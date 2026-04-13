@@ -6,6 +6,8 @@
     <title>Unity Web Player | Appquarium</title>
     <link rel="shortcut icon" href="TemplateData/favicon.ico">
     <link rel="stylesheet" href="TemplateData/style.css">
+    <!-- Google Cast Receiver SDK -->
+    <script src="//www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script>
   </head>
   <body>
     <div id="unity-container" class="unity-desktop">
@@ -128,6 +130,48 @@
 
       document.body.appendChild(script);
 
+    </script>
+
+    <!-- Cast Receiver bridge: routes Cast custom channel messages → Unity CastReceiver component -->
+    <script>
+    (function() {
+      var NAMESPACE   = 'urn:x-cast:dev.unknownaerials.appquarium';
+      var unityInst   = null;
+      var pendingMsgs = [];
+
+      var ctx = cast.framework.CastReceiverContext.getInstance();
+
+      ctx.addCustomMessageListener(NAMESPACE, function(event) {
+        var msg = typeof event.data === 'string' ? event.data : JSON.stringify(event.data);
+        if (unityInst) {
+          unityInst.SendMessage('CastReceiver', 'OnMessageReceived', msg);
+        } else {
+          pendingMsgs.push(msg);
+        }
+      });
+
+      ctx.addEventListener(cast.framework.system.EventType.SENDER_CONNECTED, function(e) {
+        if (unityInst) unityInst.SendMessage('CastReceiver', 'OnSenderConnected', e.senderId);
+      });
+      ctx.addEventListener(cast.framework.system.EventType.SENDER_DISCONNECTED, function(e) {
+        if (unityInst) unityInst.SendMessage('CastReceiver', 'OnSenderDisconnected', e.senderId);
+      });
+
+      ctx.start({ disableIdleTimeout: true });
+
+      // Hook into Unity ready — flush buffered messages
+      var _orig = window.createUnityInstance;
+      window.createUnityInstance = function() {
+        return _orig.apply(this, arguments).then(function(instance) {
+          unityInst = instance;
+          pendingMsgs.forEach(function(m) {
+            instance.SendMessage('CastReceiver', 'OnMessageReceived', m);
+          });
+          pendingMsgs = [];
+          return instance;
+        });
+      };
+    })();
     </script>
   </body>
 </html>
