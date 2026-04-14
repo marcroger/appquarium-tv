@@ -126,15 +126,31 @@
       document.querySelector("#unity-loading-bar").style.display = "block";
 
       function showError(msg) {
+        // Technical error strip (always shown)
         var el = document.getElementById('tv-error');
         if (!el) {
           el = document.createElement('div');
           el.id = 'tv-error';
-          el.style.cssText = 'position:fixed;top:0;left:0;width:100%;background:#c00;color:#fff;font:20px monospace;padding:20px;z-index:9999;white-space:pre-wrap;word-break:break-all;';
+          el.style.cssText = 'position:fixed;bottom:0;left:0;width:100%;background:#c00;color:#fff;font:16px monospace;padding:12px 20px;z-index:9999;white-space:pre-wrap;word-break:break-all;';
           document.body.appendChild(el);
         }
         el.textContent = msg;
         console.error('[TV ERROR] ' + msg);
+
+        // Friendly overlay for known WebGL 2 incompatibility
+        if (msg.toLowerCase().indexOf('webgl 2') !== -1 || msg.toLowerCase().indexOf('webgl2') !== -1) {
+          var overlay = document.createElement('div');
+          overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:linear-gradient(135deg,#060D1A,#0F2235);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9998;font-family:sans-serif;color:#DEEEE8;text-align:center;padding:60px;box-sizing:border-box;';
+          overlay.innerHTML =
+            '<div style="font-size:64px;margin-bottom:24px;">🐠</div>' +
+            '<div style="font-size:36px;font-weight:bold;margin-bottom:16px;">Appquarium</div>' +
+            '<div style="font-size:22px;color:#6A9888;max-width:700px;line-height:1.6;">' +
+              'Este dispositivo no es compatible con el visor 3D.<br>' +
+              'Para disfrutar el acuario en la TV, usa un<br>' +
+              '<span style="color:#3BB8A0;font-weight:bold;">Chromecast con Google TV</span> o dispositivo similar.' +
+            '</div>';
+          document.body.appendChild(overlay);
+        }
       }
 
       var script = document.createElement("script");
