@@ -125,11 +125,25 @@
 
       document.querySelector("#unity-loading-bar").style.display = "block";
 
+      function showError(msg) {
+        var el = document.getElementById('tv-error');
+        if (!el) {
+          el = document.createElement('div');
+          el.id = 'tv-error';
+          el.style.cssText = 'position:fixed;top:0;left:0;width:100%;background:#c00;color:#fff;font:20px monospace;padding:20px;z-index:9999;white-space:pre-wrap;word-break:break-all;';
+          document.body.appendChild(el);
+        }
+        el.textContent = msg;
+        console.error('[TV ERROR] ' + msg);
+      }
+
       var script = document.createElement("script");
       script.src = loaderUrl;
+      script.onerror = function() { showError('FAILED TO LOAD: ' + loaderUrl); };
       script.onload = () => {
         createUnityInstance(canvas, config, (progress) => {
           document.querySelector("#unity-progress-bar-full").style.width = 100 * progress + "%";
+          console.log('[Unity] loading progress: ' + Math.round(progress * 100) + '%');
         }).then((unityInstance) => {
           document.querySelector("#unity-loading-bar").style.display = "none";
           document.querySelector("#unity-fullscreen-button").onclick = () => {
@@ -138,7 +152,7 @@
           // Notify Cast bridge that Unity is ready
           if (window.__castOnUnityReady) window.__castOnUnityReady(unityInstance);
         }).catch((message) => {
-          alert(message);
+          showError('Unity load error:\n' + message);
         });
       };
       document.body.appendChild(script);
