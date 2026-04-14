@@ -57,6 +57,7 @@
 
       ctx.addEventListener(cast.framework.system.EventType.SENDER_CONNECTED, function(e) {
         console.log('[Cast] Sender connected: ' + e.senderId);
+        if (!hasWebGL2) window._dbgLog && window._dbgLog('Sender conectado: ' + e.senderId);
         if (unityInst) unityInst.SendMessage('CastReceiver', 'OnSenderConnected', e.senderId);
       });
       ctx.addEventListener(cast.framework.system.EventType.SENDER_DISCONNECTED, function(e) {
@@ -517,22 +518,45 @@
         LiteReceiver.onMessage(raw);
       };
 
+      // ── Debug overlay (shown on TV screen — remove after debugging) ──────────
+      var _dbgLines = ['Receiver cargado', 'Esperando sender...'];
+      function _dbgLog(msg) {
+        _dbgLines.push(msg);
+        if (_dbgLines.length > 10) _dbgLines.shift();
+        _dbgRedraw();
+      }
+      function _dbgRedraw() {
+        var cvs = document.getElementById('unity-canvas');
+        var c = cvs.getContext('2d');
+        var g = c.createLinearGradient(0, 0, 0, cvs.height);
+        g.addColorStop(0, '#061828'); g.addColorStop(1, '#0A3050');
+        c.fillStyle = g; c.fillRect(0, 0, cvs.width, cvs.height);
+        c.font = 'bold 28px sans-serif'; c.fillStyle = '#3BB8A0';
+        c.textAlign = 'center';
+        c.fillText('🐠  Conectando con Appquarium…', cvs.width/2, cvs.height*0.35);
+        c.font = '20px monospace'; c.textAlign = 'left'; c.fillStyle = '#DEEEE8';
+        _dbgLines.forEach(function(l, i) {
+          c.fillText('• ' + l, 40, cvs.height*0.5 + i*30);
+        });
+      }
+
       // Show a "waiting for aquarium..." screen before INIT arrives
       (function() {
         var cvs = document.getElementById('unity-canvas');
         cvs.width  = window.innerWidth;
         cvs.height = window.innerHeight;
-        var c = cvs.getContext('2d');
-        var g = c.createLinearGradient(0, 0, 0, cvs.height);
-        g.addColorStop(0, '#061828');
-        g.addColorStop(1, '#0A3050');
-        c.fillStyle = g;
-        c.fillRect(0, 0, cvs.width, cvs.height);
-        c.font = '22px sans-serif';
-        c.fillStyle = '#3BB8A0';
-        c.textAlign = 'center';
-        c.fillText('🐠  Conectando con Appquarium…', cvs.width / 2, cvs.height / 2);
+        _dbgRedraw();
       })();
+
+      // Hook into Cast bridge for debug
+      var _origLite = window.__liteOnMessage;
+      window.__liteOnMessage = function(raw) {
+        try {
+          var t = JSON.parse(raw).type || '?';
+          _dbgLog('MSG recibido: ' + t);
+        } catch(e) { _dbgLog('MSG (parse err)'); }
+        _origLite && _origLite(raw);
+      };
     }
     </script>
 
