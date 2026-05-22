@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: f8b608e94c1896a45a7bbec00ebde6e9
+timeCreated: 1472298157
+licenseType: Store
+NativeFormatImporter:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 70417
+  packageName: 16th century Cannon
+  packageVersion: 1.0
+  assetPath: Assets/Cannon/Materials/LP_cannonMat.mat
+  uploadId: 722854
