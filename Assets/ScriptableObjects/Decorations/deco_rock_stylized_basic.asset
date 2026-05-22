@@ -1,0 +1,47 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cea1df00877dcd84ca9c04dd94dbafb3, type: 3}
+  m_Name: deco_rock_stylized_basic
+  m_EditorClassIdentifier: Appquarium::DecorationData
+  itemId: deco_rock_stylized_basic
+  itemName: Roca Gris
+  description: "Roca gris est\xC3\xA1ndar de arrecife. Cl\xC3\xA1sica, s\xC3\xB3lida,
+    discreta. La base de cualquier acuario natural."
+  category: 0
+  placement: 0
+  prefab: {fileID: 2040145519782903273, guid: d7e4f68f77932504792c9ecf2e4a09f4, type: 3}
+  defaultScale: {x: 0.7, y: 0.7, z: 0.7}
+  defaultRotationY: 0
+  defaultRotationX: 0
+  defaultRotationZ: 0
+  floorYOffset: 0
+  rarity: 0
+  overrideMaterial: {fileID: 0}
+  tintColor: {r: 1, g: 1, b: 1, a: 1}
+  loopStateName: 
+  disableFX: 0
+  isStarterGift: 1
+  price: 0
+  pearlPrice: 0
+  displayOrder: 10
+  assetBundleName: pack_content_free
+  assetBundleAssetName: Rock_basic
+  hasGlow: 0
+  glowColor: {r: 1, g: 1, b: 1, a: 1}
+  glowIntensity: 0.8
+  isMountTarget: 1
+  canMountOthers: 0
+  stressReduction: 0.00008
+  hungerRateBonus: 0
+  generatesBubbles: 0
+  preventsAlgae: 0
+  isHideout: 1

@@ -1,0 +1,47 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cea1df00877dcd84ca9c04dd94dbafb3, type: 3}
+  m_Name: deco_coral_pocillopora
+  m_EditorClassIdentifier: Appquarium::DecorationData
+  itemId: deco_coral_pocillopora
+  itemName: Coral Pocillopora
+  description: Coral ramificado de arrecife tropical. Forma colonias densas que albergan
+    decenas de especies.
+  category: 1
+  placement: 0
+  prefab: {fileID: -6689036041284674117, guid: 447dabd1ab98bb24a9aabffbf4a0cfde, type: 3}
+  defaultScale: {x: 7, y: 7, z: 7}
+  defaultRotationY: 10
+  defaultRotationX: -90
+  defaultRotationZ: 0
+  floorYOffset: 0
+  rarity: 0
+  overrideMaterial: {fileID: 0}
+  tintColor: {r: 1, g: 0.3, b: 0.2, a: 1}
+  loopStateName: 
+  disableFX: 0
+  isStarterGift: 1
+  price: 0
+  pearlPrice: 0
+  displayOrder: 17
+  assetBundleName: pack_content_free
+  assetBundleAssetName: pocillopora_damicornis
+  hasGlow: 0
+  glowColor: {r: 1, g: 1, b: 1, a: 1}
+  glowIntensity: 0.8
+  isMountTarget: 0
+  canMountOthers: 1
+  stressReduction: 0.0001
+  hungerRateBonus: 0
+  generatesBubbles: 0
+  preventsAlgae: 0
+  isHideout: 0

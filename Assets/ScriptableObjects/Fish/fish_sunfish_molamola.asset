@@ -1,0 +1,49 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0adce8ec427efaf49976d6ced46cb0d0, type: 3}
+  m_Name: fish_sunfish_molamola
+  m_EditorClassIdentifier: Appquarium::FishData
+  speciesName: Ocean Sunfish
+  latinName: 
+  speciesDescription: "Una luna que nada. El pez \xF3seo m\xE1s pesado del planeta."
+  shyness: 0.4
+  aggression: 0.05
+  curiosity: 0.45
+  sociability: 0.2
+  maxSpeed: 1.5
+  turnSpeed: 1.4
+  perceptionRadius: 4
+  baseSize: 2.4
+  bodySwingOverride: -1
+  bankingAmountOverride: 8
+  turnSmoothingOverride: 5
+  preferredZone: 0
+  zoneAttraction: 0.35
+  hungerRate: 0.0014
+  stressBaseRate: 0.00015
+  schoolingStrength: 0
+  friendlySpecies: []
+  rivalSpecies: []
+  isNocturnal: 0
+  itemId: fish_sunfish_molamola
+  isStarterGift: 0
+  price: 4.99
+  rarity: 4
+  displayOrder: 0
+  prefab: {fileID: 0}
+  assetBundleName: pack_fish_legendary
+  assetBundleAssetName: fish24_sunfishMolaMola
+  maturationDays: 16
+  seniorDays: 24
+  seniorGoodbyeDays: 20
+  pearlPrice: 400
+  pearlSellValue: 80

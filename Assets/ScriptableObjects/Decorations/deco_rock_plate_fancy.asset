@@ -1,0 +1,47 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cea1df00877dcd84ca9c04dd94dbafb3, type: 3}
+  m_Name: deco_rock_plate_fancy
+  m_EditorClassIdentifier: Appquarium::DecorationData
+  itemId: deco_rock_plate_fancy
+  itemName: Losa Arcana
+  description: "Placa negra con venas de energ\xEDa violeta. Plataforma plana para
+    los coleccionistas m\xE1s atrevidos."
+  category: 0
+  placement: 0
+  prefab: {fileID: 8458342792176807067, guid: 46b60189ea038fe4292f66083e364762, type: 3}
+  defaultScale: {x: 0.85, y: 0.85, z: 0.85}
+  defaultRotationY: 0
+  defaultRotationX: 0
+  defaultRotationZ: 0
+  floorYOffset: 0
+  rarity: 1
+  overrideMaterial: {fileID: 0}
+  tintColor: {r: 1, g: 1, b: 1, a: 1}
+  loopStateName: 
+  disableFX: 0
+  isStarterGift: 0
+  price: 1.49
+  pearlPrice: 35
+  displayOrder: 112
+  assetBundleName: pack_decos_rocks
+  assetBundleAssetName: Plate_fancy
+  hasGlow: 0
+  glowColor: {r: 1, g: 1, b: 1, a: 1}
+  glowIntensity: 0.8
+  isMountTarget: 1
+  canMountOthers: 0
+  stressReduction: 0.00005
+  hungerRateBonus: 0
+  generatesBubbles: 0
+  preventsAlgae: 0
+  isHideout: 0

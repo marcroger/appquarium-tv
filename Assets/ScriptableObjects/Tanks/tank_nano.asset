@@ -1,0 +1,24 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 666381d6967a5784ea66360493f7df9a, type: 3}
+  m_Name: tank_nano
+  m_EditorClassIdentifier: Appquarium::TankData
+  itemId: tank_nano
+  tankName: Nano Reef
+  dimensions: {x: 8, y: 5, z: 4}
+  worldHalfHeight: 2.5
+  maxFishCapacity: 3
+  isStarterGift: 1
+  price: 0
+  pearlPrice: 0
+  rarity: 0
+  displayOrder: 0

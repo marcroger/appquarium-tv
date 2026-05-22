@@ -1,0 +1,24 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 666381d6967a5784ea66360493f7df9a, type: 3}
+  m_Name: tank_ocean
+  m_EditorClassIdentifier: Appquarium::TankData
+  itemId: tank_ocean
+  tankName: Oceanario
+  dimensions: {x: 18, y: 8, z: 8}
+  worldHalfHeight: 5
+  maxFishCapacity: 22
+  isStarterGift: 0
+  price: 12.99
+  pearlPrice: 200
+  rarity: 3
+  displayOrder: 0

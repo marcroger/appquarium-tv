@@ -1,0 +1,49 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0adce8ec427efaf49976d6ced46cb0d0, type: 3}
+  m_Name: fish_filefish_orange
+  m_EditorClassIdentifier: Appquarium::FishData
+  speciesName: Orangespotted Filefish
+  latinName: 
+  speciesDescription: "Manchas naranjas sobre fondo p\xE1lido. Lento, cauteloso y
+    muy curioso a su manera."
+  shyness: 0.55
+  aggression: 0.1
+  curiosity: 0.45
+  sociability: 0.2
+  maxSpeed: 1.3
+  turnSpeed: 2
+  perceptionRadius: 2.5
+  baseSize: 1
+  bodySwingOverride: 0
+  bankingAmountOverride: 7
+  turnSmoothingOverride: -1
+  preferredZone: 1
+  zoneAttraction: 0.5
+  hungerRate: 0.0007
+  stressBaseRate: 0.00025
+  schoolingStrength: 0
+  friendlySpecies: []
+  rivalSpecies: []
+  isNocturnal: 0
+  itemId: fish_filefish_orange
+  isStarterGift: 0
+  price: 1.49
+  rarity: 1
+  displayOrder: 0
+  prefab: {fileID: 0}
+  assetBundleName: pack_fish_uncommon
+  assetBundleAssetName: fish13_OrangespottedFilefish
+  maturationDays: 7
+  seniorDays: 10
+  pearlPrice: 25
+  pearlSellValue: 5

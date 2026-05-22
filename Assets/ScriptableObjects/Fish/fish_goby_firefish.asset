@@ -1,0 +1,50 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0adce8ec427efaf49976d6ced46cb0d0, type: 3}
+  m_Name: fish_goby_firefish
+  m_EditorClassIdentifier: Appquarium::FishData
+  speciesName: Firefish Goby
+  latinName: 
+  speciesDescription: "T\xEDmido y veloz. Se esconde al menor movimiento, pero su
+    aleta dorsal en llamas vale la pena esperar."
+  shyness: 0.7
+  aggression: 0.05
+  curiosity: 0.4
+  sociability: 0.3
+  maxSpeed: 3.5
+  turnSpeed: 5
+  perceptionRadius: 2.8
+  baseSize: 0.7
+  bodySwingOverride: -1
+  bankingAmountOverride: 3
+  turnSmoothingOverride: -1
+  preferredZone: 2
+  zoneAttraction: 0.8
+  hungerRate: 0.0006
+  stressBaseRate: 0.0003
+  schoolingStrength: 0
+  friendlySpecies: []
+  rivalSpecies: []
+  isNocturnal: 0
+  itemId: fish_goby_firefish
+  isStarterGift: 1
+  price: 0.49
+  rarity: 0
+  displayOrder: 0
+  prefab: {fileID: 0}
+  assetBundleName: pack_content_free
+  assetBundleAssetName: fish19_GobyNemateleotris
+  maturationDays: 5
+  seniorDays: 7
+  seniorGoodbyeDays: 5
+  pearlPrice: 10
+  pearlSellValue: 2

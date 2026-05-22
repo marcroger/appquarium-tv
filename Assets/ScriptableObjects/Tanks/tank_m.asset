@@ -1,0 +1,24 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 666381d6967a5784ea66360493f7df9a, type: 3}
+  m_Name: tank_m
+  m_EditorClassIdentifier: Appquarium::TankData
+  itemId: tank_m
+  tankName: Arrecife M
+  dimensions: {x: 12, y: 6, z: 6}
+  worldHalfHeight: 3.5
+  maxFishCapacity: 10
+  isStarterGift: 0
+  price: 4.99
+  pearlPrice: 50
+  rarity: 1
+  displayOrder: 0

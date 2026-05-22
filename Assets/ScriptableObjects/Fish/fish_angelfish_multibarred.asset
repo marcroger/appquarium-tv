@@ -1,0 +1,50 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0adce8ec427efaf49976d6ced46cb0d0, type: 3}
+  m_Name: fish_angelfish_multibarred
+  m_EditorClassIdentifier: Appquarium::FishData
+  speciesName: Multibarred Angelfish
+  latinName: 
+  speciesDescription: "Rayas blancas y negras en un cuerpo diminuto. El angelfish
+    m\xE1s t\xEDmido."
+  shyness: 0.55
+  aggression: 0.15
+  curiosity: 0.4
+  sociability: 0.25
+  maxSpeed: 1.7
+  turnSpeed: 3
+  perceptionRadius: 2.5
+  baseSize: 0.9
+  bodySwingOverride: -1
+  bankingAmountOverride: 9
+  turnSmoothingOverride: -1
+  preferredZone: 1
+  zoneAttraction: 0.6
+  hungerRate: 0.0007
+  stressBaseRate: 0.00025
+  schoolingStrength: 0
+  friendlySpecies: []
+  rivalSpecies: []
+  isNocturnal: 0
+  itemId: fish_angelfish_multibarred
+  isStarterGift: 0
+  price: 1.99
+  rarity: 2
+  displayOrder: 0
+  prefab: {fileID: 0}
+  assetBundleName: pack_fish_rare
+  assetBundleAssetName: fish09_angelfishMultibarred__22animations
+  maturationDays: 11
+  seniorDays: 16
+  seniorGoodbyeDays: 10
+  pearlPrice: 60
+  pearlSellValue: 12

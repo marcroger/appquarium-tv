@@ -1,0 +1,50 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0adce8ec427efaf49976d6ced46cb0d0, type: 3}
+  m_Name: fish_angelfish_clarion
+  m_EditorClassIdentifier: Appquarium::FishData
+  speciesName: Clarion Angelfish
+  latinName: 
+  speciesDescription: "Naranja vivo con aletas azules. Solo existe en las Islas Revillagigedo,
+    M\xE9xico."
+  shyness: 0.25
+  aggression: 0.4
+  curiosity: 0.5
+  sociability: 0.2
+  maxSpeed: 1.9
+  turnSpeed: 2.3
+  perceptionRadius: 3.5
+  baseSize: 1.5
+  bodySwingOverride: -1
+  bankingAmountOverride: 9
+  turnSmoothingOverride: -1
+  preferredZone: 1
+  zoneAttraction: 0.45
+  hungerRate: 0.001
+  stressBaseRate: 0.00018
+  schoolingStrength: 0
+  friendlySpecies: []
+  rivalSpecies: []
+  isNocturnal: 0
+  itemId: fish_angelfish_clarion
+  isStarterGift: 0
+  price: 2.99
+  rarity: 3
+  displayOrder: 0
+  prefab: {fileID: 0}
+  assetBundleName: pack_fish_epic
+  assetBundleAssetName: fish08_angelfishClarion__22animations
+  maturationDays: 12
+  seniorDays: 18
+  seniorGoodbyeDays: 14
+  pearlPrice: 150
+  pearlSellValue: 30

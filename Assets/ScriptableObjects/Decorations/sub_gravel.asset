@@ -1,0 +1,47 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cea1df00877dcd84ca9c04dd94dbafb3, type: 3}
+  m_Name: sub_gravel
+  m_EditorClassIdentifier: Appquarium::DecorationData
+  itemId: sub_gravel
+  itemName: Grava Natural
+  description: "Grava redondeada en tonos beige y marr\xF3n, el sustrato m\xE1s com\xFAn
+    en acuarios de agua dulce."
+  category: 6
+  placement: 0
+  prefab: {fileID: 0}
+  defaultScale: {x: 1, y: 1, z: 1}
+  defaultRotationY: 0
+  defaultRotationX: 0
+  defaultRotationZ: 0
+  floorYOffset: 0
+  rarity: 0
+  overrideMaterial: {fileID: 0}
+  tintColor: {r: 1, g: 1, b: 1, a: 1}
+  loopStateName: 
+  disableFX: 0
+  isStarterGift: 0
+  price: 0.99
+  pearlPrice: 0
+  displayOrder: 22
+  assetBundleName: 
+  assetBundleAssetName: 
+  hasGlow: 0
+  glowColor: {r: 1, g: 1, b: 1, a: 1}
+  glowIntensity: 0.8
+  isMountTarget: 0
+  canMountOthers: 0
+  stressReduction: 0
+  hungerRateBonus: 0
+  generatesBubbles: 0
+  preventsAlgae: 0
+  isHideout: 0

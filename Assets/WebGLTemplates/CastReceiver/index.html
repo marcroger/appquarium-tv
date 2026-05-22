@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en-us">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <title>Appquarium TV</title>
+    <link rel="shortcut icon" href="TemplateData/favicon.ico">
+    <link rel="stylesheet" href="TemplateData/style.css">
+    <!-- Google Cast Receiver SDK — must load before any body scripts -->
+    <script src="https://www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script>
+  </head>
+  <body>
+    <div id="unity-container" class="unity-desktop">
+      <canvas id="unity-canvas" width={{{ WIDTH }}} height={{{ HEIGHT }}} tabindex="-1"></canvas>
+      <div id="unity-loading-bar">
+        <div id="unity-logo"></div>
+        <div id="unity-progress-bar-empty">
+          <div id="unity-progress-bar-full"></div>
+        </div>
+      </div>
+      <div id="unity-warning"> </div>
+      <div id="unity-footer">
+        <div id="unity-logo-title-footer"></div>
+        <div id="unity-fullscreen-button"></div>
+        <div id="unity-build-title">{{{ PRODUCT_NAME }}}</div>
+      </div>
+    </div>
+
+    <!-- ── WebGL 2 detection (must run first) ──────────────────────────────── -->
+    <script>
+      var hasWebGL2 = !!(document.createElement('canvas').getContext('webgl2'));
+      console.log('[Appquarium] WebGL2 support: ' + hasWebGL2);
+    </script>
+
+    <!-- ── Cast bridge — establishes Cast SDK channel before Unity loads ──── -->
+    <script>
+    (function() {
+      var NAMESPACE   = 'urn:x-cast:dev.unknownaerials.appquarium';
+      var unityInst   = null;
+      var pendingMsgs = [];
+
+      var ctx = cast.framework.CastReceiverContext.getInstance();
+
+      ctx.addCustomMessageListener(NAMESPACE, function(event) {
+        var raw = typeof event.data === 'string' ? event.data : JSON.stringify(event.data);
+        console.log('[Cast] message received, type: ' + (tryParseType(raw)));
+
+        if (!hasWebGL2) {
+          window.__liteOnMessage && window.__liteOnMessage(raw);
+        } else if (unityInst) {
+          unityInst.SendMessage('CastReceiver', 'OnMessageReceived', raw);
+        } else {
+          pendingMsgs.push(raw);
+        }
+      });
+
+      ctx.addEventListener(cast.framework.system.EventType.SENDER_CONNECTED, function(e) {
+        console.log('[Cast] Sender connected: ' + e.senderId);
+        if (unityInst) unityInst.SendMessage('CastReceiver', 'OnSenderConnected', e.senderId);
+      });
+      ctx.addEventListener(cast.framework.system.EventType.SENDER_DISCONNECTED, function(e) {
+        console.log('[Cast] Sender disconnected: ' + e.senderId);
+        if (unityInst) unityInst.SendMessage('CastReceiver', 'OnSenderDisconnected', e.senderId);
+      });
+
+      ctx.start({ disableIdleTimeout: true });
+      console.log('[Cast] ctx.start() called — WebGL2: ' + hasWebGL2);
+
+      window.__castOnUnityReady = function(instance) {
+        console.log('[Cast] Unity ready — flushing ' + pendingMsgs.length + ' buffered messages');
+        unityInst = instance;
+        pendingMsgs.forEach(function(m) {
+          instance.SendMessage('CastReceiver', 'OnMessageReceived', m);
+        });
+        pendingMsgs = [];
+      };
+
+      function tryParseType(raw) {
+        try { return JSON.parse(raw).type; } catch(e) { return '?'; }
+      }
+    })();
+    </script>
+
+    <!-- ── Unity loader (WebGL 2 path only) ────────────────────────────────── -->
+    <script>
+    if (hasWebGL2) {
+      var canvas = document.querySelector("#unity-canvas");
+
+      function showError(msg) {
+        var el = document.getElementById('tv-error');
+        if (!el) {
+          el = document.createElement('div');
+          el.id = 'tv-error';
+          el.style.cssText = 'position:fixed;bottom:0;left:0;width:100%;background:#c00;color:#fff;font:16px monospace;padding:12px 20px;z-index:9999;white-space:pre-wrap;word-break:break-all;';
+          document.body.appendChild(el);
+        }
+        el.textContent = msg;
+        console.error('[TV ERROR] ' + msg);
+
+        if (msg.toLowerCase().indexOf('webgl 2') !== -1 || msg.toLowerCase().indexOf('webgl2') !== -1) {
+          var overlay = document.createElement('div');
+          overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:linear-gradient(135deg,#060D1A,#0F2235);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9998;font-family:sans-serif;color:#DEEEE8;text-align:center;padding:60px;box-sizing:border-box;';
+          overlay.innerHTML =
+            '<div style="font-size:64px;margin-bottom:24px;">🐠</div>' +
+            '<div style="font-size:36px;font-weight:bold;margin-bottom:16px;">Appquarium</div>' +
+            '<div style="font-size:22px;color:#6A9888;max-width:700px;line-height:1.6;">' +
+              'Este dispositivo no es compatible con el visor 3D.<br>' +
+              'Para disfrutar el acuario en la TV, usa un<br>' +
+              '<span style="color:#3BB8A0;font-weight:bold;">Chromecast con Google TV</span> o dispositivo similar.' +
+            '</div>';
+          document.body.appendChild(overlay);
+        }
+      }
+
+      function unityShowBanner(msg, type) {
+        var warningBanner = document.querySelector("#unity-warning");
+        function updateBannerVisibility() {
+          warningBanner.style.display = warningBanner.children.length ? 'block' : 'none';
+        }
+        var div = document.createElement('div');
+        div.innerHTML = msg;
+        warningBanner.appendChild(div);
+        if (type == 'error') div.style = 'background: red; padding: 10px;';
+        else {
+          if (type == 'warning') div.style = 'background: yellow; padding: 10px;';
+          setTimeout(function() {
+            warningBanner.removeChild(div);
+            updateBannerVisibility();
+          }, 5000);
+        }
+        updateBannerVisibility();
+      }
+
+      var buildUrl = "Build";
+      var loaderUrl = buildUrl + "/{{{ LOADER_FILENAME }}}";
+      var config = {
+        arguments:        [],
+        dataUrl:          buildUrl + "/{{{ DATA_FILENAME }}}",
+        frameworkUrl:     buildUrl + "/{{{ FRAMEWORK_FILENAME }}}",
+        codeUrl:          buildUrl + "/{{{ CODE_FILENAME }}}",
+        streamingAssetsUrl: "StreamingAssets",
+        companyName:      "{{{ COMPANY_NAME }}}",
+        productName:      "{{{ PRODUCT_NAME }}}",
+        productVersion:   "{{{ PRODUCT_VERSION }}}",
+        showBanner:       unityShowBanner,
+      };
+
+      canvas.style.width  = "{{{ WIDTH }}}px";
+      canvas.style.height = "{{{ HEIGHT }}}px";
+      document.querySelector("#unity-loading-bar").style.display = "block";
+
+      var script = document.createElement("script");
+      script.src    = loaderUrl;
+      script.onerror = function() { showError('FAILED TO LOAD: ' + loaderUrl); };
+      script.onload  = function() {
+        createUnityInstance(canvas, config, function(progress) {
+          document.querySelector("#unity-progress-bar-full").style.width = 100 * progress + "%";
+          console.log('[Unity] loading: ' + Math.round(progress * 100) + '%');
+        }).then(function(unityInstance) {
+          document.querySelector("#unity-loading-bar").style.display = "none";
+          document.querySelector("#unity-fullscreen-button").onclick = function() {
+            unityInstance.SetFullscreen(1);
+          };
+          if (window.__castOnUnityReady) window.__castOnUnityReady(unityInstance);
+        }).catch(function(message) {
+          showError('Unity load error:\n' + message);
+        });
+      };
+      document.body.appendChild(script);
+    }
+    </script>
+
+    <!-- ── WebGL 1 fallback — "not supported" screen ────────────────────────── -->
+    <script>
+    if (!hasWebGL2) {
+      document.querySelector('#unity-container').style.display = 'none';
+
+      var overlay = document.createElement('div');
+      overlay.style.cssText = [
+        'position:fixed;top:0;left:0;width:100%;height:100%;',
+        'background:linear-gradient(160deg,#040E1A 0%,#071828 55%,#0A2030 100%);',
+        'display:flex;flex-direction:column;align-items:center;justify-content:center;',
+        'font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;',
+        'color:#DEEEE8;text-align:center;box-sizing:border-box;padding:60px;'
+      ].join('');
+
+      overlay.innerHTML =
+        '<div style="font-size:80px;margin-bottom:28px;' +
+          'filter:drop-shadow(0 0 24px #3BB8A055);">🐠</div>' +
+        '<div style="font-size:52px;font-weight:700;letter-spacing:3px;' +
+          'margin-bottom:14px;">Appquarium</div>' +
+        '<div style="width:56px;height:2px;background:#3BB8A0;' +
+          'margin:0 auto 40px;border-radius:2px;opacity:0.7;"></div>' +
+        '<div style="font-size:22px;color:#6A9888;line-height:1.8;max-width:680px;">' +
+          'Este dispositivo no es compatible<br>con el visor 3D de Appquarium.' +
+        '</div>' +
+        '<div style="margin-top:44px;padding:24px 48px;' +
+          'border:1px solid rgba(59,184,160,0.2);border-radius:16px;' +
+          'background:rgba(59,184,160,0.06);">' +
+          '<div style="font-size:13px;color:#6A9888;margin-bottom:10px;' +
+            'text-transform:uppercase;letter-spacing:2px;">Dispositivo recomendado</div>' +
+          '<div style="font-size:22px;color:#3BB8A0;font-weight:600;">' +
+            'Chromecast con Google TV</div>' +
+          '<div style="font-size:15px;color:#4A7868;margin-top:8px;">' +
+            'o cualquier dispositivo con soporte WebGL 2</div>' +
+        '</div>';
+
+      document.body.appendChild(overlay);
+
+      window.__liteOnMessage = function() {};
+    }
+    </script>
+
+  </body>
+</html>

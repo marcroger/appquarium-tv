@@ -1,0 +1,50 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0adce8ec427efaf49976d6ced46cb0d0, type: 3}
+  m_Name: fish_angelfish_majestic
+  m_EditorClassIdentifier: Appquarium::FishData
+  speciesName: Majestic Angelfish
+  latinName: 
+  speciesDescription: "Cuerpo azul el\xE9ctrico con bandas anaranjadas. Nervioso
+    y selectivo, el m\xE1s elegante del arrecife."
+  shyness: 0.4
+  aggression: 0.25
+  curiosity: 0.45
+  sociability: 0.2
+  maxSpeed: 1.9
+  turnSpeed: 2.5
+  perceptionRadius: 3
+  baseSize: 1.25
+  bodySwingOverride: -1
+  bankingAmountOverride: 9
+  turnSmoothingOverride: -1
+  preferredZone: 1
+  zoneAttraction: 0.5
+  hungerRate: 0.0009
+  stressBaseRate: 0.00022
+  schoolingStrength: 0
+  friendlySpecies: []
+  rivalSpecies: []
+  isNocturnal: 0
+  itemId: fish_angelfish_majestic
+  isStarterGift: 0
+  price: 1.99
+  rarity: 2
+  displayOrder: 0
+  prefab: {fileID: 0}
+  assetBundleName: pack_fish_rare
+  assetBundleAssetName: fish02_angelfishMajestic__22animations
+  maturationDays: 15
+  seniorDays: 22
+  seniorGoodbyeDays: 10
+  pearlPrice: 60
+  pearlSellValue: 12

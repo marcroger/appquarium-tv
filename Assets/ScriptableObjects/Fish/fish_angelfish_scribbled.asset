@@ -1,0 +1,50 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0adce8ec427efaf49976d6ced46cb0d0, type: 3}
+  m_Name: fish_angelfish_scribbled
+  m_EditorClassIdentifier: Appquarium::FishData
+  speciesName: Scribbled Angelfish
+  latinName: 
+  speciesDescription: "Garabatos azules sobre negro. Uno de los angelfish m\xE1s
+    grandes y raros del Indo-Pac\xEDfico."
+  shyness: 0.35
+  aggression: 0.3
+  curiosity: 0.45
+  sociability: 0.2
+  maxSpeed: 1.8
+  turnSpeed: 2.2
+  perceptionRadius: 3.5
+  baseSize: 1.35
+  bodySwingOverride: -1
+  bankingAmountOverride: 9
+  turnSmoothingOverride: -1
+  preferredZone: 1
+  zoneAttraction: 0.5
+  hungerRate: 0.0009
+  stressBaseRate: 0.0002
+  schoolingStrength: 0
+  friendlySpecies: []
+  rivalSpecies: []
+  isNocturnal: 0
+  itemId: fish_angelfish_scribbled
+  isStarterGift: 0
+  price: 1.99
+  rarity: 2
+  displayOrder: 0
+  prefab: {fileID: 0}
+  assetBundleName: pack_fish_rare
+  assetBundleAssetName: fish01_angelfishScribbled
+  maturationDays: 14
+  seniorDays: 21
+  seniorGoodbyeDays: 10
+  pearlPrice: 60
+  pearlSellValue: 12

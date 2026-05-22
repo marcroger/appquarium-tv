@@ -1,0 +1,50 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0adce8ec427efaf49976d6ced46cb0d0, type: 3}
+  m_Name: fish_banggai_cardinalfish
+  m_EditorClassIdentifier: Appquarium::FishData
+  speciesName: Banggai Cardinalfish
+  latinName: 
+  speciesDescription: Elegante y puntilloso. Se mueve poco, observa mucho. Sus aletas
+    filiformes son su firma.
+  shyness: 0.25
+  aggression: 0.1
+  curiosity: 0.45
+  sociability: 0.8
+  maxSpeed: 1.5
+  turnSpeed: 2.5
+  perceptionRadius: 2.5
+  baseSize: 0.75
+  bodySwingOverride: -1
+  bankingAmountOverride: 5
+  turnSmoothingOverride: -1
+  preferredZone: 2
+  zoneAttraction: 0.65
+  hungerRate: 0.0006
+  stressBaseRate: 0.00018
+  schoolingStrength: 0
+  friendlySpecies: []
+  rivalSpecies: []
+  isNocturnal: 0
+  itemId: fish_banggai_cardinalfish
+  isStarterGift: 1
+  price: 0.49
+  rarity: 0
+  displayOrder: 0
+  prefab: {fileID: 0}
+  assetBundleName: pack_content_free
+  assetBundleAssetName: fish20_BanggaiCardinalfish
+  maturationDays: 6
+  seniorDays: 9
+  seniorGoodbyeDays: 5
+  pearlPrice: 10
+  pearlSellValue: 2
