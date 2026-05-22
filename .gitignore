@@ -1,1 +1,47 @@
-StreamingAssets/
+# Unity-generated folders (regenerated on Unity open)
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Bb]uild/
+/[Bb]uilds/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
+/[Mm]emoryCaptures/
+/[Rr]ecordings/
+*.log
+.utmp/
+
+# IDE / project files (regenerated)
+*.csproj
+*.sln
+*.suo
+*.user
+*.userprefs
+.vs/
+.idea/
+*.DotSettings.user
+
+# Blender backup files
+*.blend1
+*.blend1.meta
+
+# Build artefactos en root (legacy — del repo cuando solo hosted builds)
+# StreamingAssets/ — comentado, ya no aplica (no usamos PAD aquí)
+# StreamingAssets/
+
+# WebGL deploy output (sube a R2, no a git)
+/webgl-output/
+/webgl-build/
+
+# Pack 24 third-party — pesos grandes a NO commitear
+# Aclaración: en el TV project SÍ necesitamos los modelos para que la escena
+# los referencie. Si son >100MB cada uno hay que usar Git LFS o hostear aparte.
+# Por ahora copiamos los .fbx + textures small enough.
+# (Si algún archivo supera 100MB en commit, GitHub lo bloqueará → revisar entonces)
+
+# AppquariumEditor cache temporal (no aplica aquí pero por costumbre del mobile)
+/_WebGLBuildTemp/
+
+# OS-specific
+.DS_Store
+Thumbs.db
