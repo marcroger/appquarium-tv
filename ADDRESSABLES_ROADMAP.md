@@ -82,6 +82,43 @@ Adicional — limpieza de scripts (no Addressables, pero alineado):
 
 ---
 
+## Lecciones de build (dureza aprendida)
+
+### Build de 9.5h — 2026-05-25/26
+
+El build de Fase A tardó **9.5 horas** para 92 bundles con PackSeparately. Causa raíz confirmada por investigación:
+
+#### Culpable 1 — LZMA → LZ4 doble compresión (principal)
+
+Addressables pone **LZMA** por defecto en remote groups. WebGL no tiene threading y **no puede descomprimir LZMA** en runtime. Unity lo detecta durante el build y **recomprime silenciosamente a LZ4** cada bundle — doble trabajo por cada uno de los 92 bundles. Con PackSeparately el overhead se multiplica linealmente.
+
+**Fix obligatorio antes del próximo build:**
+```
+Addressables Groups → Remote Groups (Fish_Remote, Decos_Remote, Environments_Remote, Audio_Remote)
+  → Grupo → Inspector → Advanced Options → Compression = LZ4
+```
+Hacerlo en los 4 grupos remotos. El grupo `Built In Data` (local) puede quedar en LZ4HC.
+
+#### Culpable 2 — Recompresión de texturas en cada build
+
+Addressables recomprime las texturas aunque ya estén importadas con el formato correcto. Con ~200 texturas a 1024px en WebGL (formato Automatic → ETC2/DXT), son ~200 operaciones de compresión adicionales sobre el overhead per-bundle.
+
+**No hay fix fácil para esto** — es comportamiento interno de Unity. La única mitigación es usar texturas más pequeñas durante builds de prueba (ya lo hacemos con `★ Reduce TV Textures`).
+
+#### Si el próximo build vuelve a tardar horas
+
+Posible caché corrupta. Borrar y reconstruir:
+```powershell
+Remove-Item -Recurse -Force "Library\com.unity.addressables"
+# Luego Build → New Build → Default Build Script
+```
+
+#### Tiempo esperado TRAS el fix de LZ4
+
+Con LZMA→LZ4 corregido + 92 bundles PackSeparately: **estimado 45-90 min** (vs 9.5h). El overhead por-bundle sigue siendo real con PackSeparately pero sin la doble compresión debería ser manejable.
+
+---
+
 ## Plan de ejecución actual
 
 ### Paso 1 — Cleanup + setup (en Unity, ~10 seg cada uno)
@@ -98,7 +135,9 @@ Appquarium TV → ★ Print Addressables Summary       → "Total: 92" (25 + 54 
 Window → Asset Management → Addressables → Groups → Build → New Build → Default Build Script
 ```
 
-**Esperado con PackSeparately + fix de duplicados**: build limpio en 1-3h. 92 bundles en `ServerData/WebGL/`. Puede tardar más por overhead per-bundle pero ya no debe loopear en assertion.
+**Esperado con PackSeparately + fix de duplicados + LZ4**: build limpio en 45-90 min. 92 bundles en `ServerData/WebGL/`. Sin LZ4 (con LZMA default) puede tardar 6-10h por doble compresión — ver § "Lecciones de build".
+
+⚠️ **Antes de lanzar este paso**: asegurarse de que los 4 remote groups tienen `Compression = LZ4`.
 
 **Si peta otra vez**: el log limpio nos dará la causa real (no estará enmascarado por el bucle de assertion).
 
