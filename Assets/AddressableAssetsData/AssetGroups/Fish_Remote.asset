@@ -1,0 +1,148 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bbb281ee3bf0b054c82ac2347e9e782c, type: 3}
+  m_Name: Fish_Remote
+  m_EditorClassIdentifier: Unity.Addressables.Editor::UnityEditor.AddressableAssets.Settings.AddressableAssetGroup
+  m_GroupName: Fish_Remote
+  m_GUID: 26611cc80abffa54cbaa122ecd6c1348
+  m_SerializeEntries:
+  - m_GUID: 2769c0a25b1998e44b0e0e4be93fc37e
+    m_Address: fish_black_durgon
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2c18754d0429d514f867f175805f9458
+    m_Address: fish_napoleon_wrasse
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2cce3e706f678b24184becfd498c9bea
+    m_Address: fish_banggai_cardinalfish
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 349492b418b8dc149ba92fc168c4c8e4
+    m_Address: fish_angelfish_queen
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3b5fed519a4e27d4ebcfbddbc34a2128
+    m_Address: fish_angelfish_blueface
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4273f2e9869914341a0ac7236d62cfbd
+    m_Address: fish_parrotfish
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 42a5d805cf3e38043a18b0819d121c9a
+    m_Address: fish_moorish_idol
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4989453f0de99334aa3d2e4ad3979e00
+    m_Address: fish_klunzinger_wrasse
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 649b9d3b7b9a5ae4c853bca5d7b26c0a
+    m_Address: fish_angelfish_scribbled
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 66ba0d8287b92b24dab90181877914e4
+    m_Address: fish_angelfish_goldflake
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6a4098236a15b634b92b4adf8e032f67
+    m_Address: fish_angelfish_queensland
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7e5cbf1bb1a2f1d43b3737cb53d5ccdc
+    m_Address: fish_angelfish_flagfin
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 872f6b071c81c594daadb45a38fd6a28
+    m_Address: fish_angelfish_blueline
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 886c6ca384e5c794094048709831efb6
+    m_Address: fish_aweoweo
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 8a0dd9de4c2e1224eb620c4f17276f8e
+    m_Address: fish_angelfish_multibarred
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 9029a762d181c4042b22d6f70401fe43
+    m_Address: fish_mandarinfish
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 93d749e6bc665e04c9996067d325e834
+    m_Address: fish_angelfish_majestic
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a28b0f7e600023442b4c74005e63c721
+    m_Address: fish_boxfish_yellow
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b66d63a8e64691f4b9066fa0c31edb10
+    m_Address: fish_filefish_scrawled
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c376fed34b4c1904bba01c5425c53e2a
+    m_Address: fish_goby_firefish
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: dc5a2ad1422740244ba4ae8c389f2730
+    m_Address: fish_angelfish_clarion
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: df05dad4579b3fc44a8938e6c32060b8
+    m_Address: fish_angelfish_emperor
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e0a0317702c67974ab33157f4842aaca
+    m_Address: fish_sunfish_molamola
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ed883fe19d5449241913f2e7e879baea
+    m_Address: fish_soldierfish_redcoat
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: edb9947c632ea814c8b7b3e61f0cdede
+    m_Address: fish_filefish_orange
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  m_ReadOnly: 0
+  m_Settings: {fileID: 11400000, guid: 2f31239b37f6e9c4ca5b0602e3c82057, type: 2}
+  m_SchemaSet:
+    m_Schemas:
+    - {fileID: 11400000, guid: df4f236ae40660c448a663501661b29b, type: 2}
+    - {fileID: 11400000, guid: 0ceb005d6b84dd241b4384c7bb6e3056, type: 2}

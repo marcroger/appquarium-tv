@@ -5,12 +5,10 @@ EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
   m_Scenes:
-  - enabled: 0
+  - enabled: 1
     path: Assets/Scenes/TvScene.unity
     guid: 885e22024afe5f14488dc1d26f02cc2c
-  - enabled: 1
-    path: Assets/Scenes/AquariumScene.unity
-    guid: 45f97f6fa7f504f4984789bd48d5ccd7
   m_configObjects:
+    com.unity.addressableassets: {fileID: 11400000, guid: cdc14e817cc349146aadc526971c211b, type: 2}
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_UseUCBPForAssetBundles: 0

@@ -28,7 +28,7 @@ Toda la copia inicial se hizo desde ese commit.
 | `Fish/` | FishAgent, FishBrain, FishProceduralAnimator, NeedsModule, SteeringController | Comportamiento de peces |
 | `Tank/` | BubbleSystem, DecorationPlacer, TankBackground, TankController, TankLightingController, WaterSurface | Tank visual + decoración |
 | `Data/` | DecorationData, FishData, TankData | Definiciones ScriptableObject |
-| `Core/` | AmbientModeController, AquariumCameraController, AquariumManager, AudioManager, CastManager, CastReceiver, FishSpawner, FoodItem, PostProcessingSetup, TvSceneBootstrap | Core runtime (sin BreedingManager, FoodManager, InputHandler) |
+| `Core/` | AmbientModeController, AquariumCameraController, AquariumManager, AudioManager, CastReceiver, CastDataTypes, FishSpawner, FoodItem, PostProcessingSetup, TvSceneBootstrap | Core runtime (sin BreedingManager, FoodManager, InputHandler, CastManager). **CastManager.cs borrado 2026-05-25** — era el sender móvil, duplicado por error. Los 5 data types compartidos están ahora en `CastDataTypes.cs`. |
 | `Utils/` | AppFlags, AppVersion, CatalogLoader | Mínimo necesario |
 
 ### Scripts NO copiados (mobile-only)
@@ -91,12 +91,12 @@ Acción: re-copiar el archivo + .meta.
 ### 🔄 Cambia el sistema Cast
 
 Triggers:
-- Edit `Scripts/Core/CastManager.cs` (data types) — IMPORTANTE: data types deben coincidir entre sender (mobile) y receiver (este). Si cambian, ambos deben actualizar simultáneamente.
-- Edit `Scripts/Core/CastReceiver.cs`
-- Edit `Scripts/Core/TvSceneBootstrap.cs`
-- Edit `Plugins/Android/.../CastPlugin.java` en mobile
+- Edit `Scripts/Core/CastManager.cs` en mobile (data types: `TvAquariumState`, `CastMessage`, `TvUpdateMessage`, `TvFishEntry`, `DecoPlacementList`) — IMPORTANTE: estos data types deben coincidir entre sender (mobile, en `CastManager.cs`) y receiver (TV, en `CastDataTypes.cs`). Si cambian, **copiar SOLO los `[Serializable]` data types** a `CastDataTypes.cs` del TV, NUNCA copiar la clase `CastManager` entera (es sender-only).
+- Edit `Scripts/Core/CastReceiver.cs` en mobile → copiar al TV.
+- Edit `Scripts/Core/TvSceneBootstrap.cs` en mobile → copiar al TV (si aún existe en mobile; tras la separación del 22-may puede que solo viva en TV).
+- Edit `Plugins/Android/.../CastPlugin.java` en mobile → no afecta al TV.
 
-Acción: re-copiar el .cs cambiado. Si es un cambio de protocolo de mensajes, verificar compatibilidad senders previas (usuarios con app vieja).
+Acción: re-copiar el .cs cambiado. Si es un cambio de protocolo de mensajes, verificar compatibilidad con senders previos (usuarios con app vieja del Play Store).
 
 ### 🔄 Añades especie nueva al Pack 24 (o pez 26)
 
