@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
+using UnityEngine.UI;
 
 /// <summary>
 /// Entry point for the TvScene (WebGL Cast receiver build).
@@ -10,6 +11,7 @@ using UnityEngine.ResourceManagement.AsyncOperations;
 /// v2 (Addressables): on INIT, parses needed asset keys from state,
 /// loads them on demand via Addressables, then initializes the aquarium.
 /// Only the assets active in the user's tank are downloaded.
+/// Shows a loading overlay (logo + spinner + progress counter) during loading.
 /// </summary>
 public class TvSceneBootstrap : MonoBehaviour
 {
@@ -17,6 +19,17 @@ public class TvSceneBootstrap : MonoBehaviour
 
     [Header("TV Scene")]
     public bool alwaysAmbient = true;
+
+    // Loading overlay
+    private CanvasGroup   _overlayGroup;
+    private Text          _counterText;
+    private RectTransform _spinnerRect;
+    private bool          _spinning;
+    private Coroutine     _fadeRoutine;
+
+    static readonly Color C_BG     = new Color(0.024f, 0.051f, 0.102f, 1f); // #060D1A
+    static readonly Color C_ACCENT = new Color(0.0f,   0.85f,  1.0f,   1f); // cyan
+    static readonly Color C_MUTED  = new Color(0.6f,   0.6f,   0.6f,   1f);
 
     void Awake()
     {
@@ -36,7 +49,15 @@ public class TvSceneBootstrap : MonoBehaviour
         var uiGo = GameObject.Find("UIManager");
         if (uiGo != null) uiGo.SetActive(false);
 
-        Debug.Log("[TvSceneBootstrap] ✅ TV scene ready — waiting for Cast INIT.");
+        BuildLoadingOverlay();
+
+        Debug.Log("[TvSceneBootstrap] TV scene ready — waiting for Cast INIT.");
+    }
+
+    void Update()
+    {
+        if (_spinning && _spinnerRect != null)
+            _spinnerRect.Rotate(0f, 0f, -200f * Time.deltaTime);
     }
 
     // ── Public API (called from CastReceiver) ─────────────────────────────────
@@ -83,6 +104,8 @@ public class TvSceneBootstrap : MonoBehaviour
 
     private IEnumerator LoadAndInitializeCoroutine(TvAquariumState state)
     {
+        ShowLoadingOverlay();
+
         // ── 1. Collect keys ──────────────────────────────────────────────────
         var fishKeys = new HashSet<string>();
         if (state.activeFish != null)
@@ -93,6 +116,10 @@ public class TvSceneBootstrap : MonoBehaviour
 
         Debug.Log($"[TvScene] Loading assets — fish:{fishKeys.Count} decos:{decoKeys.Count}");
 
+        int total = fishKeys.Count + decoKeys.Count;
+        int done  = 0;
+        UpdateProgress(done, total);
+
         // ── 2. Launch all loads in parallel ──────────────────────────────────
         var fishHandles = new List<AsyncOperationHandle<FishData>>();
         foreach (var key in fishKeys)
@@ -102,9 +129,9 @@ public class TvSceneBootstrap : MonoBehaviour
         foreach (var key in decoKeys)
             decoHandles.Add(Addressables.LoadAssetAsync<DecorationData>(key));
 
-        // ── 3. Wait for all to complete ───────────────────────────────────────
-        foreach (var h in fishHandles) yield return h;
-        foreach (var h in decoHandles) yield return h;
+        // ── 3. Wait for each, update progress counter ─────────────────────────
+        foreach (var h in fishHandles) { yield return h; UpdateProgress(++done, total); }
+        foreach (var h in decoHandles) { yield return h; UpdateProgress(++done, total); }
 
         // ── 4. Collect results ────────────────────────────────────────────────
         var fishData = new List<FishData>();
@@ -132,6 +159,152 @@ public class TvSceneBootstrap : MonoBehaviour
         if (mgr == null) { Debug.LogError("[TvScene] AquariumManager not found."); yield break; }
 
         mgr.InitializeFromCastState(state, fishData, decoData);
+
+        HideLoadingOverlay();
+    }
+
+    // ── Loading overlay ───────────────────────────────────────────────────────
+
+    private void BuildLoadingOverlay()
+    {
+        var canvasGo = new GameObject("LoadingOverlay");
+
+        var canvas = canvasGo.AddComponent<Canvas>();
+        canvas.renderMode   = RenderMode.ScreenSpaceOverlay;
+        canvas.sortingOrder = 100;
+
+        var scaler = canvasGo.AddComponent<CanvasScaler>();
+        scaler.uiScaleMode         = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        scaler.referenceResolution = new Vector2(1920f, 1080f);
+
+        canvasGo.AddComponent<GraphicRaycaster>();
+
+        _overlayGroup                  = canvasGo.AddComponent<CanvasGroup>();
+        _overlayGroup.alpha            = 0f;
+        _overlayGroup.interactable     = false;
+        _overlayGroup.blocksRaycasts   = false;
+
+        // Full-screen background
+        var bg = MakeStretchChild(canvasGo.transform, "BG");
+        bg.AddComponent<Image>().color = C_BG;
+        var content = bg.transform;
+
+        // Logo text (no sprite asset — use text fallback)
+        AddText(content, "Logo", "APPQUARIUM", 64, FontStyle.Bold, C_ACCENT,
+            new Vector2(0f, 200f), new Vector2(700f, 90f));
+
+        // Spinner: filled arc that rotates in Update
+        var spinnerGo = new GameObject("Spinner");
+        spinnerGo.transform.SetParent(content, false);
+        _spinnerRect = spinnerGo.AddComponent<RectTransform>();
+        _spinnerRect.anchorMin        = new Vector2(0.5f, 0.5f);
+        _spinnerRect.anchorMax        = new Vector2(0.5f, 0.5f);
+        _spinnerRect.anchoredPosition = new Vector2(0f, 60f);
+        _spinnerRect.sizeDelta        = new Vector2(72f, 72f);
+        var arc = spinnerGo.AddComponent<Image>();
+        arc.sprite     = MakeRingSprite();
+        arc.color      = C_ACCENT;
+        arc.type       = Image.Type.Filled;
+        arc.fillMethod = Image.FillMethod.Radial360;
+        arc.fillAmount = 0.75f;
+
+        AddText(content, "LoadingText", "Cargando acuario…", 32, FontStyle.Normal,
+            Color.white, new Vector2(0f, -80f), new Vector2(700f, 44f));
+
+        _counterText = AddText(content, "CounterText", "", 24, FontStyle.Normal,
+            C_MUTED, new Vector2(0f, -140f), new Vector2(700f, 36f));
+
+        canvasGo.SetActive(false);
+    }
+
+    private RectTransform MakeStretchChild(Transform parent, string name)
+    {
+        var go = new GameObject(name);
+        go.transform.SetParent(parent, false);
+        var rt = go.AddComponent<RectTransform>();
+        rt.anchorMin = Vector2.zero;
+        rt.anchorMax = Vector2.one;
+        rt.offsetMin = Vector2.zero;
+        rt.offsetMax = Vector2.zero;
+        return rt;
+    }
+
+    private Text AddText(Transform parent, string name, string content,
+        int size, FontStyle style, Color color, Vector2 pos, Vector2 sizeDelta)
+    {
+        var go = new GameObject(name);
+        go.transform.SetParent(parent, false);
+        var rt = go.AddComponent<RectTransform>();
+        rt.anchorMin        = new Vector2(0.5f, 0.5f);
+        rt.anchorMax        = new Vector2(0.5f, 0.5f);
+        rt.anchoredPosition = pos;
+        rt.sizeDelta        = sizeDelta;
+        var t = go.AddComponent<Text>();
+        t.text      = content;
+        t.fontSize  = size;
+        t.fontStyle = style;
+        t.color     = color;
+        t.alignment = TextAnchor.MiddleCenter;
+        return t;
+    }
+
+    private Sprite MakeRingSprite()
+    {
+        // 64×64 ring texture used as the spinner arc base
+        const int size = 64;
+        var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+        var center = new Vector2(size * 0.5f, size * 0.5f);
+        const float r = 28f, thickness = 5f;
+        for (int y = 0; y < size; y++)
+        for (int x = 0; x < size; x++)
+        {
+            float d = Vector2.Distance(new Vector2(x + 0.5f, y + 0.5f), center);
+            float a = Mathf.Clamp01(1f - Mathf.Abs(d - r) / thickness);
+            tex.SetPixel(x, y, new Color(1f, 1f, 1f, a));
+        }
+        tex.Apply();
+        return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f));
+    }
+
+    private void ShowLoadingOverlay()
+    {
+        if (_overlayGroup == null) return;
+        _overlayGroup.gameObject.SetActive(true);
+        _spinning = true;
+        if (_fadeRoutine != null) StopCoroutine(_fadeRoutine);
+        _fadeRoutine = StartCoroutine(FadeOverlay(0f, 1f, 0.3f));
+    }
+
+    private void HideLoadingOverlay()
+    {
+        if (_overlayGroup == null) return;
+        if (_fadeRoutine != null) StopCoroutine(_fadeRoutine);
+        _fadeRoutine = StartCoroutine(FadeAndDeactivate());
+    }
+
+    private IEnumerator FadeAndDeactivate()
+    {
+        yield return FadeOverlay(1f, 0f, 0.5f);
+        _spinning = false;
+        _overlayGroup.gameObject.SetActive(false);
+    }
+
+    private IEnumerator FadeOverlay(float from, float to, float duration)
+    {
+        float t = 0f;
+        while (t < duration)
+        {
+            t += Time.deltaTime;
+            _overlayGroup.alpha = Mathf.Lerp(from, to, t / duration);
+            yield return null;
+        }
+        _overlayGroup.alpha = to;
+    }
+
+    private void UpdateProgress(int done, int total)
+    {
+        if (_counterText == null) return;
+        _counterText.text = total > 0 ? $"{done} / {total} cargados" : "";
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -147,7 +320,6 @@ public class TvSceneBootstrap : MonoBehaviour
             foreach (var p in wrapper.items)
             {
                 if (string.IsNullOrEmpty(p.instanceId)) continue;
-                // instanceId = "itemId_n" → strip the trailing "_n"
                 var lastUnderscore = p.instanceId.LastIndexOf('_');
                 var itemId = lastUnderscore > 0
                     ? p.instanceId.Substring(0, lastUnderscore)
