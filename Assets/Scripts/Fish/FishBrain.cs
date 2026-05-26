@@ -24,6 +24,10 @@ public class FishBrain : MonoBehaviour
     // Timer del estado actual
     private float _stateTimer;
 
+    // Etapa de vida — afecta a la duración de Idle/Explore
+    private FishAgeGroup _ageGroup = FishAgeGroup.Adult;
+    public void SetAgeGroup(FishAgeGroup age) => _ageGroup = age;
+
     // ── Inicialización ──────────────────────────────────────────────────────
 
     public void Initialize(FishData data, NeedsModule needs)
@@ -171,6 +175,11 @@ public class FishBrain : MonoBehaviour
                 if (_stateTimer <= 0 || _needs.energy > 0.9f)
                     EnterState(FishState.Idle);
                 break;
+
+            case FishState.Courtship:
+                if (_stateTimer <= 0 || IsNightForDiurnal)
+                    EnterState(FishState.Idle);
+                break;
         }
     }
 
@@ -178,10 +187,11 @@ public class FishBrain : MonoBehaviour
     {
         switch (CurrentState)
         {
-            case FishState.Idle:    _needs.TickIdle();    break;
-            case FishState.Explore: _needs.TickExplore(); break;
-            case FishState.Flee:    _needs.TickFlee();    break;
-            case FishState.Sleep:   _needs.TickSleep();   break;
+            case FishState.Idle:      _needs.TickIdle();    break;
+            case FishState.Explore:   _needs.TickExplore(); break;
+            case FishState.Flee:      _needs.TickFlee();    break;
+            case FishState.Sleep:     _needs.TickSleep();   break;
+            case FishState.Courtship: _needs.TickExplore(); break;
         }
     }
 
@@ -229,16 +239,22 @@ public class FishBrain : MonoBehaviour
         switch (newState)
         {
             case FishState.Idle:
-                // De noche los diurnos tienen Idle breve antes de volver a Sleep
                 if (IsNightForDiurnal)
                     _stateTimer = Random.Range(1f, 2.5f);
                 else
-                    _stateTimer = Random.Range(2f, 5f) * (1f + EffectiveShyness() - EffectiveCuriosity() * 0.5f);
+                {
+                    float idleBase = Random.Range(2f, 5f) * (1f + EffectiveShyness() - EffectiveCuriosity() * 0.5f);
+                    // Seniors descansan más: periodos Idle hasta 1.8× más largos
+                    _stateTimer = idleBase * (_ageGroup == FishAgeGroup.Senior ? 1.8f : 1f);
+                }
                 break;
 
             case FishState.Explore:
-                // Los curiosos exploran más tiempo
-                _stateTimer = Random.Range(5f, 10f) * (0.5f + EffectiveCuriosity());
+                {
+                    float exploreBase = Random.Range(5f, 10f) * (0.5f + EffectiveCuriosity());
+                    // Seniors se cansan antes: exploración más corta
+                    _stateTimer = exploreBase * (_ageGroup == FishAgeGroup.Senior ? 0.65f : 1f);
+                }
                 break;
 
             case FishState.Flee:
@@ -253,6 +269,19 @@ public class FishBrain : MonoBehaviour
             case FishState.Sleep:
                 _stateTimer = Random.Range(10f, 20f);
                 break;
+
+            case FishState.Courtship:
+                _stateTimer = Random.Range(35f, 60f);
+                break;
         }
+    }
+
+    /// <summary>Inicia el cortejo. Llamado por BreedingManager cuando la pareja tiene ~2h restantes de cooldown.</summary>
+    public void TriggerCourtship()
+    {
+        if (CurrentState == FishState.Flee ||
+            CurrentState == FishState.Feed ||
+            CurrentState == FishState.Sleep) return;
+        EnterState(FishState.Courtship);
     }
 }

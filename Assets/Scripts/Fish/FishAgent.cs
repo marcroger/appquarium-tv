@@ -26,6 +26,9 @@ public class FishAgent : MonoBehaviour
     public string      Uid          { get; private set; }
     public Vector3     Velocity     => _steering != null ? _steering.CurrentVelocity : Vector3.zero;
 
+    // Etapa de vida del individuo (desde el save)
+    public FishAgeGroup AgeGroup { get; private set; } = FishAgeGroup.Adult;
+
     // Pareja reproductiva (M/F) — para cohesión reforzada en steering
     public string PartnerUid { get; private set; }
     private FishAgent _partnerCache;
@@ -174,6 +177,8 @@ public class FishAgent : MonoBehaviour
 
         // Arrancar la FSM
         _brain.Initialize(data, _needs);
+        AgeGroup = save?.GetAgeGroup() ?? FishAgeGroup.Adult;
+        _brain.SetAgeGroup(AgeGroup);
         _smoothedMaxSpeed = data.maxSpeed * 0.15f;  // empieza en velocidad Idle
 
         // Escala según tamaño de especie × factor de edad individual
@@ -301,6 +306,15 @@ public class FishAgent : MonoBehaviour
         _brain.TriggerFlee(threatPosition);
     }
 
+    /// <summary>
+    /// Inicia el estado de cortejo. Llamado por BreedingManager en ambos miembros de la pareja
+    /// cuando el cooldown del huevo tiene ~2h restantes.
+    /// </summary>
+    public void StartCourtship()
+    {
+        _brain.TriggerCourtship();
+    }
+
     // ── Animator Pack 24 ────────────────────────────────────────────────────
     //
     // Idle y Explore usan el MISMO grupo (Swim) — solo cambia la velocidad.
@@ -353,6 +367,11 @@ public class FishAgent : MonoBehaviour
                 targetGroup = AnimClipGroup.Flee; speed = 1.6f;  break;
             case FishState.Sleep:
                 targetGroup = AnimClipGroup.Rest; speed = 0.18f; break;
+            case FishState.Courtship:
+                targetGroup      = AnimClipGroup.Swim;
+                speed            = 1.35f;
+                _swimIsExploring = true;
+                break;
             default: return;
         }
 
@@ -506,12 +525,13 @@ public class FishAgent : MonoBehaviour
     {
         float base_ = _brain.CurrentState switch
         {
-            FishState.Flee    => fishData.maxSpeed * 2.5f,
-            FishState.Idle    => fishData.maxSpeed * 0.15f,
-            FishState.Sleep   => 0f,
-            FishState.Explore => fishData.maxSpeed,
-            FishState.Feed    => fishData.maxSpeed * 1.5f,
-            _                 => fishData.maxSpeed
+            FishState.Flee      => fishData.maxSpeed * 2.5f,
+            FishState.Idle      => fishData.maxSpeed * 0.15f,
+            FishState.Sleep     => fishData.maxSpeed * 0.08f,
+            FishState.Explore   => fishData.maxSpeed,
+            FishState.Feed      => fishData.maxSpeed * 1.5f,
+            FishState.Courtship => fishData.maxSpeed * 0.7f,
+            _                   => fishData.maxSpeed
         };
 
         // Pez hambriento se mueve más despacio (excepto cuando huye o come)
@@ -523,6 +543,12 @@ public class FishAgent : MonoBehaviour
             float hungerPenalty = Mathf.Lerp(1f, 0.45f, (_needs.hunger - 0.5f) / 0.5f);
             base_ *= hungerPenalty;
         }
+
+        // Senior: movimiento más tranquilo en todos los estados salvo huida/alimentación
+        if (AgeGroup == FishAgeGroup.Senior &&
+            _brain.CurrentState != FishState.Flee &&
+            _brain.CurrentState != FishState.Feed)
+            base_ *= 0.60f;
 
         return base_ * (AquariumManager.Instance != null ? AquariumManager.Instance.FishSpeedMultiplier : 1f);
     }

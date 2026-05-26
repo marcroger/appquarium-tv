@@ -53,12 +53,22 @@ public class DecorationData : ScriptableObject
     public bool  hasGlow       = false;
     public Color glowColor     = Color.white;
     public float glowIntensity = 0.8f;
+    [Tooltip("Esta deco emite bioluminiscencia de noche (emission en material + bloom). Usar en corales que fluorescentan.")]
+    public bool  hasBioLuminescence = false;
+    [Tooltip("Multiplicador HDR de emisión nocturna aplicado sobre tintColor (>1 activa bloom)")]
+    public float bioGlowIntensity   = 1.5f;
 
     [Header("Surface Climbing")]
     [Tooltip("Esta deco puede usarse como superficie: otras decos pueden montarse encima (rocas, columnas, estatuas)")]
     public bool isMountTarget  = false;
     [Tooltip("Esta deco puede montarse encima de otras decos marcadas como isMountTarget (corales, plantas, conchas, estrellas)")]
     public bool canMountOthers = false;
+
+    [Header("Contacto con la superficie")]
+    [Tooltip("Cuánto se entierra la base del mesh en la superficie de contacto (suelo o deco-target). Negativo = hundir, 0 = ras, positivo = flotar. Las decos sólidas suelen llevar -0.02..-0.05; los corales -0.02; rocas pueden hundirse más.")]
+    public float embedDepth      = -0.03f;
+    [Tooltip("Punto de apoyo en espacio LOCAL del prefab (antes de defaultScale). Si está en cero, se usa el punto más bajo del AABB. Útil para corales: el AABB.min puede ser la punta de una rama lateral; aquí indicas la base/raíz que realmente debe tocar la superficie.")]
+    public Vector3 supportPointLocal = Vector3.zero;
 
     [Header("Efectos en el ecosistema")]
     [Tooltip("Reduce el estrés de los peces por segundo")]

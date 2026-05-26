@@ -60,10 +60,11 @@ public class FishProceduralAnimator : MonoBehaviour
             Quaternion targetFacing = Quaternion.LookRotation(flatVelocity.normalized);
             float maxTurnDeg = _agent.CurrentState switch
             {
-                FishState.Flee  => 280f,
-                FishState.Feed  => 150f,
-                FishState.Sleep => 20f,
-                _               => 110f
+                FishState.Flee      => 280f,
+                FishState.Feed      => 150f,
+                FishState.Sleep     => 20f,
+                FishState.Courtship => 140f,
+                _                   => 110f
             };
             _smoothedFacing = Quaternion.RotateTowards(_smoothedFacing, targetFacing, maxTurnDeg * Time.deltaTime);
 
@@ -79,11 +80,12 @@ public class FishProceduralAnimator : MonoBehaviour
         // ── 2. Frecuencia de swing según estado ────────────────────────────
         float targetFreq = _agent.CurrentState switch
         {
-            FishState.Flee    => fleeFrequency,
-            FishState.Explore => swimFrequency,
-            FishState.Feed    => swimFrequency * 1.2f,
-            FishState.Sleep   => idleFrequency  * 0.2f,
-            _                 => idleFrequency
+            FishState.Flee      => fleeFrequency,
+            FishState.Explore   => swimFrequency,
+            FishState.Feed      => swimFrequency * 1.2f,
+            FishState.Sleep     => idleFrequency  * 0.2f,
+            FishState.Courtship => swimFrequency  * 1.3f,
+            _                   => idleFrequency
         };
         _currentFrequency = Mathf.Lerp(_currentFrequency, targetFreq, Time.deltaTime * 3f);
 

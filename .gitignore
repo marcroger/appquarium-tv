@@ -33,6 +33,13 @@
 /webgl-output/
 /webgl-build/
 
+# Addressables build output — bundles generados por Build Player Content (389MB+)
+# Se deployan a R2 vía aws s3 sync, no se versionan
+/ServerData/
+
+# Claude Code internal files
+.claude/scheduled_tasks.lock
+
 # Pack 24 third-party — pesos grandes a NO commitear
 # Aclaración: en el TV project SÍ necesitamos los modelos para que la escena
 # los referencie. Si son >100MB cada uno hay que usar Git LFS o hostear aparte.

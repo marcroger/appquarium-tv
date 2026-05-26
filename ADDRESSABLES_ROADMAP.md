@@ -1,6 +1,10 @@
-# Cast Receiver — Unity Addressables (Fase A en curso)
+# Cast Receiver — Unity Addressables (Fase A.1 NUEVO bloqueante)
 
-**Actualizado:** 2026-05-25 — diagnóstico corregido + fix de duplicados aplicado.
+**Actualizado:** 2026-05-26 11:30 — Build WebGL completado pero base = 411 MB ⛔.
+
+> **Report completo:** [`BUILD_REPORT_2026-05-25.md`](BUILD_REPORT_2026-05-25.md) §8-§10
+>
+> **Hallazgo clave:** los 92 bundles remotos están en `ServerData/WebGL/` (389 MB) pero los MISMOS GLBs están duplicados en el `webgl-output/Build/webgl-output.data` (411 MB) porque el scene tiene refs directas a los SOs (`allFishCatalog` + `allDecoCatalog` = 84 refs en TvScene.unity). Modelo Netflix bloqueado hasta resolver esta duplicación — ver §9 del report.
 
 ## Objetivo
 
