@@ -90,6 +90,7 @@ public class TankBackground : MonoBehaviour
         {
             cam.clearFlags      = CameraClearFlags.SolidColor;
             cam.backgroundColor = colorBottom;
+            TvLayerDebug.Set("CAM", $"SolidColor bg=({colorBottom.r:F2},{colorBottom.g:F2},{colorBottom.b:F2})");
         }
 
         BuildNightOverlay(bounds);
@@ -181,6 +182,7 @@ public class TankBackground : MonoBehaviour
         if (found == null)
         {
             Debug.LogWarning($"[TankBG] Preset '{bgId}' no encontrado.");
+            TvLayerDebug.Set("BG", $"PRESET NOT FOUND: {bgId}");
             return;
         }
 
@@ -197,9 +199,11 @@ public class TankBackground : MonoBehaviour
         if (tex != null)
         {
             ApplyImageTexture(tex);
+            TvLayerDebug.Set("BG", $"{bgId} IMAGE shader={_bgMaterial?.shader?.name ?? "null"} tex={tex.width}x{tex.height}");
             return;
         }
 
+        TvLayerDebug.Set("BG", $"{bgId} GRADIENT (no image) shader={_bgMaterial?.shader?.name ?? "null"}");
         // Fallback: gradiente procedural
         if (animate)
             _bgTransition = StartCoroutine(TransitionGradient(found.Value.bottom, found.Value.mid, found.Value.top, 1.2f));
@@ -399,9 +403,14 @@ public class TankBackground : MonoBehaviour
         }
         tex.Apply();
 
-        Shader shader = Shader.Find("Universal Render Pipeline/Unlit")
-                     ?? Shader.Find("Unlit/Texture")
-                     ?? Shader.Find("Legacy Shaders/Diffuse");
+        // Sprites/Default está garantizado en Always Included Shaders y renderiza
+        // texturas correctamente en WebGL. URP/Unlit tiene un bug de color space en WebGL.
+        Shader shader = Shader.Find("Sprites/Default")
+                     ?? Shader.Find("UI/Default")
+                     ?? Shader.Find("Universal Render Pipeline/Unlit")
+                     ?? Shader.Find("Unlit/Texture");
+
+        JsBridge.Log($"[TankBG] shader={shader?.name ?? "NULL(error)"}");
 
         var mat = new Material(shader) { name = "BG_Mat" };
 

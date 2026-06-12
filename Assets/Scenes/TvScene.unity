@@ -508,12 +508,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: abfe1709c2ca3ce4498bbc3669b89496, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PostProcessingSetup
-  bloomIntensity: 1.2
-  bloomThreshold: 0.6
-  bloomScatter: 0.75
-  colorFilter: {r: 0.75, g: 0.9, b: 1, a: 1}
-  saturation: -15
-  postExposure: 0.1
+  bloomIntensity: 0.35
+  bloomThreshold: 0.92
+  bloomScatter: 0.6
+  colorFilter: {r: 1, g: 1, b: 1, a: 1}
+  saturation: 0
+  postExposure: 0
   vignetteIntensity: 0.095
   vignetteSmoothness: 0.4
   vignetteColor: {r: 0, g: 0.01, b: 0.06, a: 1}
@@ -688,8 +688,8 @@ Camera:
   m_GameObject: {fileID: 822374140}
   m_Enabled: 1
   serializedVersion: 2
-  m_ClearFlags: 1
-  m_BackGroundColor: {r: 0.19215687, g: 0.3019608, b: 0.4745098, a: 0}
+  m_ClearFlags: 2
+  m_BackGroundColor: {r: 0.019215687, g: 0.04705882, b: 0.09019608, a: 1}
   m_projectionMatrixMode: 1
   m_GateFitMode: 2
   m_FOVAxisMode: 0

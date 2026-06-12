@@ -24,6 +24,9 @@ MonoBehaviour:
   turnSpeed: 5
   perceptionRadius: 2.8
   baseSize: 0.7
+  wanderJitter: 0
+  wanderRadius: 0
+  wanderDistance: 0
   bodySwingOverride: -1
   bankingAmountOverride: 3
   turnSmoothingOverride: -1
@@ -40,7 +43,7 @@ MonoBehaviour:
   price: 0.49
   rarity: 0
   displayOrder: 0
-  prefab: {fileID: 0}
+  prefab: {fileID: 7328489922366372719, guid: 91732d277a7011644aefb729993a3f9d, type: 3}
   assetBundleName: pack_content_free
   assetBundleAssetName: fish19_GobyNemateleotris
   maturationDays: 5

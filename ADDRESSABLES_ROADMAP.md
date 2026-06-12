@@ -1,10 +1,26 @@
-# Cast Receiver — Unity Addressables (Fase A.1 NUEVO bloqueante)
+# Cast Receiver — Unity Addressables
 
-**Actualizado:** 2026-05-26 11:30 — Build WebGL completado pero base = 411 MB ⛔.
+**Actualizado:** 2026-06-02
 
-> **Report completo:** [`BUILD_REPORT_2026-05-25.md`](BUILD_REPORT_2026-05-25.md) §8-§10
+> **⭐ PRÓXIMO PASO:** Peces restantes (23) + validar decos en TV → aplicar FishUnlit a cada pez (cambiar .mat + ★ New Build + deploy). Ver §"Workflow por pez" abajo.
 >
-> **Hallazgo clave:** los 92 bundles remotos están en `ServerData/WebGL/` (389 MB) pero los MISMOS GLBs están duplicados en el `webgl-output/Build/webgl-output.data` (411 MB) porque el scene tiene refs directas a los SOs (`allFishCatalog` + `allDecoCatalog` = 84 refs en TvScene.unity). Modelo Netflix bloqueado hasta resolver esta duplicación — ver §9 del report.
+> **Estado actual (2026-06-08):**
+> - ✅ Unity carga (~22s, sin OOM)
+> - ✅ Background, WaterSurface, substrate: correctos (Sprites/Default)
+> - ✅ **Banggai Cardinalfish: CONFIRMADO EN PANTALLA en Xiaomi vía Cast** (2026-06-08) — cuerpo opaco, rayas negras, aletas transparentes. Shader CG legacy `Appquarium/FishUnlit`.
+> - ✅ Moorish Idol: bundle deployado con FishUnlit — pendiente validar visualmente en TV
+> - ❌ 23 peces restantes: stubs 2.5 KB — no buildeados aún
+> - ❓ Decos en TV: bundles deployados desde 2026-05-28 — nunca validadas visualmente (riesgo: URP Lit stripping, ver nota abajo)
+> - 🐛 Bug doble-slash catálogo: workaround activo, fix pendiente en `TvAddressablesSetup.cs`
+>
+> **Ver:** [`BUILD_REPORT_2026-06-02.md`](BUILD_REPORT_2026-06-02.md) — diagnóstico completo de bugs de rendering WebGL.  
+> **Reports anteriores:** [`BUILD_REPORT_2026-05-28.md`](BUILD_REPORT_2026-05-28.md) | [`BUILD_REPORT_2026-05-25.md`](BUILD_REPORT_2026-05-25.md)
+> - ✅ Compresión correcta: `m_Compression: 1` = LZ4 en Addressables 3.0 (no LZMA — diagnóstico anterior incorrecto)
+> - ✅ FishData.prefab asignado en 25 SOs (listos para buildear)
+>
+> **Ver:** [`BUILD_REPORT_2026-05-30.md`](BUILD_REPORT_2026-05-30.md) para diagnóstico completo.
+>
+> **Reports:** [`BUILD_REPORT_2026-05-28.md`](BUILD_REPORT_2026-05-28.md) | [`BUILD_REPORT_2026-05-25.md`](BUILD_REPORT_2026-05-25.md)
 
 ## Objetivo
 
@@ -92,16 +108,9 @@ Adicional — limpieza de scripts (no Addressables, pero alineado):
 
 El build de Fase A tardó **9.5 horas** para 92 bundles con PackSeparately. Causa raíz confirmada por investigación:
 
-#### Culpable 1 — LZMA → LZ4 doble compresión (principal)
+#### ~~Culpable 1 — LZMA~~ ← DIAGNÓSTICO INCORRECTO (verificado 2026-05-30)
 
-Addressables pone **LZMA** por defecto en remote groups. WebGL no tiene threading y **no puede descomprimir LZMA** en runtime. Unity lo detecta durante el build y **recomprime silenciosamente a LZ4** cada bundle — doble trabajo por cada uno de los 92 bundles. Con PackSeparately el overhead se multiplica linealmente.
-
-**Fix obligatorio antes del próximo build:**
-```
-Addressables Groups → Remote Groups (Fish_Remote, Decos_Remote, Environments_Remote, Audio_Remote)
-  → Grupo → Inspector → Advanced Options → Compression = LZ4
-```
-Hacerlo en los 4 grupos remotos. El grupo `Built In Data` (local) puede quedar en LZ4HC.
+`m_Compression: 1` en Addressables 3.0 enum = **LZ4** (0=Uncompressed, 1=LZ4, 2=LZMA). Los grupos ya tenían LZ4 desde el principio. El build de 9.5h fue causado íntegramente por la recompresión de texturas en caché fría (Culpable 2). **No hay que cambiar nada de compresión.**
 
 #### Culpable 2 — Recompresión de texturas en cada build
 
@@ -117,65 +126,139 @@ Remove-Item -Recurse -Force "Library\com.unity.addressables"
 # Luego Build → New Build → Default Build Script
 ```
 
-#### Tiempo esperado TRAS el fix de LZ4
+#### Tiempo esperado — builds con caché fría
 
-Con LZMA→LZ4 corregido + 92 bundles PackSeparately: **estimado 45-90 min** (vs 9.5h). El overhead por-bundle sigue siendo real con PackSeparately pero sin la doble compresión debería ser manejable.
+El cuello de botella REAL es la compresión de texturas para WebGL (DXT/ETC2 en CPU, ~45s/textura). No hay doble compresión porque la compresión ya era LZ4 desde el principio.
+
+- **1 pez (banggai) en frío**: ~10-15 min (texturas pequeñas del banggai)
+- **25 peces en frío a 1024px**: ~8-16h (95 texturas × 45s + FBX + animaciones)
+- **25 peces en frío a 512px** (con `★ Reduce TV Textures`): ~2-4h ← **recomendado**
+- **Builds siguientes** (SBP cache caliente): solo los assets cambiados → minutos
 
 ---
 
-## Plan de ejecución actual
+## Sesión 2026-05-26 — Intentos, errores y estado actual
 
-### Paso 1 — Cleanup + setup (en Unity, ~10 seg cada uno)
+### Contexto de entrada
 
-```
-Appquarium TV → ★ Clean Substrate Duplicates       → "Removed 12 substrate texture duplicates"
-Appquarium TV → ★ Set Bundle Mode (PackSeparately) → "All remote groups set to PackSeparately"
-Appquarium TV → ★ Print Addressables Summary       → "Total: 92" (25 + 54 + 11 + 2)
-```
+El build overnight correcto (16h frío, NonRecursiveBuilding=true) había producido:
+- 92 bundles en `ServerData/WebGL/` (389MB) ✅
+- `webgl-output.data` = 411MB ⛔ (causa: scene tenía 84 refs directas a SOs → glbs bakeados en .data)
 
-### Paso 2 — Build Player Content
+Commit 4064e61 ya había vaciado `allFishCatalog[]` y `allDecoCatalog[]` en TvScene.unity. El .data gordo era el bloqueante para Cast en Xiaomi (timeout 30s).
 
-```
-Window → Asset Management → Addressables → Groups → Build → New Build → Default Build Script
-```
+### Intento 3 — NonRecursiveBuilding=false + Shared_Local (ERROR — ~5h perdidas)
 
-**Esperado con PackSeparately + fix de duplicados + LZ4**: build limpio en 45-90 min. 92 bundles en `ServerData/WebGL/`. Sin LZ4 (con LZMA default) puede tardar 6-10h por doble compresión — ver § "Lecciones de build".
+**Qué se hizo:**
+1. Creado grupo `Shared_Local` (PackTogether, local) con 7 assets duplicados: WoodChest.mat, URPGlobalSettings.asset, rock_lod0-4.fbx
+2. Cambiado `NonRecursiveBuilding: 1 → 0` en `AddressableAssetSettings.asset`
+3. Lanzado Build Player Content × 2 (con cancelaciones)
 
-⚠️ **Antes de lanzar este paso**: asegurarse de que los 4 remote groups tienen `Compression = LZ4`.
+**Por qué fue un error:**
+`NonRecursiveBuilding=false` hace que cada bundle embeba **todas sus dependencias transitivas**. Un bundle de deco que con NonRecursiveBuilding=true era 15-25MB (deco prefab + GLB propio) pasa a ser 100MB+ (incluye WoodChest.mat × 21, rock LODs × 6, shaders URP completos). Cada bundle tardó **~47-48 minutos** en `WriteSerializedFiles`. Con 54 decos = ~42 horas estimadas. Cancelado.
 
-**Si peta otra vez**: el log limpio nos dará la causa real (no estará enmascarado por el bucle de assertion).
+El BUILD_REPORT §3 dice explícitamente que el tiempo del build anterior fue por **shader compilation en frío + reimport de texturas** — NO por NonRecursiveBuilding. Con caché caliente ya sería 1-3h con NonRecursiveBuilding=true. Se cambió innecesariamente.
 
-### Paso 3 — Build WebGL base
+**Qué quedó del intento:**
+- ServerData/WebGL: vacío (nada producido)
+- SBP cache de la build overnight: intacto en `Library/com.unity.addressables/` (buildlayout.json 690KB, addressables_content_state.bin 61KB — de las 9:11 del build correcto)
+- Shared_Local group: se **mantiene** con los 7 entries (correcto, reduce duplicación)
+- NonRecursiveBuilding: **revertido a 1 (true)**
 
-```
-File → Build Settings → Build → webgl-output/
-```
+### Estado actual — 2026-05-28
 
-Compression = Disabled (ya configurado). Esperado ~30-50MB sin `.gz`.
+| Item | Valor | Estado |
+|---|---|---|
+| NonRecursiveBuilding | **1 (true)** | ✅ correcto |
+| Shared_Local | 7 assets (WoodChest, URPGlobalSettings, rock_lod0-4) | ✅ |
+| TvScene.unity allFishCatalog/allDecoCatalog | **[] (vacíos)** | ✅ |
+| TvScene.unity allTankCatalog | 4 TankData SOs | ✅ (metadata pura, no GLBs) |
+| ServerData/WebGL | **93 bundles, 387 MB** | ✅ |
+| webgl-output.data | **26 MB** | ✅ era 411 MB |
+| R2 bundles/ | **92 bundles** | ✅ deployado |
+| R2 Build/ | data + wasm + js | ✅ deployado |
+| Test Xiaomi | **pendiente** | ⏳ |
 
-### Paso 4 — Deploy a R2
+### Test Xiaomi — pasos para la tarde
 
-```powershell
-cd D:\dev\appquarium-tv-unity
+### Nota sobre fish prefabs en Addressables
 
-# Bundles (catálogo + 92 .bundle files)
-aws s3 sync ServerData/WebGL/ s3://appquarium-tv/bundles/ `
-  --profile r2 `
-  --endpoint-url https://2aa2b7914f4ce7ce81e38d694b6219dc.r2.cloudflarestorage.com
+Los 25 fish de Pack 24 (Mikhail Nesterov) tienen `FishData.prefab` apuntando a `Assets/ThirdParty/Mikhail Nesterov/` que NO está en ningún grupo Addressables. Con NonRecursiveBuilding=true y scene refs vacías:
+- Fish bundles = 2.5KB (solo SO)
+- En runtime: `FishData.prefab` puede ser null → fish de Pack 24 no renderizarán
+- **Para el test inicial en Xiaomi esto es aceptable** — los 3 peces starter (banggai_cardinalfish, boxfish_yellow, goby_firefish) son del `pack_content_free` bundle y sí cargan
+- Para Fase B: añadir prefabs Pack 24 al grupo `Fish_Remote` como entries adicionales
 
-# Base WebGL (--delete limpia restos del build viejo de 307MB)
-aws s3 sync webgl-output/ s3://appquarium-tv/ `
-  --profile r2 `
-  --endpoint-url https://2aa2b7914f4ce7ce81e38d694b6219dc.r2.cloudflarestorage.com `
-  --delete
-```
+---
 
-### Paso 5 — Test Xiaomi TV Box S
+## Test Xiaomi — sesión de la tarde (R2 deployado ✅)
 
-Móvil → FAB → Cast → seleccionar Xiaomi. TV debe:
-1. Cargar base ligera en <10s (vs timeout 30s anterior)
-2. Recibir INIT y empezar a fetch los bundles de los assets activos del tanque del usuario
-3. Renderizar el acuario conforme van llegando los bundles (lazy, ordenado por importancia: fish primero)
+**No hay que buildear nada.** Todo está en R2. Solo hay que probar.
+
+Móvil → FAB → Cast → seleccionar Xiaomi (`MiTV-AFMU0`).
+
+**Secuencia esperada:**
+1. TV carga base WebGL (26 MB) → ready en <10s
+2. Loading overlay aparece (logo + spinner cyan + "0/N cargados")
+3. TvSceneBootstrap recibe INIT → descarga bundles activos en paralelo
+4. Contador actualiza: "1/N cargados", "2/N cargados"...
+5. Acuario visible, overlay hace fade-out
+
+**Criterios de aceptación:**
+- [ ] Tiempo total "Casting…" → primer frame: **<15s** en WiFi de casa
+- [ ] Loading overlay visible durante la carga
+- [ ] 3 peces starter (banggai_cardinalfish, boxfish_yellow, goby_firefish) nadando
+- [ ] Decos colocadas correctamente
+- [ ] Background, sustrato y lighting correctos
+- [ ] Tap "alimentar" → comida cae
+- [ ] Toggle día/noche → transición suave
+
+**Si algo falla:**
+- **~~WebAssembly OOM (pantalla roja "Out of memory: wasm memory")~~ RESUELTO** — Fix aplicado 2026-05-28: wasm parchado de 256MB a 64MB initial, R2 re-subido. Si vuelve a aparecer tras un rebuild: verificar `webGLInitialMemorySize: 64` en ProjectSettings o aplicar patch manual (ver BUILD_REPORT_2026-05-28 §9).
+- **Timeout Cast (>30s):** `curl -I https://pub-2b11cc17bdef4f75bd4d34eeabbd6042.r2.dev/Build/webgl-output.data` — verificar Content-Length ~27 MB
+- **Pantalla negra sin error:** abrir DevTools remotas → `chrome://inspect` en Chrome del PC → buscar el receiver Cast
+- **Peces no aparecen (null prefab):** los Pack24 son deuda técnica conocida (ver §"Nota sobre fish prefabs"). Los 3 starter SÍ deben cargar
+- **NullReferenceException en bundles:** bundles fresh, no debería pasar; si ocurre revisar Console Unity TV
+
+**Si Cast funciona en Xiaomi:** ✅ Fase A.1 done. Proceder a Fase B (Backgrounds/Substrates fuera de Resources).
+**Si Cast falla por timeout:** .data puede haber quedado en caché de R2 anterior. Limpiar caché Cloudflare si aplica.
+
+---
+
+---
+
+## Workflow por pez — aplicar FishUnlit (23 restantes)
+
+Cada pez del Global Reef Fish Pack necesita el fix de materiales descubierto con Banggai. El proceso incremental con SBP cache hace que el coste sea ~30-60s por pez (no 2h — solo el primer build de cada pez es frío).
+
+**Regla confirmada (ver `BUILD_REPORT_2026-06-02.md §Bug4`):**
+- Body `.mat` → shader `Appquarium/FishUnlit` (GUID `60c4ee7717958bf408b5b7f628166d09`) — `Cull Off`, `ZWrite On`, sin clip
+- Fins `.mat` (si existe separado) → shader `Sprites/Default` (fileID 10753)
+- Peces de single-material → FishUnlit únicamente
+- **NO** player rebuild — FishUnlit ya está compilado y bakeado en el player
+
+**Por qué Cull Off es obligatorio:** las normales del Global Reef Fish Pack están invertidas. Con `Cull Back` el body es invisible (Unity elimina todas las caras). Este problema es de TODO el pack, no solo del Banggai.
+
+**Coste por pez:**
+| Situación | Tiempo |
+|---|---|
+| Primer pez nuevo (SBP cache frío de ese pez) | ~30-60 min |
+| Cambio de .mat en pez ya buildeado | ~30s |
+| Todos los peces en caché caliente | ~9s (solo catalog) |
+
+**No hace falta buildear todos a la vez.** Se puede ir pez a pez: cambiar .mat → ★ New Build → deploy ese bundle → el resto siguen como están.
+
+---
+
+## Decos en TV — estado y riesgo
+
+Los 54 bundles de decos están deployados en R2 desde 2026-05-28 (92 bundles totales). **Nunca se han validado visualmente en TV.**
+
+**Riesgo:** los prefabs de deco usan materiales con `Universal Render Pipeline/Lit` que se stripea con `Managed Stripping Level: High` (mismo bug que los peces). Si las decos aparecen **magenta** en TV = mismo problema que el Banggai antes del fix.
+
+**Diferencia con peces:** las decos NO tienen normales invertidas (GLBs normales), así que NO necesitan `Cull Off`. Si el material es el problema, el fix es más simple: cambiar a `Sprites/Default` o crear variante de `FishUnlit` sin `Cull Off` para decos.
+
+**Próximo paso:** castear cualquier tanque con una deco y ver si aparece. Si magenta → fix de shader. Si bien → decos OK sin cambios.
 
 ---
 
@@ -227,11 +310,18 @@ Implementación: nuevo menu item `★ Apply TV Texture Strategy` que aplique tam
 
 ## Cuándo re-buildear bundles vs base WebGL
 
-| Cambio | Qué rebuild |
-|---|---|
-| Solo lógica C# (CastReceiver, TvSceneBootstrap, AquariumManager) | Solo WebGL base. Bundles intactos. |
-| Stats/precio de un FishData (sin cambiar prefab) | Solo Fish_Remote (rebuild incremental con Update Build → Update a Previous Build) |
-| Nuevo pez | Re-run `★ Setup Addressables`, luego rebuild Fish_Remote |
-| Nueva deco | Re-run setup, rebuild Decos_Remote |
-| Nuevo background/sustrato | Re-run setup, rebuild Environments_Remote |
-| Strategy de texturas (iteración 2) | Reimport completo + rebuild de TODOS los bundles (~1-2h) |
+**Regla de oro: siempre usar `New Build → Default Build Script`. El SBP cache hace que sea efectivamente incremental — solo reconstruye lo que cambió.**
+
+> ❌ **`Update a Previous Build` — NO usar** para nuestra arquitectura R2.  
+> Es una feature para workflows CCD (Unity Cloud). Para hosting propio (R2) no funciona correctamente cuando hay nuevas dependencias (prefabs, assets 3D). Causa builds fantasma que no producen output.
+
+| Cambio | Herramienta | Tiempo estimado |
+|---|---|---|
+| Solo lógica C# | Solo rebuild WebGL base (File → Build Settings → Build). Bundles intactos. | 15-30 min |
+| Stat/precio de un FishData SO | `New Build` | Segundos (SBP cache, solo el SO cambió) |
+| Textura de un pez cambiada | `New Build` | ~1-2 min (solo esa textura se recomprime) |
+| Nuevo pez (pez 11 con 10 ya construidos) | `★ Setup Addressables` → `New Build` | ~10-15 min (solo el nuevo en frío, los 10 usan SBP cache) |
+| Nueva deco | `★ Setup Addressables` → `New Build` | ~10-15 min (solo la nueva) |
+| Nuevo background/sustrato | `★ Setup Addressables` → `New Build` | ~2-5 min |
+| Primer build completo (25 peces, 512px) | `★ Reduce TV Textures` → `New Build` | ~2-4h (todos en caché fría — one-time) |
+| Rebuild total tras `Remove Library/` | `New Build` | = primer build completo |

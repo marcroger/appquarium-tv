@@ -24,6 +24,9 @@ MonoBehaviour:
   turnSpeed: 2.8
   perceptionRadius: 3
   baseSize: 1.05
+  wanderJitter: 0
+  wanderRadius: 0
+  wanderDistance: 0
   bodySwingOverride: -1
   bankingAmountOverride: 5
   turnSmoothingOverride: -1
@@ -40,10 +43,11 @@ MonoBehaviour:
   price: 1.49
   rarity: 1
   displayOrder: 0
-  prefab: {fileID: 0}
+  prefab: {fileID: 4909768846615674922, guid: 36d4a629e9cc4af40adff881d2ac49d1, type: 3}
   assetBundleName: pack_fish_uncommon
   assetBundleAssetName: fish15_redcoat
   maturationDays: 9
   seniorDays: 13
+  seniorGoodbyeDays: 7
   pearlPrice: 25
   pearlSellValue: 5

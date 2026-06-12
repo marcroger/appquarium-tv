@@ -198,6 +198,7 @@ public class TankLightingController : MonoBehaviour
         vol.profile = profile;
 
         SetPreset("light_white", animate: false);
+        TvLayerDebug.Set("Lighting", "initialized light_white");
         Debug.Log("[Lighting] ✅ TankLightingController (3 spots + fill + postFX)");
     }
 
@@ -215,6 +216,7 @@ public class TankLightingController : MonoBehaviour
         _currentPresetId = id;
         if (_transition != null) StopCoroutine(_transition);
 
+        TvLayerDebug.Set("Lighting", $"preset={id} filter=({preset.Value.filterColor.r:F2},{preset.Value.filterColor.g:F2},{preset.Value.filterColor.b:F2})");
         if (_spots[0] == null) return;
 
         if (animate && !preset.Value.animated)

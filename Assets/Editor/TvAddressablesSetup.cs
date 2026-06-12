@@ -13,7 +13,7 @@ using UnityEngine;
 public static class TvAddressablesSetup
 {
     private const string R2_LOAD_URL =
-        "https://pub-2b11cc17bdef4f75bd4d34eeabbd6042.r2.dev/bundles/";
+        "https://pub-2b11cc17bdef4f75bd4d34eeabbd6042.r2.dev/bundles";
 
     // ── Main MenuItem ─────────────────────────────────────────────────────────
 
@@ -21,6 +21,10 @@ public static class TvAddressablesSetup
     public static void SetupAddressables()
     {
         var settings = GetOrCreateSettings();
+        // Always ensure the Remote Load URL has no trailing slash (prevents bundles// double-slash in settings.json).
+        var profileId = settings.activeProfileId;
+        settings.profileSettings.SetValue(profileId, AddressableAssetSettings.kRemoteLoadPath, R2_LOAD_URL);
+        EditorUtility.SetDirty(settings);
 
         // ── Groups ────────────────────────────────────────────────────────────
         var fishGroup  = GetOrCreateRemoteGroup(settings, "Fish_Remote");
@@ -175,6 +179,176 @@ public static class TvAddressablesSetup
         Debug.Log("[TvAddressables] ✅ All remote groups set to PackSeparately (1 bundle per asset).");
     }
 
+    /// <summary>
+    /// Assigns FishData.prefab for all 25 fish SOs by matching assetBundleAssetName
+    /// to the prefab filename in Assets/ThirdParty/Mikhail Nesterov/.
+    /// Run this once, then rebuild Fish_Remote bundles (Build → Update a Previous Build).
+    /// NOTE: must re-run after each mobile sync that overwrites FishData SOs.
+    /// </summary>
+    [MenuItem("Appquarium TV/★ Assign Fish Prefabs")]
+    public static void AssignFishPrefabs()
+    {
+        var searchPaths = new[] { "Assets/ThirdParty/Mikhail Nesterov" };
+
+        var fishSOs = AssetDatabase.FindAssets("t:FishData",
+            new[] { "Assets/ScriptableObjects/Fish" });
+
+        int assigned = 0, alreadySet = 0, notFound = 0;
+        foreach (var guid in fishSOs)
+        {
+            var path = AssetDatabase.GUIDToAssetPath(guid);
+            var so   = AssetDatabase.LoadAssetAtPath<FishData>(path);
+            if (so == null || string.IsNullOrEmpty(so.assetBundleAssetName)) continue;
+
+            if (so.prefab != null) { alreadySet++; continue; }
+
+            var prefabGuids = AssetDatabase.FindAssets(
+                $"t:Prefab {so.assetBundleAssetName}", searchPaths);
+
+            if (prefabGuids.Length == 0)
+            {
+                Debug.LogWarning($"[FishPrefabs] ✗ No prefab for {so.itemId} ({so.assetBundleAssetName})");
+                notFound++;
+                continue;
+            }
+
+            var prefabPath = AssetDatabase.GUIDToAssetPath(prefabGuids[0]);
+            var prefab     = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+            if (prefab == null) { notFound++; continue; }
+
+            so.prefab = prefab;
+            EditorUtility.SetDirty(so);
+            Debug.Log($"[FishPrefabs] ✅ {so.itemId} → {System.IO.Path.GetFileName(prefabPath)}");
+            assigned++;
+        }
+
+        AssetDatabase.SaveAssets();
+        Debug.Log($"[FishPrefabs] Done: {assigned} assigned, {alreadySet} already set, {notFound} not found.\n" +
+                  "Next: Window → Asset Management → Addressables → Groups → Build → New Build → Default Build Script");
+    }
+
+    /// <summary>
+    /// Removes all fish from Fish_Remote except banggai_cardinalfish.
+    /// Use to do a fast 1-fish test build (~10-15 min). Restore with ★ Setup Addressables.
+    /// </summary>
+    [MenuItem("Appquarium TV/★ Test: Isolate Banggai (1 pez)")]
+    public static void IsolateBanggai()
+    {
+        var settings = AddressableAssetSettingsDefaultObject.Settings;
+        if (settings == null) { Debug.LogWarning("No Addressables settings found."); return; }
+
+        var fishGroup = settings.FindGroup("Fish_Remote");
+        if (fishGroup == null) { Debug.LogWarning("Fish_Remote group not found."); return; }
+
+        var toRemove = new List<AddressableAssetEntry>();
+        foreach (var entry in fishGroup.entries)
+            if (entry.address != "fish_banggai_cardinalfish")
+                toRemove.Add(entry);
+
+        foreach (var entry in toRemove)
+            settings.RemoveAssetEntry(entry.guid, false);
+
+        EditorUtility.SetDirty(fishGroup);
+        EditorUtility.SetDirty(settings);
+        AssetDatabase.SaveAssets();
+
+        Debug.Log($"[TvAddressables] ✅ Fish_Remote aislado: {toRemove.Count} peces eliminados, solo fish_banggai_cardinalfish queda.\n" +
+                  "Next: Build → New Build → Default Build Script\n" +
+                  "Para restaurar: Appquarium TV → ★ Setup Addressables");
+    }
+
+    /// <summary>
+    /// Adds a second fish (moorish_idol) to Fish_Remote alongside banggai.
+    /// Use to verify SBP incremental cache: second New Build should take ~same time as first,
+    /// not double, because banggai's assets are already cached.
+    /// </summary>
+    [MenuItem("Appquarium TV/★ Test: Add Moorish Idol (2 peces)")]
+    public static void AddMoorishIdol()
+    {
+        var settings = AddressableAssetSettingsDefaultObject.Settings;
+        if (settings == null) { Debug.LogWarning("No Addressables settings found."); return; }
+
+        var fishGroup = settings.FindGroup("Fish_Remote");
+        if (fishGroup == null) { Debug.LogWarning("Fish_Remote group not found."); return; }
+
+        var fishSOs = AssetDatabase.FindAssets("t:FishData fish_moorish_idol",
+            new[] { "Assets/ScriptableObjects/Fish" });
+
+        if (fishSOs.Length == 0) { Debug.LogWarning("[TvAddressables] fish_moorish_idol SO not found."); return; }
+
+        var path = AssetDatabase.GUIDToAssetPath(fishSOs[0]);
+        var so   = AssetDatabase.LoadAssetAtPath<FishData>(path);
+        if (so == null) { Debug.LogWarning("[TvAddressables] Could not load fish_moorish_idol FishData."); return; }
+
+        SetAddress(settings, fishSOs[0], so.itemId, fishGroup);
+        EditorUtility.SetDirty(fishGroup);
+        EditorUtility.SetDirty(settings);
+        AssetDatabase.SaveAssets();
+
+        Debug.Log($"[TvAddressables] ✅ Fish_Remote ahora tiene 2 peces: fish_banggai_cardinalfish + {so.itemId}\n" +
+                  "Next: Appquarium TV → ★ New Build (Default Build Script)\n" +
+                  "Si el build tarda ~2h (no ~4h) → SBP cache incremental funciona ✅");
+    }
+
+    /// <summary>
+    /// Configures remote catalog so New Build generates catalog.json in ServerData/WebGL/.
+    /// Run once, then do one WebGL player rebuild to embed the remote catalog URL in the player.
+    /// After that: bundle changes only need New Build + deploy bundles+catalog — no player rebuild ever again.
+    /// </summary>
+    [MenuItem("Appquarium TV/★ Fix Remote Catalog")]
+    public static void FixRemoteCatalog()
+    {
+        var settings = AddressableAssetSettingsDefaultObject.Settings;
+        if (settings == null) { Debug.LogWarning("No Addressables settings found."); return; }
+
+        settings.BuildRemoteCatalog = true;
+        settings.RemoteCatalogBuildPath.SetVariableByName(settings, AddressableAssetSettings.kRemoteBuildPath);
+        settings.RemoteCatalogLoadPath.SetVariableByName(settings, AddressableAssetSettings.kRemoteLoadPath);
+
+        EditorUtility.SetDirty(settings);
+        AssetDatabase.SaveAssets();
+
+        Debug.Log("[TvAddressables] ✅ Remote catalog configurado:\n" +
+                  $"  BuildPath → ServerData/[BuildTarget] (= ServerData/WebGL)\n" +
+                  $"  LoadPath  → {R2_LOAD_URL}\n\n" +
+                  "Próximos pasos:\n" +
+                  "  1. ★ New Build  → genera catalog.json + catalog.hash en ServerData/WebGL/\n" +
+                  "  2. Build WebGL Player (una sola vez) → embebe URL del catálogo remoto\n" +
+                  "  3. Deploy todo a R2\n" +
+                  "  Tras esto: futuros builds solo necesitan New Build + deploy bundles+catalog");
+    }
+
+    /// <summary>
+    /// Triggers New Build → Default Build Script programmatically.
+    /// Equivalent to Window → Asset Management → Addressables → Groups → Build → New Build → Default Build Script.
+    /// MCP will timeout but the build continues in Unity.
+    /// </summary>
+    [MenuItem("Appquarium TV/★ New Build (Default Build Script)")]
+    public static void TriggerNewBuild()
+    {
+        // Ensure remote catalog is always configured before building.
+        // This generates catalog.json + catalog.hash in ServerData/WebGL/ alongside bundles.
+        // After one WebGL player rebuild, future bundle updates never need a player rebuild.
+        var settings = AddressableAssetSettingsDefaultObject.Settings;
+        if (settings != null)
+        {
+            settings.BuildRemoteCatalog = true;
+            settings.RemoteCatalogBuildPath.SetVariableByName(settings, AddressableAssetSettings.kRemoteBuildPath);
+            settings.RemoteCatalogLoadPath.SetVariableByName(settings, AddressableAssetSettings.kRemoteLoadPath);
+            EditorUtility.SetDirty(settings);
+            AssetDatabase.SaveAssets();
+            Debug.Log("[TvAddressables] Remote catalog configurado → generará catalog.json en ServerData/WebGL/");
+        }
+
+        // Force reimport of any externally-modified assets (e.g. .mat files edited outside Unity)
+        // before SBP computes its cache keys. Without this, material changes may be missed.
+        AssetDatabase.Refresh();
+
+        Debug.Log("[TvAddressables] Lanzando New Build → Default Build Script...");
+        AddressableAssetSettings.BuildPlayerContent();
+        Debug.Log("[TvAddressables] ✅ Build completado. Verificar ServerData/WebGL/ para los bundles.");
+    }
+
     [MenuItem("Appquarium TV/★ Print Addressables Summary")]
     public static void PrintSummary()
     {
@@ -220,11 +394,12 @@ public static class TvAddressablesSetup
         AddressableAssetSettings settings, string groupName)
     {
         var group = settings.FindGroup(groupName);
-        if (group != null) return group;
-
-        group = settings.CreateGroup(groupName, false, false, false, null,
-            typeof(BundledAssetGroupSchema),
-            typeof(ContentUpdateGroupSchema));
+        if (group == null)
+        {
+            group = settings.CreateGroup(groupName, false, false, false, null,
+                typeof(BundledAssetGroupSchema),
+                typeof(ContentUpdateGroupSchema));
+        }
 
         var schema = group.GetSchema<BundledAssetGroupSchema>();
         if (schema != null)
@@ -234,6 +409,11 @@ public static class TvAddressablesSetup
             schema.LoadPath.SetVariableByName(
                 settings, AddressableAssetSettings.kRemoteLoadPath);
             schema.BundleMode = BundledAssetGroupSchema.BundlePackingMode.PackSeparately;
+            // Always ensure remote groups are included in builds.
+            // m_IncludeInBuild can silently become 0 (e.g. after NonRecursiveBuilding experiments),
+            // which causes the group to produce no bundles and no catalog entries.
+            schema.IncludeInBuild = true;
+            EditorUtility.SetDirty(schema);
         }
 
         return group;

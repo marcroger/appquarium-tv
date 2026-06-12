@@ -317,15 +317,19 @@ public class DecorationPlacer : MonoBehaviour
             ? Instantiate(prefabToSpawn, worldPos, Quaternion.identity, transform)
             : BuildProceduralMesh(data, worldPos);
 
-        // Fix materials: GLBs importados pueden tener shaders Standard (no URP) embebidos.
-        // Convertir en runtime para que sean visibles sin pasos en el Editor.
-        if (data.overrideMaterial == null)
-            FixNonURPMaterials(go);
-
-        // Material override: permite variantes visuales del mismo prefab (ej: ancla nueva/oxidada)
+        // Material override: variantes visuales del mismo prefab (ej: ancla oxidada).
+        // Se aplica ANTES de FixNonURPMaterials a propósito: HallAnchor_rust_mat y
+        // _oldrust usan URP/Lit, que renderiza MAGENTA en WebGL/Cast. Aplicándolo antes,
+        // FixNonURPMaterials lo convierte a FishUnlit (always-included) igual que al
+        // material base. Antes el override se aplicaba sin arreglar → salía magenta.
         if (data.overrideMaterial != null)
             foreach (var mr in go.GetComponentsInChildren<MeshRenderer>())
                 mr.material = data.overrideMaterial;
+
+        // Fix materials: shaders URP/Lit, Standard o glTF (de GLBs importados o de
+        // overrideMaterial) renderizan magenta en el Cast device. Convertir a FishUnlit
+        // en runtime. Se ejecuta SIEMPRE — con o sin override — para cubrir ambos caminos.
+        FixNonURPMaterials(go);
 
         // Tint color: multiplica _BaseColor sobre la textura (real) o establece el color base (placeholder).
         // Para placeholders: siempre aplicar — SetColor ya asignó el color pero el tint lo confirma
@@ -1063,6 +1067,40 @@ public class DecorationPlacer : MonoBehaviour
         return Mathf.Abs(newZ - pos.z) > 0.001f;   // solo límite de Z
     }
 
+    /// <summary>Carga decoraciones de forma asíncrona (yield cada 2 decos) para no bloquear el browser loop.</summary>
+    public System.Collections.IEnumerator LoadFromSaveAsync(List<DecoPlacement> placements)
+    {
+        SaveLoaded = true;
+        if (placements == null) yield break;
+        int n = 0;
+        foreach (var p in placements)
+        {
+            if (string.IsNullOrEmpty(p.instanceId))
+                p.instanceId = p.itemId + "_0";
+
+            var data = allDecorationCatalog.Find(d => d.itemId == p.itemId);
+            if (data == null)
+            {
+                Debug.LogWarning($"[Deco] LoadFromSaveAsync: itemId '{p.itemId}' not found ({allDecorationCatalog.Count} entries). Skipped.");
+                JsBridge.Log($"ERR deco not found: {p.itemId}");
+                continue;
+            }
+            JsBridge.Log($"Placing deco {++n}: {p.itemId} prefab={(data.prefab != null ? "OK" : "NULL")}");
+            var pos = p.position;
+            if (data.placement == PlacementType.Floor && Mathf.Approximately(pos.z, 0f))
+                pos.z = ZDecoBack;
+            Quaternion? savedQ = p.hasUserRot
+                ? (Quaternion?)new Quaternion(p.quatX, p.quatY, p.quatZ, p.quatW)
+                : null;
+            PlaceAt(data, pos, p.flipped, p.rotationY, p.tiltX, p.scaleFactor, fromSave: true, instanceId: p.instanceId, savedUserRot: savedQ);
+            if (n % 2 == 0) yield return null; // yield every 2 decos — keeps browser loop alive
+        }
+        foreach (var p in placements)
+            if (!string.IsNullOrEmpty(p.mountedOnInstanceId))
+                MountDecoOnTarget(p.instanceId, p.mountedOnInstanceId);
+        JsBridge.Log($"Decos placed: {_placed.Count}/{placements.Count}");
+    }
+
     /// <summary>Carga decoraciones desde la lista de posiciones guardada.</summary>
     public void LoadFromSave(List<DecoPlacement> placements)
     {
@@ -1612,8 +1650,14 @@ public class DecorationPlacer : MonoBehaviour
     /// </summary>
     public static void FixNonURPMaterials(GameObject go)
     {
-        var urpLit = Shader.Find("Universal Render Pipeline/Lit");
-        if (urpLit == null) return;
+        // Device-safe targets (CG legacy, sin LightMode → ejecutan en el Cast renderer):
+        //   DecoLit  = con iluminación (relieve) — preferido para decos.
+        //   FishUnlit/Sprites = plano — fallback si DecoLit no estuviera disponible.
+        // URP/Lit, Standard y glTF NO ejecutan en el Cast (magenta), aunque estén always-included.
+        var decoLit   = Shader.Find("Appquarium/DecoLit");
+        var fishUnlit = Shader.Find("Appquarium/FishUnlit") ?? Shader.Find("Sprites/Default");
+        var litTarget = decoLit != null ? decoLit : fishUnlit;
+        if (litTarget == null) return;
 
         foreach (var mr in go.GetComponentsInChildren<Renderer>())
         {
@@ -1626,71 +1670,41 @@ public class DecorationPlacer : MonoBehaviour
                 var mat = mats[i];
                 if (mat == null) { newMats[i] = mat; continue; }
                 string sname = mat.shader != null ? mat.shader.name : "";
+                JsBridge.Log($"FixMat {go.name}: mat={mat.name} shader={sname}");
 
-                // Dejar Sprites/Default y UI intactos
-                if (sname.Contains("Sprites") || sname.Contains("UI/Default"))
+                // Ya device-safe → dejar intacto: Sprites/UI, FishUnlit, DecoLit, o ya procesado.
+                if (sname.Contains("Sprites") || sname.Contains("UI/Default")
+                    || sname.Contains("Appquarium/")
+                    || mat.name.EndsWith("_DECOLIT"))
                 { newMats[i] = mat; continue; }
 
-                // Materiales ya procesados por nosotros → saltar
-                if (mat.name.EndsWith("_URP"))
-                { newMats[i] = mat; continue; }
+                // Todo lo demás que NO ejecuta en el Cast (URP/Lit, Standard, glTF/PbrMetallic,
+                // Hidden/InternalError) → convertir a DecoLit (o FishUnlit fallback). Soporta los
+                // tres convenios de propiedades: URP (_BaseMap), Standard (_MainTex), glTFast
+                // (baseColorTexture). Antes el glTF se escapaba ("glTF/PbrMetallicRoughness" no
+                // contiene "glTFPbr") → corales/estatuas salían magenta en el device.
+                bool needsFix = sname.Contains("Universal Render Pipeline/Lit")
+                             || sname.Contains("Hidden/InternalError")
+                             || sname.Contains("Standard")
+                             || sname.Contains("glTF")
+                             || sname.Contains("PbrMetallic");
+                if (!needsFix) { newMats[i] = mat; continue; }
 
-                // Materiales URP/Lit nativos (HQ Rocks, Stylized Rocks, etc.)
-                // Re-resolver el shader por nombre: el bytecode del bundle puede no coincidir
-                // con el shader compilado del proyecto → material lila/morado.
-                if (sname.Contains("Universal Render Pipeline/Lit"))
-                {
-                    var found = Shader.Find(sname);
-                    if (found != null && found != mat.shader)
-                    {
-                        var fixedMat = new Material(mat);
-                        // Preservar textura antes de cambiar shader (puede perderse el binding)
-                        Texture litTex = null;
-                        if (mat.HasProperty("_BaseMap")) litTex = mat.GetTexture("_BaseMap");
-                        if (litTex == null && mat.HasProperty("_MainTex")) litTex = mat.GetTexture("_MainTex");
-                        fixedMat.shader = found;
-                        if (litTex != null && fixedMat.HasProperty("_BaseMap"))
-                            fixedMat.SetTexture("_BaseMap", litTex);
-                        newMats[i] = fixedMat;
-                        anyFixed = true;
-                    }
-                    else { newMats[i] = mat; }
-                    continue;
-                }
-
-                // Leer textura base ANTES de cambiar shader.
-                // GLTFast (glTFPbrMetallicRoughness) usa propiedades sin underscore: baseColorTexture.
-                // URP/Lit usa _BaseMap. Standard usa _MainTex.
-                Texture mainTex = null;
-                if (mat.HasProperty("_BaseMap"))          mainTex = mat.GetTexture("_BaseMap");
-                if (mainTex == null && mat.HasProperty("baseColorTexture")) mainTex = mat.GetTexture("baseColorTexture");
-                if (mainTex == null && mat.HasProperty("_MainTex"))         mainTex = mat.GetTexture("_MainTex");
-
-                // Leer normal map: URP=_BumpMap, GLTFast=normalTexture
-                Texture bumpMap = null;
-                if (mat.HasProperty("_BumpMap"))     bumpMap = mat.GetTexture("_BumpMap");
-                if (bumpMap == null && mat.HasProperty("normalTexture")) bumpMap = mat.GetTexture("normalTexture");
+                Texture baseTex = null;
+                if (mat.HasProperty("_BaseMap"))                            baseTex = mat.GetTexture("_BaseMap");
+                if (baseTex == null && mat.HasProperty("baseColorTexture")) baseTex = mat.GetTexture("baseColorTexture");
+                if (baseTex == null && mat.HasProperty("_MainTex"))         baseTex = mat.GetTexture("_MainTex");
 
                 Color baseColor = Color.white;
-                if (mat.HasProperty("_BaseColor"))        baseColor = mat.GetColor("_BaseColor");
-                else if (mat.HasProperty("baseColorFactor")) baseColor = mat.GetColor("baseColorFactor");
-                else if (mat.HasProperty("_Color"))       baseColor = mat.GetColor("_Color");
+                if (mat.HasProperty("_BaseColor"))           baseColor = mat.GetColor("_BaseColor");
+                else if (mat.HasProperty("baseColorFactor"))  baseColor = mat.GetColor("baseColorFactor");
+                else if (mat.HasProperty("_Color"))           baseColor = mat.GetColor("_Color");
 
-                // Crear material standalone con URP/Lit.
-                // NOTA: NO copiamos _MetallicGlossMap — los GLBs de Smithsonian tienen metallic≈1.0
-                // bakeado en el canal B del mapa PBR, lo que causa aspecto cromado/blanco.
-                // Forzamos metallic=0 y smoothness baja para superficies orgánicas.
-                var newMat = new Material(urpLit) { name = mat.name + "_URP" };
-                newMat.SetColor("_BaseColor", baseColor);
-                newMat.SetFloat("_Metallic", 0f);
-                newMat.SetFloat("_Smoothness", mainTex != null ? 0.35f : 0.1f);
-                if (mainTex != null) newMat.SetTexture("_BaseMap", mainTex);
-                if (bumpMap != null)
-                {
-                    newMat.SetTexture("_BumpMap", bumpMap);
-                    newMat.EnableKeyword("_NORMALMAP");
-                }
-                newMats[i] = newMat;
+                var fixedMat = new Material(litTarget) { name = mat.name + "_DECOLIT" };
+                if (baseTex != null) fixedMat.SetTexture("_MainTex", baseTex);
+                if (fixedMat.HasProperty("_Color"))      fixedMat.SetColor("_Color", baseColor);
+                if (fixedMat.HasProperty("_Brightness")) fixedMat.SetFloat("_Brightness", 1f);
+                newMats[i] = fixedMat;
                 anyFixed = true;
             }
             if (anyFixed) mr.materials = newMats;

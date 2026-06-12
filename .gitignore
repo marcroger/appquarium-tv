@@ -49,6 +49,19 @@
 # AppquariumEditor cache temporal (no aplica aquí pero por costumbre del mobile)
 /_WebGLBuildTemp/
 
+# Node — suite de test local (puppeteer). package.json sí se versiona.
+/node_modules/
+/package-lock.json
+
+# Salidas de test local / scratch en root (no son assets)
+/deco-clean.png
+/deco-floor.png
+/fps-check.png
+/local-test-screenshot.png
+/local-test-zoom.png
+/local-test-anchor-zoom.png
+/catalog_1.2.1.hash
+
 # OS-specific
 .DS_Store
 Thumbs.db

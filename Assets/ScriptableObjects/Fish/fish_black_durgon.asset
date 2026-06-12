@@ -24,6 +24,9 @@ MonoBehaviour:
   turnSpeed: 3
   perceptionRadius: 3.5
   baseSize: 1.1
+  wanderJitter: 0
+  wanderRadius: 0
+  wanderDistance: 0
   bodySwingOverride: -1
   bankingAmountOverride: 7
   turnSmoothingOverride: -1
@@ -40,10 +43,11 @@ MonoBehaviour:
   price: 1.49
   rarity: 1
   displayOrder: 0
-  prefab: {fileID: 0}
+  prefab: {fileID: 4900036460436236609, guid: 7c71a65761931b64cb37e6d373342e51, type: 3}
   assetBundleName: pack_fish_uncommon
   assetBundleAssetName: fish12_blackDurgon
   maturationDays: 10
   seniorDays: 15
+  seniorGoodbyeDays: 7
   pearlPrice: 25
   pearlSellValue: 5

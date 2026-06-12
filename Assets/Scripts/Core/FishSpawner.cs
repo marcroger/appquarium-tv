@@ -309,6 +309,8 @@ public class FishSpawner : MonoBehaviour
     /// </summary>
     private static void FixBundleShaders(GameObject visual)
     {
+        // Sprites/Default está garantizado en el build (TankBackground lo usa)
+        var fallback = Shader.Find("Sprites/Default");
         foreach (var r in visual.GetComponentsInChildren<Renderer>(true))
         {
             var mats = r.materials;
@@ -317,6 +319,7 @@ public class FishSpawner : MonoBehaviour
             {
                 if (mats[i] == null || mats[i].shader == null) continue;
                 var found = Shader.Find(mats[i].shader.name);
+                if (found == null) found = fallback; // shader stripeado → Sprites/Default
                 if (found != null && found != mats[i].shader)
                 {
                     mats[i].shader = found;

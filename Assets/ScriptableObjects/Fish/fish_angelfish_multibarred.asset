@@ -24,6 +24,9 @@ MonoBehaviour:
   turnSpeed: 3
   perceptionRadius: 2.5
   baseSize: 0.9
+  wanderJitter: 0
+  wanderRadius: 0
+  wanderDistance: 0
   bodySwingOverride: -1
   bankingAmountOverride: 9
   turnSmoothingOverride: -1
@@ -40,7 +43,7 @@ MonoBehaviour:
   price: 1.99
   rarity: 2
   displayOrder: 0
-  prefab: {fileID: 0}
+  prefab: {fileID: 8867613351493125753, guid: 8be1277364a4be7418466102c249d655, type: 3}
   assetBundleName: pack_fish_rare
   assetBundleAssetName: fish09_angelfishMultibarred__22animations
   maturationDays: 11

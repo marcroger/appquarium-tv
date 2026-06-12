@@ -17,6 +17,10 @@ using UnityEngine.Rendering.Universal;
 public class PostProcessingSetup : MonoBehaviour
 {
     [Header("Bloom")]
+    [Tooltip("Bloom es un blur multi-pass: el efecto de post-proceso más caro en GPU. " +
+             "OFF en el Cast device (Mali-G31) — se mantienen Color + Vignette, que son baratos. " +
+             "Poner ON solo para builds de escritorio/preview.")]
+    public bool      enableBloom    = false;
     [Range(0f, 3f)]  public float bloomIntensity  = 0.35f;
     [Range(0f, 1f)]  public float bloomThreshold  = 0.92f;
     [Range(0f, 1f)]  public float bloomScatter    = 0.6f;
@@ -81,12 +85,19 @@ public class PostProcessingSetup : MonoBehaviour
         var profile = ScriptableObject.CreateInstance<VolumeProfile>();
 
         // ── Bloom ─────────────────────────────────────────────────────────────
-        var bloom = profile.Add<Bloom>(true);
-        bloom.active = true;
-        bloom.intensity.Override(bloomIntensity);
-        bloom.threshold.Override(bloomThreshold);
-        bloom.scatter.Override(bloomScatter);
-        bloom.highQualityFiltering.Override(true);
+        // Desactivado en el Cast device: el blur multi-pass del bloom es el efecto
+        // más caro en el Mali-G31. Sin él, el pass de post-proceso queda en Color +
+        // Vignette (single-pass, barato). Recortar bloom recupera la mayor parte del
+        // coste GPU del post-proceso manteniendo el tono submarino.
+        if (enableBloom)
+        {
+            var bloom = profile.Add<Bloom>(true);
+            bloom.active = true;
+            bloom.intensity.Override(bloomIntensity);
+            bloom.threshold.Override(bloomThreshold);
+            bloom.scatter.Override(bloomScatter);
+            bloom.highQualityFiltering.Override(false); // Cast device GPU — high quality too expensive
+        }
 
         // ── Color Adjustments ─────────────────────────────────────────────────
         var color = profile.Add<ColorAdjustments>(true);
@@ -105,6 +116,7 @@ public class PostProcessingSetup : MonoBehaviour
 
         _volume.profile = profile;
 
+        TvLayerDebug.Set("PostFX", $"bloom={(enableBloom ? bloomIntensity.ToString("F2") : "OFF")} filter=({colorFilter.r:F2},{colorFilter.g:F2},{colorFilter.b:F2})");
         Debug.Log($"[PostFX] ✅ Bloom + Color + Vignette activos ({profile.components.Count} efectos). [P]=toggle [O]=estado");
     }
 }

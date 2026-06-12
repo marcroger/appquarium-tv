@@ -41,6 +41,8 @@ public class CastReceiver : MonoBehaviour
         {
             case "INIT":
                 var state = JsonUtility.FromJson<TvAquariumState>(msg.payload);
+                if (TvSceneBootstrap.Instance == null)
+                    JsBridge.Log("ERR: TvSceneBootstrap.Instance is NULL at INIT time!");
                 TvSceneBootstrap.Instance?.InitializeFromState(state);
                 break;
 

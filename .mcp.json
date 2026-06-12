@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "mcp-unity": {
+      "command": "C:\\Program Files\\nodejs\\node.exe",
+      "args": [
+        "D:\\dev\\appquarium-tv-unity\\Library\\PackageCache\\com.gamelovers.mcp-unity@72c005fa0ae2\\Server~\\build\\index.js"
+      ],
+      "cwd": "D:\\dev\\appquarium-tv-unity"
+    }
+  }
+}

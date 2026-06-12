@@ -35,6 +35,7 @@ public class TvSceneBootstrap : MonoBehaviour
     {
         if (Instance != null && Instance != this) { Destroy(gameObject); return; }
         Instance = this;
+        gameObject.AddComponent<TvLayerDebug>();
     }
 
     void Start()
@@ -48,6 +49,26 @@ public class TvSceneBootstrap : MonoBehaviour
 
         var uiGo = GameObject.Find("UIManager");
         if (uiGo != null) uiGo.SetActive(false);
+
+        Application.targetFrameRate = 30; // stable 30fps on Cast device > choppy 60fps
+
+        // renderScale < 1 → URP renderiza a menos resolución (gran ahorro de fill-rate
+        // GPU en el Mali-G31, que va a ~7fps). Se hace en runtime porque el asset URP no
+        // está como fichero editable en el proyecto. 0.7 = 49% de píxeles, leve pérdida de
+        // nitidez a cambio de framerate. Ajustable según lo que dé el device.
+        // Lookup robusto: el asset activo puede venir del quality level o del default global.
+        // Debug.Log (no JsBridge) porque esto corre muy temprano, antes de que el bridge esté listo.
+        var rpAsset = QualitySettings.renderPipeline
+                   ?? UnityEngine.Rendering.GraphicsSettings.defaultRenderPipeline;
+        if (rpAsset is UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset urpAsset)
+        {
+            urpAsset.renderScale = 0.7f;
+            Debug.Log($"[TvScene] renderScale set to {urpAsset.renderScale}");
+        }
+        else
+        {
+            Debug.Log($"[TvScene] renderScale SKIP — rp={(rpAsset == null ? "null" : rpAsset.GetType().Name)}");
+        }
 
         BuildLoadingOverlay();
 
@@ -64,8 +85,9 @@ public class TvSceneBootstrap : MonoBehaviour
 
     public void InitializeFromState(TvAquariumState state)
     {
-        if (state == null) { Debug.LogWarning("[TvScene] INIT received null state."); return; }
+        if (state == null) { Debug.LogWarning("[TvScene] INIT received null state."); JsBridge.Log("ERR: INIT state is null — JSON parse failed!"); return; }
         Debug.Log($"[TvScene] INIT — fish:{state.activeFish?.Count ?? 0} bg:{state.bgId}");
+        JsBridge.Log($"INIT: fish={state.activeFish?.Count ?? 0} bg={state.bgId} tank={state.selectedTankId}");
         StartCoroutine(LoadAndInitializeCoroutine(state));
     }
 
@@ -115,6 +137,7 @@ public class TvSceneBootstrap : MonoBehaviour
         var decoKeys = ParseDecoItemIds(state.decoJson);
 
         Debug.Log($"[TvScene] Loading assets — fish:{fishKeys.Count} decos:{decoKeys.Count}");
+        JsBridge.Log($"Loading: {fishKeys.Count} fish, {decoKeys.Count} decos");
 
         int total = fishKeys.Count + decoKeys.Count;
         int done  = 0;
@@ -140,7 +163,10 @@ public class TvSceneBootstrap : MonoBehaviour
             if (h.Status == AsyncOperationStatus.Succeeded)
                 fishData.Add(h.Result);
             else
+            {
                 Debug.LogWarning($"[TvScene] Failed to load FishData: {h.DebugName}");
+                JsBridge.Log($"ERR fish load FAILED: {h.DebugName} ({h.OperationException?.Message ?? "unknown"})");
+            }
         }
 
         var decoData = new List<DecorationData>();
@@ -149,16 +175,30 @@ public class TvSceneBootstrap : MonoBehaviour
             if (h.Status == AsyncOperationStatus.Succeeded)
                 decoData.Add(h.Result);
             else
+            {
                 Debug.LogWarning($"[TvScene] Failed to load DecoData: {h.DebugName}");
+                JsBridge.Log($"ERR deco load FAILED: {h.DebugName} ({h.OperationException?.Message ?? "unknown"})");
+            }
         }
 
-        Debug.Log($"[TvScene] Assets loaded — fish:{fishData.Count} decos:{decoData.Count}");
+        int fishFailed = fishHandles.Count - fishData.Count;
+        int decoFailed = decoHandles.Count - decoData.Count;
+        Debug.Log($"[TvScene] Assets loaded — fish:{fishData.Count}/{fishHandles.Count} decos:{decoData.Count}/{decoHandles.Count}");
+        JsBridge.Log($"Loaded: fish={fishData.Count}/{fishHandles.Count} decos={decoData.Count}/{decoHandles.Count}" +
+            (fishFailed + decoFailed > 0 ? $" FAILED={fishFailed+decoFailed}" : " OK"));
 
         // ── 5. Initialize aquarium with loaded data ───────────────────────────
         var mgr = AquariumManager.Instance;
-        if (mgr == null) { Debug.LogError("[TvScene] AquariumManager not found."); yield break; }
+        if (mgr == null)
+        {
+            Debug.LogError("[TvScene] AquariumManager not found.");
+            JsBridge.Log("ERROR: AquariumManager.Instance is null!");
+            yield break;
+        }
 
-        mgr.InitializeFromCastState(state, fishData, decoData);
+        JsBridge.Log("Calling InitializeFromCastStateAsync...");
+        yield return StartCoroutine(mgr.InitializeFromCastStateAsync(state, fishData, decoData));
+        JsBridge.Log($"InitDone: fish={mgr.fishSpawner?.ActiveFish?.Count ?? -1}");
 
         HideLoadingOverlay();
     }
@@ -186,7 +226,7 @@ public class TvSceneBootstrap : MonoBehaviour
 
         // Full-screen background
         var bg = MakeStretchChild(canvasGo.transform, "BG");
-        bg.AddComponent<Image>().color = C_BG;
+        bg.gameObject.AddComponent<Image>().color = C_BG;
         var content = bg.transform;
 
         // Logo text (no sprite asset — use text fallback)

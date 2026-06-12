@@ -24,6 +24,9 @@ MonoBehaviour:
   turnSpeed: 2.2
   perceptionRadius: 4
   baseSize: 1.55
+  wanderJitter: 0
+  wanderRadius: 0
+  wanderDistance: 0
   bodySwingOverride: -1
   bankingAmountOverride: 9
   turnSmoothingOverride: -1
@@ -40,7 +43,7 @@ MonoBehaviour:
   price: 2.99
   rarity: 3
   displayOrder: 0
-  prefab: {fileID: 0}
+  prefab: {fileID: 7240959876256343691, guid: b609212e00b60f64891163bf39b0e9f4, type: 3}
   assetBundleName: pack_fish_epic
   assetBundleAssetName: fish10_angelfishQueen__22animations
   maturationDays: 12

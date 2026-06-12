@@ -87,33 +87,100 @@ Detalle de qué se sincroniza, qué NO, y por qué: ver `SYNC_NOTES.md`.
 
 ## Build pipeline (resumen)
 
-### Fase A.1 — Slim base WebGL (BLOQUEANTE actual)
+### Estado actual — 2026-06-08
 
-Ver `CAST_NETFLIX_SPEC.md` §5 para los 12 pasos detallados. Objetivo: bajar `.data` de 411MB a ≤50MB sacando los GLBs duplicados que se cuelan vía referencias del scene a los SOs.
+`.data` = 21 MB, `.wasm` = 44 MB. Remote catalog activo. Banggai + Moorish Idol deployados en R2.
+🎉 **Banggai CONFIRMADO en pantalla (Xiaomi TV Box S vía Cast)** — primer pez 3D real renderizando correcto. Cierra la cadena de bugs de rendering (shader CG legacy `Appquarium/FishUnlit`). Detalle: `BUILD_REPORT_2026-06-02.md`.
+
+**SBP cache incremental confirmado:** 1 pez cold = 2:01h | 2 peces incremental = 1:39h | todo cacheado = 9s.
+**Remote catalog arreglado:** `★ New Build` genera `catalog_1.2.1.{bin,hash}` en `ServerData/WebGL/`.
+**Workflow actual:** New Build + deploy bundles+catalog. Player solo se rebuilda si cambia C#.
+
+**Tras sync mobile:** re-ejecutar `Appquarium TV → ★ Assign Fish Prefabs` (los SOs se resetean).
+
+Ver `BUILD_REPORT_2026-05-28.md` para histórico de la Fase A.1.
+
+### Player Settings WebGL activos (tras sesión 2026-05-28)
+
+| Setting | Valor |
+|---|---|
+| Compression Format | Disabled |
+| Exception Support | None |
+| WebAssembly 2023 | OFF |
+| Initial Memory Size | **64 MB** |
+| Maximum Memory Size | 512 MB |
+| Memory Growth Mode | Geometric (0.2 step, 96 MB cap) |
+| Strip Engine Code | ON |
+| Managed Stripping Level | **High** |
+| IL2CPP Code Generation | **OptimizeSize** |
+
+> **⚠ NO cambiar Managed Stripping a menos que haya TypeLoadException en runtime.** High stripping es necesario para que el wasm quepa en memoria del Cast device.
 
 ### Comandos clave
 
-```
-# Verificar CORS R2 (pre-req crítico, §4.8 del spec)
-curl -I -H "Origin: https://anything" https://pub-2b11cc17bdef4f75bd4d34eeabbd6042.r2.dev/bundles/<some-bundle>.bundle
+```powershell
+# Verificar CORS R2 (pre-req crítico)
+curl -I -H "Origin: https://anything" https://pub-2b11cc17bdef4f75bd4d34eeabbd6042.r2.dev/bundles/<bundle>.bundle
 
-# Limpiar cache Addressables ANTES de Build Player Content (bug Unity conocido)
+# Build bundles: Window → Asset Management → Addressables → Groups → Build → New Build → Default Build Script
+# ❌ NO usar "Update a Previous Build" — es para workflows CCD (Unity Cloud), no para R2 self-hosted.
+#    Causa builds fantasma que no producen output cuando hay nuevas dependencias.
+#    "New Build" con SBP cache ya es efectivamente incremental: solo reconstruye lo que cambió.
+# Build WebGL player: File → Build Settings → Build (output en webgl-output/)
+# NOTA: ambos son pasos INDEPENDIENTES. Solo rebuild player si cambió código C#.
+
+# Si el build tarda demasiado: reducir texturas primero
+# Unity → Appquarium TV → ★ Reduce TV Textures  (512px → 4× menos tiempo de compresión WebGL)
+# Build de 25 peces: ~2-4h con 512px (vs 8-16h con 1024px)
+
+# Solo si hay corrupción confirmada (builds que abortan a mitad, assertion failures):
 Remove-Item -Recurse -Force "Library\com.unity.addressables\aa"
 
-# Build Player Content desde Unity: Window → Asset Management → Addressables → Groups → Build → New Build → Default Build Script
+# Deploy a R2 — SIEMPRE añadir los env vars
+$env:AWS_REQUEST_CHECKSUM_CALCULATION = "when_required"
+$env:AWS_RESPONSE_CHECKSUM_VALIDATION = "when_supported"
 
-# Build WebGL base: File → Build (output en webgl-output/)
+# ⚠ Archivos pequeños (< ~30 KB: .hash, .js loader, monoscripts.bundle) fallan con sync
+# → Usar aws s3 cp individual para esos archivos si falla el sync
 
-# Deploy a R2
+# — Caso normal: solo New Build (bundles + catalog, sin tocar player) —
+# Los bundles usan sync SIN --delete para no borrar los que no se rebuildearon
 aws s3 sync ServerData/WebGL/ s3://appquarium-tv/bundles/ `
   --profile r2 `
   --endpoint-url https://2aa2b7914f4ce7ce81e38d694b6219dc.r2.cloudflarestorage.com `
   --cache-control "public, max-age=604800"
+# El catalog.hash suele fallar con sync → subir por separado:
+aws s3 cp ServerData/WebGL/catalog_1.2.1.hash s3://appquarium-tv/bundles/catalog_1.2.1.hash `
+  --profile r2 `
+  --endpoint-url https://2aa2b7914f4ce7ce81e38d694b6219dc.r2.cloudflarestorage.com `
+  --cache-control "public, max-age=60" --content-type "text/plain"
 
+# — Solo player rebuild (bundles intactos en R2) —
 aws s3 sync webgl-output/ s3://appquarium-tv/ `
   --profile r2 `
   --endpoint-url https://2aa2b7914f4ce7ce81e38d694b6219dc.r2.cloudflarestorage.com `
-  --delete
+  --delete `
+  --exclude "bundles/*" `
+  --cache-control "public, max-age=3600"
+# Si falla loader.js o monoscripts.bundle → subir con aws s3 cp individual (sin --content-type extra)
+
+# — Rebuild completo (player + todos los bundles, caso raro) —
+# 1. Limpiar bundles viejos
+aws s3 rm s3://appquarium-tv/bundles/ --recursive `
+  --profile r2 `
+  --endpoint-url https://2aa2b7914f4ce7ce81e38d694b6219dc.r2.cloudflarestorage.com
+# 2. Subir bundles nuevos
+aws s3 sync ServerData/WebGL/ s3://appquarium-tv/bundles/ `
+  --profile r2 `
+  --endpoint-url https://2aa2b7914f4ce7ce81e38d694b6219dc.r2.cloudflarestorage.com `
+  --cache-control "public, max-age=604800"
+# 3. Subir player (SIEMPRE --exclude "bundles/*" con --delete)
+aws s3 sync webgl-output/ s3://appquarium-tv/ `
+  --profile r2 `
+  --endpoint-url https://2aa2b7914f4ce7ce81e38d694b6219dc.r2.cloudflarestorage.com `
+  --delete `
+  --exclude "bundles/*" `
+  --cache-control "public, max-age=3600"
 ```
 
 ---
