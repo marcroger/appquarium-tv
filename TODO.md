@@ -38,17 +38,17 @@ Ordenado por prioridad dentro de cada bloque. Actualizar con fecha al cerrar cad
   Appquarium" o al menos `alwaysAmbient=true` para que siga animado indefinidamente.
   > `Assets/Scripts/Core/CastReceiver.cs:67` — `OnSenderDisconnected`
 
-- [ ] **Audio** — `ambient_water.wav` + `ambient_music.mp3` en `Resources/Audio/` existen y
-  se cargarán con `Resources.Load`. Verificar que se oyen al castear a Xiaomi.
-  **Gap confirmado:** `ambient_bubbles` NO existe en `Resources/Audio/` — el canal queda en silencio.
-  Solución: añadir un `.ogg/.mp3/.wav` libre de derechos a `Assets/Resources/Audio/ambient_bubbles.*`.
-  Fuentes: freesound.org "aquarium bubbles" o pixabay.com. No requiere bundle rebuild.
-  > `Assets/Resources/Audio/` — falta `ambient_bubbles.*`
+- [ ] **Audio** — `ambient_water.wav` + `ambient_music.mp3` + `ambient_bubbles.wav` en
+  `Resources/Audio/`. Verificar que se oyen al castear a Xiaomi.
+  `ambient_bubbles.wav` copiado del móvil 2026-06-19 (10 min loop, 110 MB raw → ~6 MB Vorbis en build).
+  Pendiente: player rebuild para confirmarlo.
 
-- [ ] **Feed fish** — `TvSceneBootstrap.ApplyUpdate` maneja `case "feed"` via
-  `FoodManager.Instance?.SpawnFood(...)`. `FoodManager` es mobile-only (está en stubs?).
-  Verificar si el mensaje llega desde el móvil y si el efecto visual se ve en TV.
-  > `Assets/Scripts/Stubs/TvStubs.cs` — ¿tiene FoodManager stub?
+- [x] **Feed visual** ✅ 2026-06-19 — `TvFoodManager.cs` sustituye el stub null.
+  `FeedAll()` spawna 2–5 FoodItems procedurales en la superficie. FishBrain los detecta
+  via `CheckForFood()→GetNearestFood()→TriggerFeed()`. Auto-feed cada 4 min.
+  Mando TV: botón Enter = startle, F/MediaPlayPause = feed.
+  Pendiente: player rebuild para activar en TV real.
+  > `Assets/Scripts/Core/TvFoodManager.cs` (nuevo)
 
 - [ ] **`refresh` UPDATE** — `CastManager.SendUpdate("refresh")` existe en mobile pero nunca
   se llama. En TV solo loggea "waiting for new INIT". Cuando mobile lo implemente (Fase B),
