@@ -130,6 +130,11 @@ public class AquariumManager : MonoBehaviour
             ? cameraController.SetupAndGetBounds()
             : new Bounds(Vector3.zero, ActiveTankData.dimensions);
         try { tankController.InitializeWithBounds(tankBounds); } catch (Exception e) { JsBridge.Log($"TankCtrl ERR: {e.Message}"); }
+
+        // Clean up previous state before reinitializing (e.g. Cast reconnect sends a 2nd INIT).
+        fishSpawner?.DespawnAll();
+        tankController.GetComponent<DecorationPlacer>()?.RemoveAllDecos();
+
         SpawnCastFish(tankBounds);
 
         yield return null; // let browser process Cast heartbeats before heavy deco work

@@ -201,6 +201,20 @@ public class DecorationPlacer : MonoBehaviour
         Debug.Log("[Deco] ✅ DecorationPlacer listo (free positioning)");
     }
 
+    /// <summary>
+    /// Destroy all placed decos and reset tracking state.
+    /// Called before re-initializing from a new INIT message (Cast reconnect).
+    /// </summary>
+    public void RemoveAllDecos()
+    {
+        foreach (var key in new System.Collections.Generic.List<string>(_placed.Keys))
+            RemoveGameObject(key);
+        _placed.Clear();
+        _bioLumMats.Clear();
+        _bioLumLights.Clear();
+        SaveLoaded = false;
+    }
+
     // Rango seguro de Z: el background está en Z=+1.8, margen al frente y al fondo
     public const float ZFront    = -1.0f;   // más cercano visible (sin salirse del suelo)
     public const float ZBack     = +4.2f;   // límite del mesh del suelo

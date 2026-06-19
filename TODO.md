@@ -38,18 +38,23 @@ Ordenado por prioridad dentro de cada bloque. Actualizar con fecha al cerrar cad
   Appquarium" o al menos `alwaysAmbient=true` para que siga animado indefinidamente.
   > `Assets/Scripts/Core/CastReceiver.cs:67` — `OnSenderDisconnected`
 
-- [ ] **Audio** — bundles en R2 existen (`Audio_Remote` group, 2 clips). ¿El AudioManager
-  arranca y reproduce en TV? Verificar: ¿se inicializa en `AquariumManager.InitializeFromCastStateAsync`?
-  ¿Se oye algo al castear? Sin feedback del device = desconocido.
+- [ ] **Audio** — `ambient_water.wav` + `ambient_music.mp3` en `Resources/Audio/` existen y
+  se cargarán con `Resources.Load`. Verificar que se oyen al castear a Xiaomi.
+  **Gap confirmado:** `ambient_bubbles` NO existe en `Resources/Audio/` — el canal queda en silencio.
+  Solución: añadir un `.ogg/.mp3/.wav` libre de derechos a `Assets/Resources/Audio/ambient_bubbles.*`.
+  Fuentes: freesound.org "aquarium bubbles" o pixabay.com. No requiere bundle rebuild.
+  > `Assets/Resources/Audio/` — falta `ambient_bubbles.*`
 
 - [ ] **Feed fish** — `TvSceneBootstrap.ApplyUpdate` maneja `case "feed"` via
   `FoodManager.Instance?.SpawnFood(...)`. `FoodManager` es mobile-only (está en stubs?).
   Verificar si el mensaje llega desde el móvil y si el efecto visual se ve en TV.
   > `Assets/Scripts/Stubs/TvStubs.cs` — ¿tiene FoodManager stub?
 
-- [ ] **`refresh` UPDATE** — el móvil puede enviar `type: "refresh"` que debería reinicializar
-  el acuario con el estado nuevo. Actualmente solo loggea: "waiting for new INIT". Verificar si
-  el móvil manda un INIT después del refresh, o si TV necesita pedirlo.
+- [ ] **`refresh` UPDATE** — `CastManager.SendUpdate("refresh")` existe en mobile pero nunca
+  se llama. En TV solo loggea "waiting for new INIT". Cuando mobile lo implemente (Fase B),
+  TV ya tiene el handler correcto: si mobile manda INIT después del refresh, funciona.
+  Si solo manda refresh sin INIT → TV necesita pedir reinit explícitamente.
+  > Mobile: `CastManager.cs:156` | TV: `TvSceneBootstrap.cs` `case "refresh"`
 
 - [ ] **Overscan panel** — el index.html tiene CSS de overscan (safe area). Verificar visualmente
   que el debug panel y el aquarium no quedan cortados en TV con overscan real.
@@ -109,15 +114,37 @@ Ordenado por prioridad dentro de cada bloque. Actualizar con fecha al cerrar cad
 
 ---
 
+## 📡 Updates en tiempo real (Fase B — requiere cambios en mobile)
+
+> **Hallazgo 2026-06-19:** `CastManager.SendUpdate()` en mobile está implementado pero nunca
+> se llama. Ninguna acción del usuario durante una sesión Cast llega a la TV en tiempo real.
+> Los cambios solo se reflejan al desconectar y reconectar. El receptor TV ya tiene handlers
+> para todos los tipos — falta el lado mobile.
+
+- [ ] **ambient (day/sunset/night)** — mobile: conectar botón modo día/noche a `SendUpdate("ambient", mode)`
+  TV: ✅ implementado (`AmbientModeController`)
+  > Mobile: `CastManager.cs:156` | TV: `TvSceneBootstrap.cs` `case "ambient"`
+
+- [ ] **speed** — mobile: conectar slider velocidad peces a `SendUpdate("speed", value)`
+  TV: ✅ implementado (`AquariumManager.FishSpeedMultiplier`)
+  > Mobile: `CastManager.cs:156` | TV: `TvSceneBootstrap.cs` `case "speed"`
+
+- [ ] **feed** — mobile: conectar botón comida a `SendUpdate("feed")`. TV: solo stub (FoodManager=null).
+  Si se quiere efecto visual en TV, añadir partículas "comida cae desde arriba" sin FoodManager.
+  > Mobile: `CastManager.cs:156` | TV: `TvSceneBootstrap.cs` `case "feed"`
+
+---
+
 ## 🔒 Fase B (post-launch / cuando haya usuarios reales)
 
 - [ ] **Seguridad R2** — actualmente el bucket es público sin autenticación. Cualquiera puede
   listar y descargar los bundles. Implementar Cloudflare Worker + JWT firmado por el móvil antes
   de cualquier marketing a tier-1. Spec lista en `project_r2_security.md` (memoria).
 
-- [ ] **Reconexión Cast robusta** — si el usuario cierra y reabre la app móvil, el receiver
-  debe aceptar el nuevo INIT sin recargar la página. Verificar que `OnSenderConnected` +
-  nuevo INIT reinicializa el acuario correctamente sin acumular peces/decos del INIT anterior.
+- [x] **Reconexión Cast robusta** ✅ 2026-06-19 — `InitializeFromCastStateAsync` ahora llama
+  `fishSpawner.DespawnAll()` + `DecorationPlacer.RemoveAllDecos()` antes de cada INIT.
+  Un 2º INIT (reconexión) limpia el estado anterior sin duplicar peces ni decos.
+  > `AquariumManager.cs:132` + `DecorationPlacer.cs:202`
 
 - [ ] **Bioluminiscencia corales — 6 pendientes** — los 6 SOs con `hasBioLuminescence=true`
   necesitan validación visual. Listado: heliopora, distichopora, pocillopora, corallium + 2 más.
