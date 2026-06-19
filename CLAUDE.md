@@ -140,8 +140,11 @@ Remove-Item -Recurse -Force "Library\com.unity.addressables\aa"
 $env:AWS_REQUEST_CHECKSUM_CALCULATION = "when_required"
 $env:AWS_RESPONSE_CHECKSUM_VALIDATION = "when_supported"
 
-# ⚠ Archivos pequeños (< ~30 KB: .hash, .js loader, monoscripts.bundle) fallan con sync
-# → Usar aws s3 cp individual para esos archivos si falla el sync
+# ⚠ Archivos pequeños con aws s3 cp en CLI 2.23+:
+#   - aws s3 cp <5KB falla con SignatureDoesNotMatch (R2 no soporta CRC64NVME default de CLI 2.23+)
+#   - aws s3 sync funciona para archivos medianos, pero NO para archivos muy pequeños sueltos
+#   - FIX: usar boto3 directamente para archivos problemáticos:
+#     python -c "import boto3,configparser,os; c=configparser.ConfigParser(); c.read([os.path.expanduser('~/.aws/credentials')]); client=boto3.client('s3',endpoint_url='https://2aa2b7914f4ce7ce81e38d694b6219dc.r2.cloudflarestorage.com',aws_access_key_id=c.get('r2','aws_access_key_id'),aws_secret_access_key=c.get('r2','aws_secret_access_key'),region_name='auto'); client.put_object(Bucket='appquarium-tv',Key='<KEY>',Body=open('<FILE>','rb').read(),CacheControl='<CC>'); print('OK')"
 
 # — Caso normal: solo New Build (bundles + catalog, sin tocar player) —
 # Los bundles usan sync SIN --delete para no borrar los que no se rebuildearon
