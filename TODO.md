@@ -38,16 +38,13 @@ Ordenado por prioridad dentro de cada bloque. Actualizar con fecha al cerrar cad
   Appquarium" o al menos `alwaysAmbient=true` para que siga animado indefinidamente.
   > `Assets/Scripts/Core/CastReceiver.cs:67` — `OnSenderDisconnected`
 
-- [ ] **Audio** — `ambient_water.wav` + `ambient_music.mp3` + `ambient_bubbles.wav` en
-  `Resources/Audio/`. Verificar que se oyen al castear a Xiaomi.
-  `ambient_bubbles.wav` copiado del móvil 2026-06-19 (10 min loop, 110 MB raw → ~6 MB Vorbis en build).
-  Pendiente: player rebuild para confirmarlo.
+- [ ] **Audio** — `ambient_water.wav` + `ambient_music.mp3` + `ambient_bubbles.wav` incluidos en build.
+  Pendiente: verificar que se oyen en Xiaomi tras deploy.
 
 - [x] **Feed visual** ✅ 2026-06-19 — `TvFoodManager.cs` sustituye el stub null.
   `FeedAll()` spawna 2–5 FoodItems procedurales en la superficie. FishBrain los detecta
   via `CheckForFood()→GetNearestFood()→TriggerFeed()`. Auto-feed cada 4 min.
-  Mando TV: botón Enter = startle, F/MediaPlayPause = feed.
-  Pendiente: player rebuild para activar en TV real.
+  Mando TV: botón Enter = startle, F/MediaPlayPause = feed. Build 2026-06-19 activo.
   > `Assets/Scripts/Core/TvFoodManager.cs` (nuevo)
 
 - [ ] **`refresh` UPDATE** — `CastManager.SendUpdate("refresh")` existe en mobile pero nunca

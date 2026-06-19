@@ -87,13 +87,15 @@ Detalle de qué se sincroniza, qué NO, y por qué: ver `SYNC_NOTES.md`.
 
 ## Build pipeline (resumen)
 
-### Estado actual — 2026-06-08
+### Estado actual — 2026-06-19
 
-`.data` = 21 MB, `.wasm` = 44 MB. Remote catalog activo. Banggai + Moorish Idol deployados en R2.
-🎉 **Banggai CONFIRMADO en pantalla (Xiaomi TV Box S vía Cast)** — primer pez 3D real renderizando correcto. Cierra la cadena de bugs de rendering (shader CG legacy `Appquarium/FishUnlit`). Detalle: `BUILD_REPORT_2026-06-02.md`.
+`.data` = 35 MB, `.wasm` = 43 MB. Remote catalog activo. Banggai + Moorish Idol en R2.
+🎉 **FLUIDO en Xiaomi TV Box S** — bloom OFF + renderScale 0.7 + targetFrameRate 30. Detalle: `BUILD_REPORT_2026-06-19.md`.
 
-**SBP cache incremental confirmado:** 1 pez cold = 2:01h | 2 peces incremental = 1:39h | todo cacheado = 9s.
-**Remote catalog arreglado:** `★ New Build` genera `catalog_1.2.1.{bin,hash}` en `ServerData/WebGL/`.
+**Player build 2026-06-19 (pendiente deploy):** TvFoodManager (feed visual + auto-feed 4min),
+mando TV (Enter=startle / F=feed), audio burbujas, fix reconexión 2º INIT.
+**settings.json auto-parcheado** por `TvBuildPostprocess.cs` tras cada build — no intervención manual.
+**SBP cache incremental:** 1 pez cold = 2:01h | 2 peces incremental = 1:39h | todo cacheado = 9s.
 **Workflow actual:** New Build + deploy bundles+catalog. Player solo se rebuilda si cambia C#.
 
 **Tras sync mobile:** re-ejecutar `Appquarium TV → ★ Assign Fish Prefabs` (los SOs se resetean).
