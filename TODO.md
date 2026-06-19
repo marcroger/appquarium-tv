@@ -99,10 +99,9 @@ Ordenado por prioridad dentro de cada bloque. Actualizar con fecha al cerrar cad
 
 ## 🏗 Deploy / infraestructura
 
-- [ ] **Fix permanente de settings.json** — el archivo local `webgl-output/StreamingAssets/aa/settings.json`
-  está parcheado manualmente. Opciones: (A) fix en `TvAddressablesSetup.cs` para generar el
-  path correcto, (B) post-process script en el pipeline de build que parchea el archivo al salir.
-  Opción A preferida — corrige el origen.
+- [x] **Fix permanente de settings.json** ✅ 2026-06-19 — `TvBuildPostprocess.cs` parchea
+  automáticamente tras cada WebGL Player Build. No hace falta intervención manual.
+  > `Assets/Editor/TvBuildPostprocess.cs`
 
 - [ ] **Script de deploy unificado** — actualmente el deploy requiere recordar 4 comandos
   con el orden correcto y el boto3 workaround. Crear `Tools/deploy.ps1` o `Tools/deploy.sh`
@@ -129,8 +128,9 @@ Ordenado por prioridad dentro de cada bloque. Actualizar con fecha al cerrar cad
   TV: ✅ implementado (`AquariumManager.FishSpeedMultiplier`)
   > Mobile: `CastManager.cs:156` | TV: `TvSceneBootstrap.cs` `case "speed"`
 
-- [ ] **feed** — mobile: conectar botón comida a `SendUpdate("feed")`. TV: solo stub (FoodManager=null).
-  Si se quiere efecto visual en TV, añadir partículas "comida cae desde arriba" sin FoodManager.
+- [ ] **feed** — mobile: conectar botón comida a `SendUpdate("feed")`.
+  TV: ✅ `TvFoodManager` implementado 2026-06-19 — pellets visuales + peces nadan a comer.
+  Solo falta que mobile llame `SendUpdate("feed")`.
   > Mobile: `CastManager.cs:156` | TV: `TvSceneBootstrap.cs` `case "feed"`
 
 ---
