@@ -149,19 +149,7 @@ public class UIManager : MonoBehaviour
     public DownloadBannerController  ShowDownloadBanner()   => null;
 }
 
-// ── FoodManager stub ──────────────────────────────────────────────────────────
-
-public class FoodManager : MonoBehaviour
-{
-    public static FoodManager Instance => null;     // TV: no FoodManager GameObject in scene
-
-    public static event Action OnFoodSpawned;
-
-    public FoodItem GetNearestFood(Vector3 position, float radius) => null;
-    public void     ClaimFood(FoodItem food)                        {}
-    public void     SpawnFood(Vector3 position)                     {}
-    public void     StartAutoFeed(Bounds tankBounds)                {}
-}
+// FoodManager — real implementation in TvFoodManager.cs (not a stub)
 
 // ── AdService stub ────────────────────────────────────────────────────────────
 

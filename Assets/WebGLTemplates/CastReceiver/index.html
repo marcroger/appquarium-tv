@@ -344,6 +344,31 @@
         window.unityInstance.SendMessage('CastReceiver', 'OnMessageReceived', msg);
       }, 500);
     })();
+
+    // ── Device input (Android TV remote + keyboard shortcuts) ────────────────
+    // Enter / OK button (Android TV remote center) → startle (fish scatter)
+    // F key / MediaPlayPause button                → feed (pellets drop, fish swim to eat)
+    // In devtest mode these are triggered by keyboard so you can test without a TV remote.
+    (function() {
+      function sendDeviceInput(action) {
+        if (!window.unityInstance) return;
+        dbg('Input: ' + action);
+        window.unityInstance.SendMessage('CastReceiver', 'OnDeviceInput', action);
+      }
+      window.addEventListener('keydown', function(e) {
+        switch (e.keyCode) {
+          case 13:  // Enter → OK button on Android TV remote
+            e.preventDefault();
+            sendDeviceInput('startle');
+            break;
+          case 70:  // F key → feed (devtest convenience + MediaPlayPause fallback)
+          case 179: // MediaPlayPause (some Android TV remotes)
+            e.preventDefault();
+            sendDeviceInput('feed');
+            break;
+        }
+      }, false);
+    })();
     </script>
 
     <!-- ════════════════════════════════════════════════════════════════════════

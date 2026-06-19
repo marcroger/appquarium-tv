@@ -178,6 +178,9 @@ public class AquariumManager : MonoBehaviour
             }
         }
 
+        // Start auto-feed (4-min cycle, proporcional al número de peces)
+        FoodManager.Instance.StartAutoFeed(tankBounds);
+
         Debug.Log($"[AquariumManager] Aquarium ready (async). Fish: {fishSpawner?.ActiveFish?.Count ?? 0}");
         JsBridge.Log($"AQUARIUM READY: {fishSpawner?.ActiveFish?.Count ?? 0} fish active");
     }
@@ -338,9 +341,22 @@ public class AquariumManager : MonoBehaviour
 
     // ── Public API (used by TvSceneBootstrap) ─────────────────────────────────
 
+    /// <summary>
+    /// Spawna comida visual en el tanque. FishBrain detecta los FoodItems
+    /// de forma natural via CheckForFood() → GetNearestFood() → TriggerFeed().
+    /// </summary>
     public void FeedAll()
     {
-        foreach (var fish in fishSpawner.ActiveFish) fish?.Feed();
+        var fish = fishSpawner?.ActiveFish;
+        if (fish == null || fish.Count == 0) return;
+        var bounds = tankController.GetTankBounds();
+        int count  = Mathf.Clamp(fish.Count, 2, 5);
+        for (int i = 0; i < count; i++)
+        {
+            float x = UnityEngine.Random.Range(bounds.min.x + 0.5f, bounds.max.x - 0.5f);
+            float z = UnityEngine.Random.Range(bounds.min.z + 0.3f, bounds.max.z - 0.3f);
+            FoodManager.Instance.SpawnFood(new Vector3(x, bounds.max.y - 0.2f, z));
+        }
     }
 
     public void StartleAll(Vector3 position)

@@ -111,9 +111,12 @@ public class TvSceneBootstrap : MonoBehaviour
                 break;
 
             case "feed":
-                var bounds = mgr.tankController.GetTankBounds();
-                FoodManager.Instance?.SpawnFood(
-                    new Vector3(bounds.center.x, bounds.max.y - 0.5f, 0f));
+                mgr.FeedAll();
+                break;
+
+            case "startle":
+                var sBounds = mgr.tankController.GetTankBounds();
+                mgr.StartleAll(sBounds.center);
                 break;
 
             case "refresh":
