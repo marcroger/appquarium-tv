@@ -7,24 +7,21 @@ Ordenado por prioridad dentro de cada bloque. Actualizar con fecha al cerrar cad
 
 ## 🐛 Bugs confirmados en TV
 
-- [ ] **Coral emission overflow** — con bloom OFF, `_EmissionColor` HDR de corales bioluminiscentes
-  (`hasBioLuminescence=true`) se aplana a color puro saturado en vez de glow suave. Los 6 corales
-  afectados (heliopora, distichopora, pocillopora, corallium, etc.) se ven con colores "quemados"
-  de noche. Fix: reducir `BioLumEmissionScale` (<0.3) para emision sin bloom, o activar bloom
-  con threshold alto (0.95+) solo para emission.
-  > `DecorationPlacer.cs:91` — `BioLumEmissionScale = 0.75f`
+- [x] **Coral emission overflow** ✅ 2026-06-19 — `BioLumEmissionScale` reducido de 0.75 → 0.25.
+  Sin bloom en TV, HDR >0.5 quedaba como color saturado plano. Con 0.25 el glow es sutil y correcto.
+  ⚠ Si sync desde mobile restaura 0.75, volver a poner 0.25 (móvil usa bloom, TV no).
+  > `DecorationPlacer.cs:91`
 
-- [ ] **Doble-slash en settings.json generado por Unity** — `TvAddressablesSetup.cs` genera
-  `bundles//catalog_1.2.1.hash` en el CatalogHash path. El archivo local `webgl-output/` ya está
-  parcheado manualmente, pero el generador sigue siendo incorrecto. Si alguien hace un New Build
-  + Player sin el parche... vuelve a romperse.
-  > `Assets/Editor/TvAddressablesSetup.cs` — buscar `CacheHash` o `CatalogHash` en la
-  configuración de `ContentCatalogProvider`.
+- [x] **Doble-slash en settings.json generado por Unity** ✅ 2026-06-19 — `TvBuildPostprocess.cs`
+  parchea automáticamente `StreamingAssets/aa/settings.json` tras cada WebGL Player Build.
+  Corrige `bundles//` → `bundles/` y `m_DisableCatalogUpdateOnStart: false` → `true`.
+  Ya no hace falta parchear manualmente tras deploy.
+  > `Assets/Editor/TvBuildPostprocess.cs` (nuevo)
 
-- [ ] **Panel debug visible en producción** — el `#dbg-panel` con logs de arranque es visible
-  para el usuario final en la TV durante la carga. Debería ocultarse automáticamente tras N
-  segundos (o al recibir `AQUARIUM READY`).
-  > `Assets/WebGLTemplates/CastReceiver/index.html` — añadir `setTimeout` o evento desde Unity.
+- [x] **Panel debug visible en producción** ✅ 2026-06-19 — Panel se oculta con fade 1.5s,
+  8 segundos después de recibir el mensaje "AQUARIUM READY" desde C#. En error (JS ERR /
+  ERROR): cancela el hide y vuelve visible.
+  > `Assets/WebGLTemplates/CastReceiver/index.html`
 
 ---
 

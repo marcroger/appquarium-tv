@@ -86,9 +86,10 @@ public class DecorationPlacer : MonoBehaviour
     private float     _bioLumCurrentStrength = 0f; // [0,1] — fuente de verdad para el fade
 
     // Escala de emisión HDR. Valores >1 por canal activan bloom en URP (umbral ≈1.0).
-    // 0.75 → heliopora blue=1.5, distichopora blue=1.35 (bloom claro); pocillopora red=1.125 (leve bloom);
-    // corallium red=0.75 (sin bloom, glow suave acorde a su rareza).
-    private const float BioLumEmissionScale = 0.75f;
+    // Mobile (bloom ON):  0.75 → heliopora=1.5, distichopora=1.35 (bloom), pocillopora=1.125, corallium=0.75
+    // TV (bloom OFF): 0.25 → valores máx ~0.5 — evita el color saturado plano sin glow que produce HDR sin bloom.
+    // TV: si en sync desde mobile este valor vuelve a 0.75, restaurar a 0.25 (TV no tiene bloom).
+    private const float BioLumEmissionScale = 0.25f;
 
     void OnEnable()  => AmbientModeController.OnModeChanged += OnAmbientChanged;
     void OnDisable() => AmbientModeController.OnModeChanged -= OnAmbientChanged;

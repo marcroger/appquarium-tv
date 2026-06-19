@@ -79,6 +79,7 @@
       font:bold 15px/1.35 monospace;padding:6px 12px;
       box-sizing:border-box;pointer-events:none;
       max-height:62vh;overflow:hidden;display:block;border-radius:8px;
+      transition:opacity 1.5s ease;
     "></div>
 
     <!-- FPS meter — esquina sup. derecha, legible desde el sofá.
@@ -94,7 +95,7 @@
 
     <script>
       // ── Debug logger ──────────────────────────────────────────────────────
-      var _dbgLines = [], _dbgT0 = Date.now();
+      var _dbgLines = [], _dbgT0 = Date.now(), _dbgHideTimer = null;
       function dbg(msg) {
         var t = ((Date.now()-_dbgT0)/1000).toFixed(1);
         var line = '['+t+'s] '+msg;
@@ -108,6 +109,17 @@
           el.innerHTML = _dbgLines.slice().reverse().map(function(l){
             return '<div>'+l.replace(/</g,'&lt;')+'</div>';
           }).join('');
+
+          // Auto-ocultar el panel 8s después de AQUARIUM READY.
+          // En error: cancelar el hide y volver visible (opacity:1).
+          if (msg.indexOf('AQUARIUM READY') !== -1) {
+            if (_dbgHideTimer) clearTimeout(_dbgHideTimer);
+            _dbgHideTimer = setTimeout(function(){ el.style.opacity='0'; }, 8000);
+          }
+          if (msg.indexOf('JS ERR') !== -1 || msg.indexOf('ERROR') !== -1) {
+            if (_dbgHideTimer) { clearTimeout(_dbgHideTimer); _dbgHideTimer = null; }
+            el.style.opacity = '1';
+          }
         }
       }
 
