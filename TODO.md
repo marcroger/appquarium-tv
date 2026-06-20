@@ -60,16 +60,8 @@ Ordenado por prioridad dentro de cada bloque. Actualizar con fecha al cerrar cad
 
 ## 🐟 Contenido pendiente
 
-- [ ] **24 peces restantes** — materiales ya corregidos en disco (FishUnlit body + Sprites/Default
-  fins). Para añadir cada pez: `★ Setup Addressables` → `★ New Build` → deploy bundle+catalog.
-  Sin player rebuild. Ver workflow en `CLAUDE.md`.
-
-  Prioridad sugerida (más distintivos visualmente primero):
-  1. Clownfish (Nemo — icónico)
-  2. Blue Tang (Dory)
-  3. Lionfish (crines especiales)
-  4. Pufferfish
-  5. ... (resto según catálogo del móvil)
+- [x] **25 peces** ✅ 2026-06-08 — todos buildeados y en R2. Catalog referenciado correctamente.
+  (El TODO anterior decía "24 restantes" — estaba desactualizado; el build del 08-jun los completó todos.)
 
 ---
 

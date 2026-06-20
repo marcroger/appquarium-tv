@@ -58,7 +58,8 @@ TV (este proyecto)
       └── AmbientModeController, AquariumCameraController, etc.
 ```
 
-**Lo que NO existe en TV (mobile-only):** UI, IAP, Ad, SaveSystem, BreedingManager, FoodManager, InputHandler, FieldGuide, Localization (TV asume inglés/idioma fijo).
+**Lo que NO existe en TV (mobile-only):** UI, IAP, Ad, SaveSystem, BreedingManager, InputHandler, FieldGuide, Localization (TV asume inglés/idioma fijo).
+**TV tiene su propio:** `TvFoodManager` (stub del FoodManager mobile — feed visual + auto-feed).
 
 ---
 
@@ -87,13 +88,17 @@ Detalle de qué se sincroniza, qué NO, y por qué: ver `SYNC_NOTES.md`.
 
 ## Build pipeline (resumen)
 
-### Estado actual — 2026-06-19
+### Estado actual — 2026-06-20
 
-`.data` = 35 MB, `.wasm` = 43 MB. Remote catalog activo. Banggai + Moorish Idol en R2.
+`.data` = 34.4 MB, `.wasm` = 42.2 MB. Remote catalog activo. **25/25 peces en R2** ✅.
 🎉 **FLUIDO en Xiaomi TV Box S** — bloom OFF + renderScale 0.7 + targetFrameRate 30. Detalle: `BUILD_REPORT_2026-06-19.md`.
 
-**Player build 2026-06-19 (pendiente deploy):** TvFoodManager (feed visual + auto-feed 4min),
-mando TV (Enter=startle / F=feed), audio burbujas, fix reconexión 2º INIT.
+**Player build 2026-06-19 — DEPLOYADO 2026-06-20:**
+- `TvFoodManager.cs` — feed visual (pellets + peces nadan a comer) + auto-feed cada 4 min
+- Mando Android TV: Enter = startle, F/MediaPlayPause = feed
+- `ambient_bubbles.wav` bakeado en `.data` (~14 MB Vorbis, loop 10 min)
+- Fix reconexión 2º INIT: DespawnAll + RemoveAllDecos antes de reinit
+
 **settings.json auto-parcheado** por `TvBuildPostprocess.cs` tras cada build — no intervención manual.
 **SBP cache incremental:** 1 pez cold = 2:01h | 2 peces incremental = 1:39h | todo cacheado = 9s.
 **Workflow actual:** New Build + deploy bundles+catalog. Player solo se rebuilda si cambia C#.
@@ -167,7 +172,19 @@ aws s3 sync webgl-output/ s3://appquarium-tv/ `
   --delete `
   --exclude "bundles/*" `
   --cache-control "public, max-age=3600"
-# Si falla loader.js o monoscripts.bundle → subir con aws s3 cp individual (sin --content-type extra)
+# Archivos pequeños que fallan con sync (catalog.hash, settings.json) → subir con boto3:
+python -c "
+import boto3, configparser, os
+c = configparser.ConfigParser(); c.read([os.path.expanduser('~/.aws/credentials')])
+client = boto3.client('s3', endpoint_url='https://2aa2b7914f4ce7ce81e38d694b6219dc.r2.cloudflarestorage.com',
+    aws_access_key_id=c.get('r2','aws_access_key_id'), aws_secret_access_key=c.get('r2','aws_secret_access_key'), region_name='auto')
+for local, key, ct, cc in [
+    ('webgl-output/StreamingAssets/aa/catalog.hash','StreamingAssets/aa/catalog.hash','text/plain','public, max-age=60'),
+    ('webgl-output/StreamingAssets/aa/settings.json','StreamingAssets/aa/settings.json','application/json','public, max-age=60'),
+]:
+    client.put_object(Bucket='appquarium-tv', Key=key, Body=open(local,'rb').read(), ContentType=ct, CacheControl=cc)
+    print('OK:', key)
+"
 
 # — Rebuild completo (player + todos los bundles, caso raro) —
 # 1. Limpiar bundles viejos
@@ -194,13 +211,13 @@ aws s3 sync webgl-output/ s3://appquarium-tv/ `
 
 | Carpeta | Contenido |
 |---|---|
-| `Assets/Scripts/Core/` | AquariumManager (slim), AmbientModeController, AquariumCameraController, AudioManager, CastReceiver, CastDataTypes, FishSpawner, FoodItem, PostProcessingSetup, **TvSceneBootstrap** ⭐ |
+| `Assets/Scripts/Core/` | AquariumManager (slim), AmbientModeController, AquariumCameraController, AudioManager, CastReceiver, CastDataTypes, FishSpawner, FoodItem, PostProcessingSetup, **TvSceneBootstrap** ⭐, **TvFoodManager** |
 | `Assets/Scripts/Fish/` | FishAgent, FishBrain, SteeringController, NeedsModule, FishProceduralAnimator (sync mobile) |
 | `Assets/Scripts/Tank/` | TankController, DecorationPlacer, BubbleSystem, TankBackground, TankLightingController, WaterSurface (sync mobile) |
 | `Assets/Scripts/Data/` | FishData, DecorationData, TankData (sync mobile) |
 | `Assets/Scripts/Utils/` | AppFlags, AppVersion, CatalogLoader (sync mobile) |
 | `Assets/Scripts/Stubs/` | TvStubs (stubs para clases mobile-only referenciadas indirectamente) |
-| `Assets/Editor/` | TvAddressablesSetup, TvBuildTools, SyncFromMobileMenu |
+| `Assets/Editor/` | TvAddressablesSetup, TvBuildTools, SyncFromMobileMenu, **TvBuildPostprocess** (parchea settings.json tras cada build) |
 | `Tools/` | SyncFromMobile.ps1 |
 
 ---
@@ -227,9 +244,9 @@ aws s3 sync webgl-output/ s3://appquarium-tv/ `
 | `Audio_Remote` | PackSeparately | 2 audio clips | 2 |
 | `Default Local Group` | PackTogether | scaffolding | 1 |
 
-Total bundles en `ServerData/WebGL/`: **92** (post build 26-may 03:35).
+Total bundles en R2: **92+** (fish×25 + decos×54 + envs×11 + audio×2). Algunos tienen versiones duplicadas de builds anteriores — el catalog siempre apunta al correcto.
 
-**LZ4 compression** confirmado. **NonRecursiveBuilding=true** (cambio pendiente a `false` en Fase A.1 — ver spec §4.2).
+**LZ4 compression** confirmado. **NonRecursiveBuilding=true** — ⚠ NO cambiar a `false` (causa 47 min/bundle, builds de 30h+). Ver `feedback_nonrecursivebuilding.md`.
 
 ---
 
