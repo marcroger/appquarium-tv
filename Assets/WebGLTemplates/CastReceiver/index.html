@@ -90,8 +90,20 @@
       position:fixed;top:0;right:0;z-index:10000;
       background:rgba(0,0,0,0.80);color:#6f6;
       font:bold 22px/1.25 monospace;padding:6px 14px;
-      text-align:right;pointer-events:none;border-bottom-left-radius:10px;
+      text-align:right;pointer-events:none;border-bottom-left-radius:0;
     ">FPS —</div>
+
+    <!-- Stats panel — debajo del FPS meter. Solo visible tras Unity READY.
+         Acumula muestras cada segundo, refresca cada 5s.
+         FPS avg/lo/hi de la sesión + WASM heap + JS heap. -->
+    <div id="stats-panel" style="
+      position:fixed;top:42px;right:0;z-index:10000;
+      background:rgba(0,0,0,0.80);color:#8dd;
+      font:bold 13px/1.6 monospace;padding:5px 14px 7px;
+      text-align:right;pointer-events:none;border-bottom-left-radius:10px;
+      border-top:1px solid rgba(255,255,255,0.08);
+      display:none;min-width:190px;
+    "></div>
 
     <script>
       // ── Debug logger ──────────────────────────────────────────────────────
@@ -180,12 +192,75 @@
               var avg = sum / count;
               el.textContent = 'FPS ' + avg.toFixed(0) + '  ▼' + worst.toFixed(0);
               el.style.color = avg >= 50 ? '#6f6' : (avg >= 30 ? '#ff5' : '#f55');
+              if (window._recordFpsSample) window._recordFpsSample(avg);
             }
             winStart = now; sum = 0; count = 0; worst = 1e9;
           }
           requestAnimationFrame(tick);
         }
         requestAnimationFrame(tick);
+      })();
+
+      // ── Performance stats panel ───────────────────────────────────────────
+      // Recibe muestras de FPS cada segundo (desde el fps meter de arriba).
+      // Actualiza el panel cada 5s con: sesión, FPS avg/lo/hi, WASM heap, JS heap.
+      // Solo se muestra cuando unityInstance existe (acuario activo).
+      (function() {
+        var panel  = document.getElementById('stats-panel');
+        var fpsBuf = [];   // muestras de 1s avg — máx 10 min (600)
+        var t0     = 0;    // performance.now() del primer sample (Unity ya listo)
+
+        function getWasmMB() {
+          try {
+            var m = window.unityInstance && window.unityInstance.Module;
+            if (!m) return 0;
+            var buf = (m.wasmMemory && m.wasmMemory.buffer) || (m.HEAPU8 && m.HEAPU8.buffer);
+            return buf ? Math.round(buf.byteLength / 1048576) : 0;
+          } catch(e) { return 0; }
+        }
+
+        function getHeap() {
+          if (!performance.memory) return null;
+          return {
+            used:  Math.round(performance.memory.usedJSHeapSize  / 1048576),
+            limit: Math.round(performance.memory.jsHeapSizeLimit / 1048576)
+          };
+        }
+
+        function fmtTime(ms) {
+          var s = Math.floor(ms / 1000), m = Math.floor(s / 60); s %= 60;
+          return m + ':' + (s < 10 ? '0' : '') + s;
+        }
+
+        function render() {
+          if (!fpsBuf.length) return;
+          var sum = 0, lo = 999, hi = 0;
+          for (var i = 0; i < fpsBuf.length; i++) {
+            sum += fpsBuf[i];
+            if (fpsBuf[i] < lo) lo = fpsBuf[i];
+            if (fpsBuf[i] > hi) hi = fpsBuf[i];
+          }
+          var avg  = sum / fpsBuf.length;
+          var wasm = getWasmMB();
+          var heap = getHeap();
+          var lines = [
+            'SESSION ' + fmtTime(performance.now() - t0),
+            'FPS avg:' + avg.toFixed(0) + ' lo:' + lo.toFixed(0) + ' hi:' + hi.toFixed(0),
+          ];
+          if (wasm)  lines.push('WASM  ' + wasm + ' MB');
+          if (heap)  lines.push('HEAP  ' + heap.used + '/' + heap.limit + ' MB');
+          panel.innerHTML = lines.join('<br>');
+        }
+
+        // Recibe avg de FPS cada segundo desde el fps meter
+        window._recordFpsSample = function(avg) {
+          if (!window.unityInstance) return;
+          if (!t0) { t0 = performance.now(); panel.style.display = 'block'; }
+          fpsBuf.push(avg);
+          if (fpsBuf.length > 600) fpsBuf.shift();
+        };
+
+        setInterval(render, 5000);
       })();
     </script>
 
