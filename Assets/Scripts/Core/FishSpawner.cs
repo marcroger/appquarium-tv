@@ -203,6 +203,20 @@ public class FishSpawner : MonoBehaviour
             Debug.Log($"[FishSpawner] ✅ {replaced} peces reemplazados de placeholder a modelo real.");
     }
 
+    /// <summary>Despawns the first active fish matching speciesId. Returns count removed.</summary>
+    public int DespawnBySpecies(string speciesId)
+    {
+        var toRemove = new List<FishAgent>();
+        foreach (var f in _activeFish)
+            if (f != null && f.Data?.itemId == speciesId) toRemove.Add(f);
+        foreach (var f in toRemove)
+        {
+            _activeFish.Remove(f);
+            if (f != null) Destroy(f.gameObject);
+        }
+        return toRemove.Count;
+    }
+
     /// <summary>Elimina todos los peces activos.</summary>
     public void DespawnAll()
     {

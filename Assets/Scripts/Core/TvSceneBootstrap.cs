@@ -20,6 +20,12 @@ public class TvSceneBootstrap : MonoBehaviour
     [Header("TV Scene")]
     public bool alwaysAmbient = true;
 
+    // Addressable handle registries — track handles so we can release memory on reconnect or remove
+    private readonly List<AsyncOperationHandle<FishData>>                    _initFishHandles    = new();
+    private readonly List<AsyncOperationHandle<DecorationData>>              _initDecoHandles    = new();
+    private readonly Dictionary<string, AsyncOperationHandle<FishData>>      _runtimeFishHandles = new();
+    private readonly Dictionary<string, AsyncOperationHandle<DecorationData>> _runtimeDecoHandles = new();
+
     // Loading overlay
     private CanvasGroup   _overlayGroup;
     private Text          _counterText;
@@ -110,9 +116,7 @@ public class TvSceneBootstrap : MonoBehaviour
                     mgr.FishSpeedMultiplier = spd;
                 break;
 
-            case "feed":
-                mgr.FeedAll();
-                break;
+            case "feed":    mgr.FeedAll(); break;
 
             case "startle":
                 var sBounds = mgr.tankController.GetTankBounds();
@@ -122,6 +126,15 @@ public class TvSceneBootstrap : MonoBehaviour
             case "refresh":
                 Debug.Log("[TvScene] Refresh requested — waiting for new INIT.");
                 break;
+
+            // ── Real-time asset updates ──────────────────────────────────────
+            case "add_fish":    StartCoroutine(AddFishAsync(upd.value));   break;
+            case "remove_fish": RemoveFish(upd.value);                     break;
+            case "add_deco":    StartCoroutine(AddDecoAsync(upd.value));   break;
+            case "remove_deco": RemoveDeco(upd.value);                     break;
+            case "change_bg":   ChangeBg(upd.value);                       break;
+            case "change_sub":  ChangeSub(upd.value);                      break;
+            case "change_light":ChangeLight(upd.value);                    break;
         }
     }
 
@@ -130,6 +143,14 @@ public class TvSceneBootstrap : MonoBehaviour
     private IEnumerator LoadAndInitializeCoroutine(TvAquariumState state)
     {
         ShowLoadingOverlay();
+
+        // ── 0. Release handles from previous session (Cast reconnect) ─────────
+        foreach (var h in _initFishHandles)    Addressables.Release(h);
+        foreach (var h in _initDecoHandles)    Addressables.Release(h);
+        foreach (var h in _runtimeFishHandles.Values) Addressables.Release(h);
+        foreach (var h in _runtimeDecoHandles.Values) Addressables.Release(h);
+        _initFishHandles.Clear();    _initDecoHandles.Clear();
+        _runtimeFishHandles.Clear(); _runtimeDecoHandles.Clear();
 
         // ── 1. Collect keys ──────────────────────────────────────────────────
         var fishKeys = new HashSet<string>();
@@ -189,6 +210,10 @@ public class TvSceneBootstrap : MonoBehaviour
         Debug.Log($"[TvScene] Assets loaded — fish:{fishData.Count}/{fishHandles.Count} decos:{decoData.Count}/{decoHandles.Count}");
         JsBridge.Log($"Loaded: fish={fishData.Count}/{fishHandles.Count} decos={decoData.Count}/{decoHandles.Count}" +
             (fishFailed + decoFailed > 0 ? $" FAILED={fishFailed+decoFailed}" : " OK"));
+
+        // Store handles so we can release them on reconnect (next INIT)
+        _initFishHandles.AddRange(fishHandles);
+        _initDecoHandles.AddRange(decoHandles);
 
         // ── 5. Initialize aquarium with loaded data ───────────────────────────
         var mgr = AquariumManager.Instance;
@@ -387,5 +412,168 @@ public class TvSceneBootstrap : MonoBehaviour
             case "sunset": amb.SetSunset(); break;
             case "night":  amb.SetNight();  break;
         }
+    }
+
+    // ── Real-time asset update handlers ───────────────────────────────────────
+
+    private IEnumerator AddFishAsync(string jsonValue)
+    {
+        var payload = SafeFromJson<TvAddFishPayload>(jsonValue);
+        if (payload == null || string.IsNullOrEmpty(payload.speciesId)) yield break;
+
+        var mgr = AquariumManager.Instance;
+        if (mgr == null) yield break;
+
+        // Reuse already-loaded data if available from INIT catalog
+        FishData data = mgr.allFishCatalog.Find(d => d.itemId == payload.speciesId);
+        if (data == null)
+        {
+            var h = Addressables.LoadAssetAsync<FishData>(payload.speciesId);
+            yield return h;
+            if (h.Status != AsyncOperationStatus.Succeeded)
+            {
+                JsBridge.Log($"ERR add_fish: load failed {payload.speciesId}");
+                yield break;
+            }
+            data = h.Result;
+            _runtimeFishHandles[payload.speciesId] = h;
+            mgr.allFishCatalog.Add(data);
+        }
+
+        var bounds = mgr.tankController.GetTankBounds();
+        var save   = new OwnedFishSave
+        {
+            uid       = System.Guid.NewGuid().ToString(),
+            speciesId = payload.speciesId,
+            nickname  = payload.nickname ?? ""
+        };
+        var agent = mgr.fishSpawner.SpawnFish(data, bounds, save);
+        if (agent != null) { agent.SetNickname(save.nickname); agent.SetUid(save.uid); }
+        JsBridge.Log($"add_fish: {payload.speciesId} spawned");
+    }
+
+    private void RemoveFish(string speciesId)
+    {
+        var mgr = AquariumManager.Instance;
+        if (mgr == null) return;
+
+        int count = mgr.fishSpawner.DespawnBySpecies(speciesId);
+        JsBridge.Log($"remove_fish: {speciesId} (removed={count})");
+
+        // Release bundle only if it was runtime-loaded and no instances remain
+        if (_runtimeFishHandles.TryGetValue(speciesId, out var h))
+        {
+            bool anyLeft = false;
+            foreach (var f in mgr.fishSpawner.ActiveFish)
+                if (f != null && f.Data?.itemId == speciesId) { anyLeft = true; break; }
+            if (!anyLeft)
+            {
+                Addressables.Release(h);
+                _runtimeFishHandles.Remove(speciesId);
+                mgr.allFishCatalog.RemoveAll(d => d.itemId == speciesId);
+            }
+        }
+    }
+
+    private IEnumerator AddDecoAsync(string jsonValue)
+    {
+        var payload = SafeFromJson<TvAddDecoPayload>(jsonValue);
+        if (payload == null || string.IsNullOrEmpty(payload.itemId)) yield break;
+
+        var mgr = AquariumManager.Instance;
+        if (mgr == null) yield break;
+        var placer = mgr.tankController.GetComponent<DecorationPlacer>();
+        if (placer == null) yield break;
+
+        DecorationData data = mgr.allDecoCatalog.Find(d => d.itemId == payload.itemId);
+        if (data == null)
+        {
+            var h = Addressables.LoadAssetAsync<DecorationData>(payload.itemId);
+            yield return h;
+            if (h.Status != AsyncOperationStatus.Succeeded)
+            {
+                JsBridge.Log($"ERR add_deco: load failed {payload.itemId}");
+                yield break;
+            }
+            data = h.Result;
+            if (!_runtimeDecoHandles.ContainsKey(payload.itemId))
+            {
+                _runtimeDecoHandles[payload.itemId] = h;
+                mgr.allDecoCatalog.Add(data);
+            }
+            else
+            {
+                Addressables.Release(h); // already tracked from a previous add
+            }
+        }
+
+        placer.PlaceAt(data, payload.position,
+            flipped:     payload.flipped,
+            rotationY:   payload.rotationY,
+            scaleFactor: payload.scaleFactor > 0f ? payload.scaleFactor : 1f,
+            fromSave:    true,
+            instanceId:  string.IsNullOrEmpty(payload.instanceId) ? null : payload.instanceId);
+
+        JsBridge.Log($"add_deco: {payload.itemId} at {payload.position:F1}");
+    }
+
+    private void RemoveDeco(string instanceId)
+    {
+        var mgr = AquariumManager.Instance;
+        if (mgr == null) return;
+        var placer = mgr.tankController.GetComponent<DecorationPlacer>();
+        if (placer == null) return;
+
+        // Derive itemId by stripping the trailing _N index from instanceId
+        int    lastUs = instanceId.LastIndexOf('_');
+        string itemId = lastUs > 0 ? instanceId.Substring(0, lastUs) : instanceId;
+
+        bool ok = placer.Remove(instanceId);
+        JsBridge.Log($"remove_deco: {instanceId} (ok={ok})");
+
+        // Release bundle when the last instance of this itemId is gone
+        if (ok && !placer.IsPlaced(itemId) && _runtimeDecoHandles.TryGetValue(itemId, out var h))
+        {
+            Addressables.Release(h);
+            _runtimeDecoHandles.Remove(itemId);
+            mgr.allDecoCatalog.RemoveAll(d => d.itemId == itemId);
+        }
+    }
+
+    private void ChangeBg(string bgId)
+    {
+        var mgr = AquariumManager.Instance;
+        if (mgr == null) return;
+        var bg = mgr.tankController.GetComponent<TankBackground>();
+        if (bg != null) bg.SetPreset(bgId);
+        if (mgr.SaveData != null) mgr.SaveData.selectedBgId = bgId;
+        JsBridge.Log($"change_bg: {bgId}");
+    }
+
+    private void ChangeSub(string subId)
+    {
+        var mgr = AquariumManager.Instance;
+        if (mgr == null) return;
+        var placer = mgr.tankController.GetComponent<DecorationPlacer>();
+        if (placer != null) placer.SetSubstrate(subId);
+        if (mgr.SaveData != null) mgr.SaveData.selectedSubId = subId;
+        JsBridge.Log($"change_sub: {subId}");
+    }
+
+    private void ChangeLight(string lightId)
+    {
+        var mgr = AquariumManager.Instance;
+        if (mgr == null) return;
+        var lighting = mgr.tankController.GetComponent<TankLightingController>();
+        if (lighting != null) lighting.SetPreset(lightId);
+        if (mgr.SaveData != null) mgr.SaveData.lightPresetId = lightId;
+        JsBridge.Log($"change_light: {lightId}");
+    }
+
+    private static T SafeFromJson<T>(string json) where T : class
+    {
+        if (string.IsNullOrEmpty(json)) return null;
+        try   { return JsonUtility.FromJson<T>(json); }
+        catch { return null; }
     }
 }

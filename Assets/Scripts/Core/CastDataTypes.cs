@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using UnityEngine;
 
 // Wire format for Cast Custom Channel messages.
 // These types are SHARED between mobile (sender, encodes) and TV (receiver, decodes).
@@ -43,4 +44,26 @@ public class CastMessage
 public class DecoPlacementList
 {
     public List<DecoPlacement> items = new List<DecoPlacement>();
+}
+
+// ── Payloads for real-time Cast UPDATE messages ──────────────────────────────
+// Mobile serializes these as JSON into TvUpdateMessage.value.
+// TV deserializes them in TvSceneBootstrap to act on the change.
+
+[Serializable]
+public class TvAddFishPayload
+{
+    public string speciesId;
+    public string nickname;
+}
+
+[Serializable]
+public class TvAddDecoPayload
+{
+    public string  instanceId;  // mobile instance key, e.g. "deco_coral_brain_0"
+    public string  itemId;      // addressable key, e.g. "deco_coral_brain"
+    public Vector3 position;    // world position in tank space
+    public float   scaleFactor;
+    public bool    flipped;
+    public float   rotationY;
 }

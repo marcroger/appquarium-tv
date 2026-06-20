@@ -424,12 +424,28 @@
     // Enter / OK button (Android TV remote center) → startle (fish scatter)
     // F key / MediaPlayPause button                → feed (pellets drop, fish swim to eat)
     // In devtest mode these are triggered by keyboard so you can test without a TV remote.
+    // Devtest-only UPDATE shortcuts (only active with ?devtest=1):
+    //   A → add_fish (moorish idol)   Z → remove_fish (moorish idol)
+    //   B → change_bg (cycle)         S → change_sub (cycle)
     (function() {
       function sendDeviceInput(action) {
         if (!window.unityInstance) return;
         dbg('Input: ' + action);
         window.unityInstance.SendMessage('CastReceiver', 'OnDeviceInput', action);
       }
+      function sendCastUpdate(type, value) {
+        if (!window.unityInstance) { dbg('Unity not ready for UPDATE'); return; }
+        var payload = JSON.stringify({ type: type, value: value });
+        var msg = JSON.stringify({ type: 'UPDATE', payload: payload });
+        dbg('DEV UPDATE: ' + type + ' = ' + value);
+        window.unityInstance.SendMessage('CastReceiver', 'OnMessageReceived', msg);
+      }
+      var _devBgIdx  = 0;
+      var _devSubIdx = 0;
+      var DEV_BGS  = ['bg_ocean','bg_reef','bg_cave','bg_abyss','bg_sunset','bg_tropical'];
+      var DEV_SUBS = ['sub_sand','sub_gravel','sub_black','sub_coral'];
+      var isDevTest = new URLSearchParams(window.location.search).get('devtest') === '1';
+
       window.addEventListener('keydown', function(e) {
         switch (e.keyCode) {
           case 13:  // Enter → OK button on Android TV remote
@@ -440,6 +456,27 @@
           case 179: // MediaPlayPause (some Android TV remotes)
             e.preventDefault();
             sendDeviceInput('feed');
+            break;
+          // ── Devtest-only UPDATE shortcuts ─────────────────────────────────
+          case 65:  // A → add moorish idol
+            if (!isDevTest) break;
+            e.preventDefault();
+            sendCastUpdate('add_fish', JSON.stringify({ speciesId: 'fish_moorish_idol', nickname: 'Cast Test' }));
+            break;
+          case 90:  // Z → remove moorish idol
+            if (!isDevTest) break;
+            e.preventDefault();
+            sendCastUpdate('remove_fish', 'fish_moorish_idol');
+            break;
+          case 66:  // B → cycle background
+            if (!isDevTest) break;
+            e.preventDefault();
+            sendCastUpdate('change_bg', DEV_BGS[_devBgIdx++ % DEV_BGS.length]);
+            break;
+          case 83:  // S → cycle substrate
+            if (!isDevTest) break;
+            e.preventDefault();
+            sendCastUpdate('change_sub', DEV_SUBS[_devSubIdx++ % DEV_SUBS.length]);
             break;
         }
       }, false);

@@ -32,8 +32,9 @@ El móvil envía el estado del tanque vía Google Cast SDK; este proyecto **rend
 
 | Doc | Cuándo |
 |---|---|
-| [`CAST_NETFLIX_SPEC.md`](CAST_NETFLIX_SPEC.md) | ⭐ Spec ejecutable para Fase A.1 — contrato actual del refactor Netflix. 10 secciones. |
-| [`BUILD_REPORT_2026-05-25.md`](BUILD_REPORT_2026-05-25.md) | Diagnóstico del build de 411MB + análisis duplicación. Justifica por qué hacemos lo que dice el spec. |
+| [`CAST_UPDATES.md`](CAST_UPDATES.md) | ⭐ Protocolo UPDATE en tiempo real — tipos, payloads, gestión memoria, calls mobile pendientes. |
+| [`CAST_NETFLIX_SPEC.md`](CAST_NETFLIX_SPEC.md) | Spec ejecutable para Fase A.1 — contrato del refactor Netflix. 10 secciones. |
+| [`BUILD_REPORT_2026-05-25.md`](BUILD_REPORT_2026-05-25.md) | Diagnóstico del build de 411MB + análisis duplicación. |
 | [`ADDRESSABLES_ROADMAP.md`](ADDRESSABLES_ROADMAP.md) | Estado de bundles + cómo se organizan los Addressables. |
 | [`SYNC_NOTES.md`](SYNC_NOTES.md) | Cómo sincronizar scripts/SOs desde mobile y qué NO sincronizar. |
 | [`HANDOFF.md`](HANDOFF.md) | Setup inicial del proyecto (histórico — F1..F8). |
@@ -98,6 +99,14 @@ Detalle de qué se sincroniza, qué NO, y por qué: ver `SYNC_NOTES.md`.
 - Mando Android TV: Enter = startle, F/MediaPlayPause = feed
 - `ambient_bubbles.wav` bakeado en `.data` (~14 MB Vorbis, loop 10 min)
 - Fix reconexión 2º INIT: DespawnAll + RemoveAllDecos antes de reinit
+
+**Sesión 2026-06-20 — Updates en tiempo real (C# implementado, pendiente deploy):**
+- Handle registry en `TvSceneBootstrap` — handles Addressable de INIT y runtime trackeados y liberados correctamente en reconexión y en remove
+- Nuevos handlers UPDATE: `add_fish`, `remove_fish`, `add_deco`, `remove_deco`, `change_bg`, `change_sub`, `change_light`
+- `FishSpawner.DespawnBySpecies(speciesId)` añadido
+- Devtest keyboard: A=add_fish, Z=remove_fish, B=change_bg, S=change_sub
+- Protocolo documentado en `CAST_UPDATES.md` — incluye tabla de calls a añadir en mobile
+- **Requiere player rebuild** (cambio C#) + deploy para activar en producción
 
 **settings.json auto-parcheado** por `TvBuildPostprocess.cs` tras cada build — no intervención manual.
 **SBP cache incremental:** 1 pez cold = 2:01h | 2 peces incremental = 1:39h | todo cacheado = 9s.

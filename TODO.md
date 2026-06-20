@@ -102,25 +102,50 @@ Ordenado por prioridad dentro de cada bloque. Actualizar con fecha al cerrar cad
 
 ---
 
-## 📡 Updates en tiempo real (Fase B — requiere cambios en mobile)
+## 📡 Updates en tiempo real
 
-> **Hallazgo 2026-06-19:** `CastManager.SendUpdate()` en mobile está implementado pero nunca
-> se llama. Ninguna acción del usuario durante una sesión Cast llega a la TV en tiempo real.
-> Los cambios solo se reflejan al desconectar y reconectar. El receptor TV ya tiene handlers
-> para todos los tipos — falta el lado mobile.
+> **2026-06-20:** TV ya tiene handlers completos para todos los tipos de UPDATE.
+> Handle registry implementado — los bundles se liberan correctamente en remove y en reconexión.
+> Pendiente: conectar llamadas en el lado mobile (Fase B). Ver `CAST_UPDATES.md` para el protocolo completo.
 
-- [ ] **ambient (day/sunset/night)** — mobile: conectar botón modo día/noche a `SendUpdate("ambient", mode)`
+### TV ✅ — pendiente mobile
+
+- [x] **TV handler: add_fish** ✅ 2026-06-20 — carga bundle Addressable si no estaba en INIT, spawna pez.
+  > `TvSceneBootstrap.cs` `case "add_fish"` → `AddFishAsync()`
+  > Mobile: añadir call en `AquariumManager.AddFishToTank()` — ver `CAST_UPDATES.md §2`
+
+- [x] **TV handler: remove_fish** ✅ 2026-06-20 — despawna pez, libera bundle si era runtime.
+  > `TvSceneBootstrap.cs` `case "remove_fish"` → `RemoveFish()`
+  > Mobile: añadir call en `AquariumManager.RemoveFishFromTank()` — ver `CAST_UPDATES.md §2`
+
+- [x] **TV handler: add_deco** ✅ 2026-06-20 — carga bundle, coloca en posición enviada por mobile.
+  > `TvSceneBootstrap.cs` `case "add_deco"` → `AddDecoAsync()`
+  > Mobile: añadir call en `DecorationPlacer.PlaceAt()` — ver `CAST_UPDATES.md §2`
+
+- [x] **TV handler: remove_deco** ✅ 2026-06-20 — quita instancia, libera bundle si no quedan más.
+  > `TvSceneBootstrap.cs` `case "remove_deco"` → `RemoveDeco()`
+  > Mobile: añadir call en `DecorationPlacer.Remove()` — ver `CAST_UPDATES.md §2`
+
+- [x] **TV handler: change_bg** ✅ 2026-06-20 — `TankBackground.SetPreset(bgId)`. Sin Addressables.
+  > `TvSceneBootstrap.cs` `case "change_bg"` → `ChangeBg()`
+  > Mobile: añadir call en DecoPanel/TankBackground — ver `CAST_UPDATES.md §2`
+
+- [x] **TV handler: change_sub** ✅ 2026-06-20 — `DecorationPlacer.SetSubstrate(subId)`. Sin Addressables.
+  > `TvSceneBootstrap.cs` `case "change_sub"` → `ChangeSub()`
+  > Mobile: añadir call en DecoPanel/DecorationPlacer — ver `CAST_UPDATES.md §2`
+
+- [x] **TV handler: change_light** ✅ 2026-06-20 — `TankLightingController.SetPreset(lightId)`. Sin Addressables.
+  > `TvSceneBootstrap.cs` `case "change_light"` → `ChangeLight()`
+  > Mobile: añadir call en DecoPanel/TankLightingController — ver `CAST_UPDATES.md §2`
+
+- [ ] **ambient** — mobile: conectar botón modo día/noche a `SendUpdate("ambient", mode)`
   TV: ✅ implementado (`AmbientModeController`)
-  > Mobile: `CastManager.cs:156` | TV: `TvSceneBootstrap.cs` `case "ambient"`
 
 - [ ] **speed** — mobile: conectar slider velocidad peces a `SendUpdate("speed", value)`
   TV: ✅ implementado (`AquariumManager.FishSpeedMultiplier`)
-  > Mobile: `CastManager.cs:156` | TV: `TvSceneBootstrap.cs` `case "speed"`
 
 - [ ] **feed** — mobile: conectar botón comida a `SendUpdate("feed")`.
-  TV: ✅ `TvFoodManager` implementado 2026-06-19 — pellets visuales + peces nadan a comer.
-  Solo falta que mobile llame `SendUpdate("feed")`.
-  > Mobile: `CastManager.cs:156` | TV: `TvSceneBootstrap.cs` `case "feed"`
+  TV: ✅ `TvFoodManager` implementado 2026-06-19.
 
 ---
 
