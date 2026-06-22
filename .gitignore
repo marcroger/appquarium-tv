@@ -65,3 +65,8 @@
 # OS-specific
 .DS_Store
 Thumbs.db
+
+# Large audio binaries — stored locally only (Addressables, not needed in repo)
+Assets/Resources/Audio/*.wav
+Assets/Resources/Audio/*.mp3
+Assets/Resources/Audio/*.ogg
