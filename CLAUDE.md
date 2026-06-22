@@ -97,39 +97,36 @@ Después de cada sync, verificar `Assets/Resources/Audio/*.meta`:
 
 ## Build pipeline (resumen)
 
-### Estado actual — 2026-06-20
+### Estado actual — 2026-06-22
 
-`.data` = 32.0 MB en R2. 🎉 **FLUIDO en Xiaomi TV Box S** — bloom OFF + renderScale 0.7 + targetFrameRate 30.
-**Audio OOM resuelto** — `ambient_bubbles.wav` cargada correctamente (loadType:2, mono). Ver `BUILD_REPORT_2026-06-19.md`.
+`.data` = 32.0 MB | `.wasm` = 42.2 MB en R2. 🎉 **FLUIDO en Xiaomi TV Box S** — bloom OFF + renderScale 0.7 + targetFrameRate 30.
+**Calidad visual mejorada** — Tonemapping Neutral + saturation +18 + contrast +10 + SMAA Low. Confirmado visualmente en TV (2026-06-22).
 
-**⚠ PENDIENTE DEPLOY — webgl-output/ listo, R2 API timeout de red (2026-06-20 noche):**
-Dos fixes en build, pendientes de subir a R2 cuando vuelva la conexión:
-1. **Cast disconnect ~2 min** — `maxInactivity:0` + keepalive 60s en `index.html`
-2. **Tint corales/decos** — `DecorationPlacer.PlaceAt()` comprueba `_Color` además de `_BaseColor`
+**Build 2026-06-22 — DEPLOYADO (calidad visual + SMAA):**
+- `PostProcessingSetup.cs` — Tonemapping Neutral (evita highlights lavados) + saturation +18 + contrast +10
+- `TvSceneBootstrap.cs` — SMAA Low en cámara principal (bordes menos dentados, 1 pass extra)
+- Valores serializados en escena: `enableTonemapping=true`, `saturation=18`, `contrast=10`, `postExposure=0.05`
+- Panel debug confirma: `PostFX: bloom=OFF tm=Neutral sat=18 con=10`
 
-**Build 2026-06-20 — DEPLOYADO (audio OOM resuelto):**
+**Build 2026-06-22 (también en R2) — disconnect diag + Fase B:**
+- `index.html` — logs `e.reason` + duración de sesión en `SENDER_DISCONNECTED`
+- `index.html` — overlay visual "Sender desconectado" con contador en TV
+- `index.html` — keepalive receiver→sender 60s (logea cada 5 ticks o al fallar)
+- `CastReceiver.cs` — PING/KEEPALIVE mensajes silenciados (no spam en log)
+- `ctx.start({ disableIdleTimeout:true, maxInactivity:3600 })` — ⚠ SDK rechaza valores ≤5; usar 3600
+- Fase B mobile: `SendUpdate()` conectado en todos los puntos de acción (ver `CAST_UPDATES.md`)
+
+**Build 2026-06-20 — base (audio OOM resuelto, tint corales, feed visual):**
 - `TvFoodManager.cs` — feed visual (pellets + peces nadan a comer) + auto-feed cada 4 min
-- Mando Android TV: Enter = startle, F/MediaPlayPause = feed
-- `ambient_bubbles.wav` loadType:2, forceToMono:1 — correcto para WebGL/Cast ✅
-- Fix reconexión 2º INIT: DespawnAll + RemoveAllDecos antes de reinit
+- `ambient_bubbles.wav` loadType:2, forceToMono:1 ✅
 - Handlers UPDATE: `add_fish`, `remove_fish`, `add_deco`, `remove_deco`, `change_bg`, `change_sub`, `change_light`
-- `.data` = 32.0 MB | `.wasm` = 44.2 MB
+- `DecorationPlacer.PlaceAt()` aplica tint a `_BaseColor` Y `_Color`
 
-**Sesión 2026-06-20 (2) — Cast disconnect fix (en build, pendiente deploy):**
-- `ctx.start({ disableIdleTimeout:true, maxInactivity:0 })` — evita desconexión por inactividad
-- Keepalive cada 60s en `index.html` (`ctx.sendCustomMessage`) — mantiene canal bidireccional activo
-- `disableIdleTimeout` y `maxInactivity` son timeouts **INDEPENDIENTES** — necesitamos ambos:
-  - `disableIdleTimeout`: no shutdown cuando 0 senders conectados
-  - `maxInactivity:0`: no desconectar sender "inactivo" (sin mensajes hacia receiver)
-- > `Assets/WebGLTemplates/CastReceiver/index.html` (línea 370)
-
-**Sesión 2026-06-20 (3) — Tint corales fix (en build, pendiente deploy):**
-- `FixNonURPMaterials()` convierte materiales a `DecoLit`/`FishUnlit` (CG legacy, usan `_Color`)
-- Tint code anterior buscaba `_BaseColor` → false en esos shaders → tint nunca aplicado (bug silencioso)
-- Fix: `DecorationPlacer.PlaceAt()` aplica tint a `_BaseColor` Y `_Color` — cubre todos los shaders
-- Local test confirma: corallium=rojo, heliopora=azul, distichopora=morado ✅
-- Devtest `index.html` actualizado con 3 corales (sustituye cannon/column)
-- > `Assets/Scripts/Tank/DecorationPlacer.cs` línea 356
+**⚠ PENDIENTE — Disconnect sender (mobile):**
+- Se desconecta a los ~2-3 min. Root cause probable: Android Doze mata el proceso del sender.
+- Fix en mobile (repo separado): PARTIAL_WAKE_LOCK en `CastPlugin.java` + keepalive PING sender→receiver cada 60s.
+- Para diagnosticar: ver razón en panel debug TV al desconectar (`reason:REQUESTED_BY_SENDER` vs `reason:unknown`).
+- `reason:unknown` = Android mató el proceso → WakeLock en mobile es el fix.
 
 **settings.json auto-parcheado** por `TvBuildPostprocess.cs` tras cada build — no intervención manual.
 **SBP cache incremental:** 1 pez cold = 2:01h | 2 peces incremental = 1:39h | todo cacheado = 9s.

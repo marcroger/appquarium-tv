@@ -76,6 +76,19 @@ public class TvSceneBootstrap : MonoBehaviour
             Debug.Log($"[TvScene] renderScale SKIP — rp={(rpAsset == null ? "null" : rpAsset.GetType().Name)}");
         }
 
+        // SMAA Low: 1 extra pass, sharper edges than no-AA. MSAA is broken on WebGL (Unity 6 bug).
+        var cam = Camera.main;
+        if (cam != null)
+        {
+            var camData = cam.GetComponent<UnityEngine.Rendering.Universal.UniversalAdditionalCameraData>();
+            if (camData != null)
+            {
+                camData.antialiasing        = UnityEngine.Rendering.Universal.AntialiasingMode.SubpixelMorphologicalAntiAliasing;
+                camData.antialiasingQuality = UnityEngine.Rendering.Universal.AntialiasingQuality.Low;
+                Debug.Log("[TvScene] SMAA Low enabled");
+            }
+        }
+
         BuildLoadingOverlay();
 
         Debug.Log("[TvSceneBootstrap] TV scene ready — waiting for Cast INIT.");
