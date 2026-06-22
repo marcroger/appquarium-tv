@@ -99,33 +99,26 @@ El TV mantiene dos registros de handles:
 
 ---
 
-## Lo que el móvil necesita implementar (pendiente Fase B)
+## Fase B — implementada en mobile (2026-06-22)
 
-Todos los puntos de llamada son en `D:\dev\appquarium-unity\`. **No tocar ahora.**
+`CastManager.SendUpdate()` ya se llama en todos los puntos de acción del usuario.
+`TvAddFishPayload` y `TvAddDecoPayload` añadidos en `CastManager.cs` del mobile.
 
-### 1. `CastManager.SendUpdate()` — ya existe, nunca se llama
+| Update type  | Fichero mobile            | Método / punto de llamada                                   |
+|--------------|---------------------------|-------------------------------------------------------------|
+| `add_fish`   | `AquariumManager.cs`      | `AddFishToTank()` — tras `SaveSystem.Save`                  |
+| `remove_fish`| `AquariumManager.cs`      | `RemoveFishFromTank()` — tras `SaveSystem.Save`             |
+| `speed`      | `AquariumManager.cs`      | `FishSpeedMultiplier` setter — tras `SaveSystem.Save`       |
+| `add_deco`   | `DecorationPlacer.cs`     | `PlaceAt()` — al final, solo si `!fromSave`                 |
+| `remove_deco`| `DecorationPlacer.cs`     | `Remove()` — tras `RemoveGameObject`                        |
+| `feed`       | `UIManager.cs`            | `SpawnFoodInTank()` — tras el loop de spawn                 |
+| `startle`    | `InputHandler.cs`         | `StartleNearbyFish()` — una vez por acción de usuario       |
+| `ambient`    | `AmbientModeController.cs`| `SetMode()` — tras `OnModeChanged?.Invoke`                  |
+| `change_bg`  | `DecoPanel.cs`            | lambda `btn1Action` en `BuildBgContent()` — tras `SaveSystem.Save`     |
+| `change_sub` | `DecoPanel.cs`            | lambda `btn1Action` en `BuildSubContent()` — tras `SaveSystem.Save`    |
+| `change_light`| `DecoPanel.cs`           | lambda `btn1Action` en `BuildLightsContent()` — tras `SaveSystem.Save` |
 
-Firma actual en mobile:
-```csharp
-public void SendUpdate(string updateType, string value = "")
-```
-
-### 2. Calls a añadir en mobile
-
-| Acción usuario | Clase mobile | Call a añadir |
-|---------------|--------------|---------------|
-| Comprar/añadir pez | `AquariumManager.AddFishToTank()` | `CastManager.Instance?.SendUpdate("add_fish", JsonUtility.ToJson(new TvAddFishPayload { speciesId = data.itemId, nickname = save.nickname }))` |
-| Vender/quitar pez | `AquariumManager.RemoveFishFromTank()` | `CastManager.Instance?.SendUpdate("remove_fish", save.speciesId)` |
-| Colocar deco | `DecorationPlacer.PlaceAt()` | `CastManager.Instance?.SendUpdate("add_deco", JsonUtility.ToJson(new TvAddDecoPayload { instanceId = instanceId, itemId = data.itemId, position = worldPos, scaleFactor = scaleFactor, flipped = flipped, rotationY = rotationY }))` |
-| Quitar deco | `DecorationPlacer.Remove()` | `CastManager.Instance?.SendUpdate("remove_deco", instanceId)` |
-| Cambiar fondo | `DecoPanel` / `TankBackground.SetPreset()` | `CastManager.Instance?.SendUpdate("change_bg", bgId)` |
-| Cambiar sustrato | `DecoPanel` / `DecorationPlacer.SetSubstrate()` | `CastManager.Instance?.SendUpdate("change_sub", subId)` |
-| Cambiar luz | `DecoPanel` / `TankLightingController.SetPreset()` | `CastManager.Instance?.SendUpdate("change_light", lightId)` |
-| Modo ambiental | `AmbientModeController` botón | `CastManager.Instance?.SendUpdate("ambient", mode)` |
-| Velocidad peces | `fishSpeedMultiplier` setter | `CastManager.Instance?.SendUpdate("speed", value.ToString(CultureInfo.InvariantCulture))` |
-| Dar comida | `UIManager.SpawnFoodInTank()` | `CastManager.Instance?.SendUpdate("feed")` |
-
-> **Nota:** `TvAddFishPayload` y `TvAddDecoPayload` deben añadirse al móvil (CastDataTypes.cs del mobile o inline en CastManager.cs). El TV ya los tiene.
+**Nota `add_deco`:** posición enviada es `go.transform.position` del frame 0 (antes del micro-ajuste de `RefineFloorSnapNextFrame`). Diferencia sub-pixel, invisible en práctica. El INIT en reconexión siempre sincroniza la posición exacta guardada en disco.
 
 ---
 

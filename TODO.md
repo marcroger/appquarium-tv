@@ -7,6 +7,32 @@ Ordenado por prioridad dentro de cada bloque. Actualizar con fecha al cerrar cad
 
 ## 🐛 Bugs confirmados en TV
 
+- [x] **Audio OOM → pantalla azul sin peces** ✅ 2026-06-20 DEPLOYADO Y CONFIRMADO.
+  `ambient_bubbles.wav.meta` tenía `loadType:0` (Decompress on Load). En Cast (Xiaomi TV Box S),
+  al cargar un WAV de 110 MB con Decompress on Load → 110 MB PCM en WASM → OOM → Chrome muere →
+  Cast disconnects. Síntoma: AQUARIUM READY se ve en logs ("3 peces y 11 decos"), luego pantalla azul
+  y disconnect en segundos. NO ES problema de R2 — es audio OOM.
+  **Fix:** `loadType:0 → 2` (Compressed in Memory), `forceToMono:1`, `quality:0.7`, `3D:0`.
+  **⚠ RECURRENTE:** cada sync desde mobile restaura los .meta de mobile (loadType:0). VERIFICAR DESPUÉS DE CADA SYNC.
+  > `Assets/Resources/Audio/ambient_bubbles.wav.meta`
+
+- [ ] **Tint color de corales/decos no visible en TV** — Fix en build, pendiente deploy (R2 timeout red).
+  El tintColor del SO (e.g. corallium=rojo-naranja, heliopora=azul, distichopora=morado) no se aplica en TV.
+  **Causa:** `FixNonURPMaterials()` convierte todos los materiales a `DecoLit` o `FishUnlit` (shaders CG legacy con `_Color`).
+  El tint code posterior busca `mat.HasProperty("_BaseColor")` → false en esos shaders → tint silenciosamente ignorado.
+  **Fix:** `DecorationPlacer.PlaceAt()` líneas 356–364: comprobar `_Color` además de `_BaseColor`, aplicar a ambas.
+  Verificado en local test (screenshot): corallium=rojo, heliopora=azul, distichopora=morado ✅ visible en SwiftShader.
+  > `Assets/Scripts/Tank/DecorationPlacer.cs` línea 356
+
+- [ ] **Cast disconnect ~2 min** — Fix en build, pendiente deploy (R2 timeout red).
+  Sesión Cast cae ~2 minutos después de AQUARIUM READY, tenga el móvil en primer plano o no.
+  **Causa:** `maxInactivity` en Cast Built-In (Xiaomi) desconecta senders sin actividad bidireccional
+  en el canal — incluso con `disableIdleTimeout:true` (que solo previene shutdown con 0 senders).
+  `disableIdleTimeout` y `maxInactivity` son timeouts INDEPENDIENTES.
+  **Fix:** `ctx.start({ disableIdleTimeout:true, maxInactivity:0 })` + keepalive cada 60s
+  (`ctx.sendCustomMessage(NAMESPACE, undefined, JSON.stringify({type:'KEEPALIVE'})`).
+  > `Assets/WebGLTemplates/CastReceiver/index.html` línea 370
+
 - [x] **Coral emission overflow** ✅ 2026-06-19 — `BioLumEmissionScale` reducido de 0.75 → 0.25.
   Sin bloom en TV, HDR >0.5 quedaba como color saturado plano. Con 0.25 el glow es sutil y correcto.
   ⚠ Si sync desde mobile restaura 0.75, volver a poner 0.25 (móvil usa bloom, TV no).

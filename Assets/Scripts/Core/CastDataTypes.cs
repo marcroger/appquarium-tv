@@ -24,6 +24,7 @@ public class TvAquariumState
     public string            ambientMode    = "day";
     public float             fishSpeed      = 1f;
     public string            selectedTankId = "";
+    public float             tankHalfWidth  = 0f;  // mobile camera half-width in world units; 0 = old client (no remap)
 }
 
 [Serializable]

@@ -144,6 +144,7 @@ public class AquariumManager : MonoBehaviour
         if (placer != null)
         {
             placer.allDecorationCatalog = allDecoCatalog ?? new List<DecorationData>();
+            placer.MobileTankHalfWidth  = state.tankHalfWidth; // 0 if old client → no remap
             if (castSave.decoPositions != null && castSave.decoPositions.Count > 0)
                 yield return StartCoroutine(placer.LoadFromSaveAsync(castSave.decoPositions));
             else

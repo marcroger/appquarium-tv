@@ -56,6 +56,10 @@ public class DecorationPlacer : MonoBehaviour
     [Tooltip("Epsilon anti z-fighting global. El contacto visual real lo controla DecorationData.embedDepth per-deco (default -0.03f = base pegada a la superficie).")]
     public float floorSnapYOffset = 0f;
 
+    // Aspect-ratio remapping: set by TvSceneBootstrap after receiving INIT from mobile.
+    // 0 = no remapping (old mobile client or same aspect ratio). See PlaceAt().
+    public float MobileTankHalfWidth = 0f;
+
     // Estado
     private Bounds _tankBounds;
     private readonly Dictionary<string, PlacedDeco> _placed = new();
@@ -313,6 +317,12 @@ public class DecorationPlacer : MonoBehaviour
             snappedY = ApplyYSnap(worldPos.y, data.placement);
         worldPos = new Vector3(worldPos.x, snappedY, worldPos.z);
 
+        // Remap X from mobile coordinate space to TV coordinate space.
+        // Mobile sends absolute world-X based on its own aspect ratio (portrait tank narrower than TV).
+        // Without this, all decos cluster near the center of the TV's wider view.
+        if (MobileTankHalfWidth > 0.1f && _tankBounds.extents.x > 0.1f)
+            worldPos.x = worldPos.x * (_tankBounds.extents.x / MobileTankHalfWidth);
+
         // Clamp dentro de los bounds del tanque
         worldPos.x = Mathf.Clamp(worldPos.x, _tankBounds.min.x + 0.3f, _tankBounds.max.x - 0.3f);
         worldPos.y = Mathf.Clamp(worldPos.y, _tankBounds.min.y, _tankBounds.max.y - 0.3f);
@@ -346,18 +356,20 @@ public class DecorationPlacer : MonoBehaviour
         // en runtime. Se ejecuta SIEMPRE — con o sin override — para cubrir ambos caminos.
         FixNonURPMaterials(go);
 
-        // Tint color: multiplica _BaseColor sobre la textura (real) o establece el color base (placeholder).
-        // Para placeholders: siempre aplicar — SetColor ya asignó el color pero el tint lo confirma
-        // con la referencia correcta del material instanciado. Sin la guardia != white porque el
-        // placeholder puede necesitar colores aunque el SO tenga tintColor próximo a blanco.
+        // Tint color: multiplica sobre la textura del prefab real, o establece el color base del placeholder.
+        // IMPORTANTE: después de FixNonURPMaterials, los materiales usan FishUnlit (_Color, no _BaseColor).
+        // Aplicar en ambas propiedades para cubrir: FishUnlit (_Color) y glTF/URP que puedan sobrevivir (_BaseColor).
         bool applyTint = usingPlaceholder
             ? (data.tintColor.a > 0f && data.tintColor != Color.white)
             : (data.tintColor != Color.white);
         if (applyTint)
             foreach (var mr in go.GetComponentsInChildren<Renderer>())
                 foreach (var mat in mr.materials)
-                    if (mat != null && mat.HasProperty("_BaseColor"))
-                        mat.SetColor("_BaseColor", data.tintColor);
+                {
+                    if (mat == null) continue;
+                    if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", data.tintColor);
+                    if (mat.HasProperty("_Color"))     mat.SetColor("_Color",     data.tintColor);
+                }
 
         // Desactivar física si el prefab tiene Rigidbody (evita que la gravedad tire la deco al suelo).
         // No se destruye porque puede haber HingeJoint u otros joints que dependen de él.

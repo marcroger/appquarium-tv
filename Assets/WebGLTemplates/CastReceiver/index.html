@@ -336,11 +336,63 @@
       if (!hasWebGL2) return;  // ya hay error de WebGL2
       if (window.__castSdkFailed || typeof cast === 'undefined' || !cast.framework) return;
 
-      var NAMESPACE   = 'urn:x-cast:dev.unknownaerials.appquarium';
-      var unityInst   = null;
-      var pendingMsgs = [];
+      var NAMESPACE     = 'urn:x-cast:dev.unknownaerials.appquarium';
+      var unityInst     = null;
+      var pendingMsgs   = [];
+      var senderCount   = 0;
+      var sessionStart  = 0;   // Date.now() when first sender connected
+      var keepAliveOk   = 0;
+      var keepAliveFail = 0;
 
       var ctx = cast.framework.CastReceiverContext.getInstance();
+
+      // ── Reconnect overlay ────────────────────────────────────────────────────
+      // Shown over the Unity canvas when all senders disconnect.
+      // z-index:400 = above canvas (default), below splash (500) and debug panel (9999).
+      var _reconnectEl = (function() {
+        var el = document.createElement('div');
+        el.style.cssText = [
+          'position:fixed;top:0;left:0;width:100%;height:100%;z-index:400',
+          'background:rgba(4,14,26,0.72)',
+          'display:none;flex-direction:column;align-items:center;justify-content:center',
+          "font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#DEEEE8",
+          'text-align:center;pointer-events:none;opacity:0;transition:opacity 0.6s'
+        ].join(';');
+        el.innerHTML =
+          '<div style="font-size:52px;margin-bottom:20px">📱</div>' +
+          '<div style="font-size:26px;font-weight:700;color:#3BB8A0;letter-spacing:2px;margin-bottom:10px">Sender desconectado</div>' +
+          '<div style="font-size:17px;color:#6A9888;line-height:1.7">Abre Appquarium en el móvil<br>y vuelve a castear para reconectar</div>' +
+          '<div id="rc-timer" style="margin-top:22px;font-size:13px;color:#4A7868;letter-spacing:1px"></div>';
+        document.body.appendChild(el);
+        return el;
+      })();
+      var _rcTimer = null, _rcStart = 0;
+
+      function showReconnect() {
+        _rcStart = Date.now();
+        _reconnectEl.style.display = 'flex';
+        setTimeout(function(){ _reconnectEl.style.opacity='1'; }, 16);
+        clearInterval(_rcTimer);
+        _rcTimer = setInterval(function(){
+          var s = Math.floor((Date.now()-_rcStart)/1000), m = Math.floor(s/60); s %= 60;
+          var el = document.getElementById('rc-timer');
+          if (el) el.textContent = 'Desconectado hace '+m+':'+(s<10?'0':'')+s;
+        }, 1000);
+      }
+      function hideReconnect() {
+        clearInterval(_rcTimer);
+        _reconnectEl.style.opacity = '0';
+        setTimeout(function(){ _reconnectEl.style.display='none'; }, 650);
+      }
+
+      // ── Cast SDK lifecycle events ────────────────────────────────────────────
+
+      ctx.addEventListener(cast.framework.system.EventType.READY, function() {
+        dbg('Cast SDK READY');
+      });
+      ctx.addEventListener(cast.framework.system.EventType.SHUTDOWN, function(e) {
+        dbg('Cast SDK SHUTDOWN — reason:'+(e.reason||'?'));
+      });
 
       ctx.addCustomMessageListener(NAMESPACE, function(event) {
         var raw  = typeof event.data==='string' ? event.data : JSON.stringify(event.data);
@@ -357,17 +409,29 @@
       });
 
       ctx.addEventListener(cast.framework.system.EventType.SENDER_CONNECTED, function(e) {
-        dbg('Sender connected: '+e.senderId);
+        senderCount++;
+        if (senderCount === 1) sessionStart = Date.now();
+        dbg('Sender CONNECTED #'+senderCount+': '+e.senderId);
         setSplashStatus('Conectado — cargando…');
+        hideReconnect();
         if (unityInst) unityInst.SendMessage('CastReceiver','OnSenderConnected',e.senderId);
       });
+
       ctx.addEventListener(cast.framework.system.EventType.SENDER_DISCONNECTED, function(e) {
-        dbg('Sender disconnected: '+e.senderId);
-        if (unityInst) unityInst.SendMessage('CastReceiver','OnSenderDisconnected',e.senderId);
+        senderCount = Math.max(0, senderCount - 1);
+        var reason  = (e.reason != null ? String(e.reason) : 'unknown');
+        var elapsed = sessionStart ? Math.round((Date.now()-sessionStart)/1000) : 0;
+        var m = Math.floor(elapsed/60), s = elapsed%60;
+        dbg('Sender DISCONNECTED — reason:'+reason+' after '+m+':'+(s<10?'0':'')+s+' remaining:'+senderCount);
+        if (senderCount === 0) showReconnect();
+        var payload = JSON.stringify({ senderId:e.senderId, reason:reason, elapsedSeconds:elapsed });
+        if (unityInst) unityInst.SendMessage('CastReceiver','OnSenderDisconnected',payload);
       });
 
       try {
-        ctx.start({ disableIdleTimeout: true });
+        // disableIdleTimeout: keep receiver alive when 0 senders connected.
+        // maxInactivity:3600 = 1h; SDK rejects values ≤5 with runtime error.
+        ctx.start({ disableIdleTimeout: true, maxInactivity: 3600 });
         dbg('ctx.start() OK');
       } catch(e) {
         showSplashError('📡','Error Cast SDK',
@@ -375,6 +439,21 @@
           false);
         return;
       }
+
+      // Keepalive: receiver→sender every 60s. Logs failures — if sendCustomMessage starts
+      // throwing while senderCount>0, it signals the channel died before SENDER_DISCONNECTED.
+      // Logged every 5 ticks (5 min) on success to avoid noise.
+      setInterval(function() {
+        if (!unityInst || senderCount === 0) return;
+        try {
+          ctx.sendCustomMessage(NAMESPACE, undefined, JSON.stringify({ type:'KEEPALIVE', t:Math.round((Date.now()-sessionStart)/1000) }));
+          keepAliveOk++;
+          if (keepAliveOk % 5 === 0) dbg('Keepalive ok×'+keepAliveOk+' fail×'+keepAliveFail);
+        } catch(e) {
+          keepAliveFail++;
+          dbg('Keepalive FAIL ×'+keepAliveFail+': '+e.message);
+        }
+      }, 60000);
 
       window.__castOnUnityReady = function(instance) {
         dbg('Unity READY — flushing '+pendingMsgs.length+' msgs');
@@ -402,11 +481,12 @@
         // instanceId DEBE tener formato itemId_N: ParseDecoItemIds deriva la key
         // de Addressables partiendo por el último '_' (deco_anchor_0 → deco_anchor).
         var testDecos = { items: [
-          { itemId: 'deco_anchor',         instanceId: 'deco_anchor_0',         position: {x:-4, y:-2.8, z:2.0}, scaleFactor: 1 },
-          { itemId: 'deco_anchor_rust',    instanceId: 'deco_anchor_rust_0',     position: {x:-2, y:-2.8, z:2.0}, scaleFactor: 1 },
-          { itemId: 'deco_anchor_oldrust', instanceId: 'deco_anchor_oldrust_0',  position: {x: 0, y:-2.8, z:2.0}, scaleFactor: 1 },
-          { itemId: 'deco_cannon',         instanceId: 'deco_cannon_0',          position: {x: 2, y:-2.8, z:2.0}, scaleFactor: 1 },
-          { itemId: 'deco_column_greek_1', instanceId: 'deco_column_greek_1_0',  position: {x: 4, y:-2.8, z:2.0}, scaleFactor: 1 }
+          { itemId: 'deco_anchor',           instanceId: 'deco_anchor_0',           position: {x:-5, y:-2.8, z:2.0}, scaleFactor: 1 },
+          { itemId: 'deco_anchor_rust',      instanceId: 'deco_anchor_rust_0',       position: {x:-3, y:-2.8, z:2.0}, scaleFactor: 1 },
+          { itemId: 'deco_anchor_oldrust',   instanceId: 'deco_anchor_oldrust_0',    position: {x:-1, y:-2.8, z:2.0}, scaleFactor: 1 },
+          { itemId: 'deco_coral_corallium',  instanceId: 'deco_coral_corallium_0',   position: {x: 1, y:-2.8, z:2.0}, scaleFactor: 1 },
+          { itemId: 'deco_coral_heliopora',  instanceId: 'deco_coral_heliopora_0',   position: {x: 3, y:-2.8, z:2.0}, scaleFactor: 1 },
+          { itemId: 'deco_coral_distichopora',instanceId: 'deco_coral_distichopora_0',position: {x: 5, y:-2.8, z:2.0}, scaleFactor: 1 }
         ]};
         var testState = {
           activeFish: [{speciesId: 'fish_banggai_cardinalfish', nickname: 'TestFish'}],

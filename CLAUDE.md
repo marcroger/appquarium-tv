@@ -85,28 +85,51 @@ Detalle de qué se sincroniza, qué NO, y por qué: ver `SYNC_NOTES.md`.
 
 **Tras sync:** Unity TV reimporta automáticamente. Verificar Console sin errores antes de cualquier build.
 
+**⚠ CRÍTICO tras sync — verificar audio .meta files:**
+Los `.meta` de mobile tienen `loadType:0` (Decompress on Load, OK en Android 6 GB).
+En WebGL/Cast esto causa **OOM → Chrome muere → pantalla azul sin peces** (bug recurrente).
+Después de cada sync, verificar `Assets/Resources/Audio/*.meta`:
+- `loadType: 0` → cambiar a `loadType: 2` (Compressed in Memory) — si no, rebuild + deploy
+- Referencia correcta: `ambient_water.wav.meta` (loadType:2, quality:0.7, forceToMono:0)
+- `ambient_bubbles.wav.meta` corregido 2026-06-20 (loadType:2, forceToMono:1, quality:0.7, 3D:0)
+
 ---
 
 ## Build pipeline (resumen)
 
 ### Estado actual — 2026-06-20
 
-`.data` = 34.4 MB, `.wasm` = 42.2 MB. Remote catalog activo. **25/25 peces en R2** ✅.
-🎉 **FLUIDO en Xiaomi TV Box S** — bloom OFF + renderScale 0.7 + targetFrameRate 30. Detalle: `BUILD_REPORT_2026-06-19.md`.
+`.data` = 32.0 MB en R2. 🎉 **FLUIDO en Xiaomi TV Box S** — bloom OFF + renderScale 0.7 + targetFrameRate 30.
+**Audio OOM resuelto** — `ambient_bubbles.wav` cargada correctamente (loadType:2, mono). Ver `BUILD_REPORT_2026-06-19.md`.
 
-**Player build 2026-06-19 — DEPLOYADO 2026-06-20:**
+**⚠ PENDIENTE DEPLOY — webgl-output/ listo, R2 API timeout de red (2026-06-20 noche):**
+Dos fixes en build, pendientes de subir a R2 cuando vuelva la conexión:
+1. **Cast disconnect ~2 min** — `maxInactivity:0` + keepalive 60s en `index.html`
+2. **Tint corales/decos** — `DecorationPlacer.PlaceAt()` comprueba `_Color` además de `_BaseColor`
+
+**Build 2026-06-20 — DEPLOYADO (audio OOM resuelto):**
 - `TvFoodManager.cs` — feed visual (pellets + peces nadan a comer) + auto-feed cada 4 min
 - Mando Android TV: Enter = startle, F/MediaPlayPause = feed
-- `ambient_bubbles.wav` bakeado en `.data` (~14 MB Vorbis, loop 10 min)
+- `ambient_bubbles.wav` loadType:2, forceToMono:1 — correcto para WebGL/Cast ✅
 - Fix reconexión 2º INIT: DespawnAll + RemoveAllDecos antes de reinit
+- Handlers UPDATE: `add_fish`, `remove_fish`, `add_deco`, `remove_deco`, `change_bg`, `change_sub`, `change_light`
+- `.data` = 32.0 MB | `.wasm` = 44.2 MB
 
-**Sesión 2026-06-20 — Updates en tiempo real (C# implementado, pendiente deploy):**
-- Handle registry en `TvSceneBootstrap` — handles Addressable de INIT y runtime trackeados y liberados correctamente en reconexión y en remove
-- Nuevos handlers UPDATE: `add_fish`, `remove_fish`, `add_deco`, `remove_deco`, `change_bg`, `change_sub`, `change_light`
-- `FishSpawner.DespawnBySpecies(speciesId)` añadido
-- Devtest keyboard: A=add_fish, Z=remove_fish, B=change_bg, S=change_sub
-- Protocolo documentado en `CAST_UPDATES.md` — incluye tabla de calls a añadir en mobile
-- **Requiere player rebuild** (cambio C#) + deploy para activar en producción
+**Sesión 2026-06-20 (2) — Cast disconnect fix (en build, pendiente deploy):**
+- `ctx.start({ disableIdleTimeout:true, maxInactivity:0 })` — evita desconexión por inactividad
+- Keepalive cada 60s en `index.html` (`ctx.sendCustomMessage`) — mantiene canal bidireccional activo
+- `disableIdleTimeout` y `maxInactivity` son timeouts **INDEPENDIENTES** — necesitamos ambos:
+  - `disableIdleTimeout`: no shutdown cuando 0 senders conectados
+  - `maxInactivity:0`: no desconectar sender "inactivo" (sin mensajes hacia receiver)
+- > `Assets/WebGLTemplates/CastReceiver/index.html` (línea 370)
+
+**Sesión 2026-06-20 (3) — Tint corales fix (en build, pendiente deploy):**
+- `FixNonURPMaterials()` convierte materiales a `DecoLit`/`FishUnlit` (CG legacy, usan `_Color`)
+- Tint code anterior buscaba `_BaseColor` → false en esos shaders → tint nunca aplicado (bug silencioso)
+- Fix: `DecorationPlacer.PlaceAt()` aplica tint a `_BaseColor` Y `_Color` — cubre todos los shaders
+- Local test confirma: corallium=rojo, heliopora=azul, distichopora=morado ✅
+- Devtest `index.html` actualizado con 3 corales (sustituye cannon/column)
+- > `Assets/Scripts/Tank/DecorationPlacer.cs` línea 356
 
 **settings.json auto-parcheado** por `TvBuildPostprocess.cs` tras cada build — no intervención manual.
 **SBP cache incremental:** 1 pez cold = 2:01h | 2 peces incremental = 1:39h | todo cacheado = 9s.
@@ -236,6 +259,10 @@ aws s3 sync webgl-output/ s3://appquarium-tv/ `
 - **Receiver Published** App ID `8F6C873F` — funciona en cualquier device sin registrar Cast Console
 - **Cast SDK timeout = 30s** desde "Connecting…" hasta receiver READY. Sin esto la sesión aborta.
 - **Xiaomi TV Box S** como `MiTV-AFMU0` en LAN. Cast SDK 3.72.446070.
+- **`ctx.start()` — parámetros correctos:** `{ disableIdleTimeout: true, maxInactivity: 3600 }`
+  - `disableIdleTimeout: true` — no shutdown cuando 0 senders conectados
+  - `maxInactivity: 3600` — no desconectar sender "inactivo". ⚠ El SDK **rechaza valores ≤ 5** con error en runtime. Usar 3600 (1h) como "nunca".
+  - El keepalive cada 60s en JS (`sendCustomMessage`) complementa esto para Cast Built-In implementations que ignoran `maxInactivity`.
 - WebGL Chromium en Cast = sandbox MUY estricto:
   - `Exception Support: None` (sino peta con wasm-exceptions)
   - `WebAssembly 2023 features: OFF`
@@ -256,6 +283,27 @@ aws s3 sync webgl-output/ s3://appquarium-tv/ `
 Total bundles en R2: **92+** (fish×25 + decos×54 + envs×11 + audio×2). Algunos tienen versiones duplicadas de builds anteriores — el catalog siempre apunta al correcto.
 
 **LZ4 compression** confirmado. **NonRecursiveBuilding=true** — ⚠ NO cambiar a `false` (causa 47 min/bundle, builds de 30h+). Ver `feedback_nonrecursivebuilding.md`.
+
+---
+
+## ⚠ index.html — template vs procesado
+
+`Assets/WebGLTemplates/CastReceiver/index.html` es el **template fuente**. Unity lo procesa durante el build y sustituye los placeholders `{{{ LOADER_FILENAME }}}`, `{{{ DATA_FILENAME }}}`, `{{{ FRAMEWORK_FILENAME }}}`, `{{{ CODE_FILENAME }}}`, `{{{ PRODUCT_NAME }}}`, etc. El resultado procesado va a `webgl-output/index.html`.
+
+**NUNCA copiar el template sobre `webgl-output/index.html`** — el browser intentará cargar `Build/{{{ LOADER_FILENAME }}}` literalmente → 404 → "Error de red" en el receiver.
+
+Para cambiar solo el `index.html` sin rebuild del player:
+1. Editar `webgl-output/index.html` directamente
+2. Subir a R2 con boto3: `client.put_object(Bucket='appquarium-tv', Key='index.html', ...)`
+
+Los valores correctos de los placeholders (para emergencias):
+- `{{{ LOADER_FILENAME }}}` → `webgl-output.loader.js`
+- `{{{ DATA_FILENAME }}}` → `webgl-output.data`
+- `{{{ FRAMEWORK_FILENAME }}}` → `webgl-output.framework.js`
+- `{{{ CODE_FILENAME }}}` → `webgl-output.wasm`
+- `{{{ WIDTH }}}` / `{{{ HEIGHT }}}` → `960` / `600`
+- `{{{ PRODUCT_NAME }}}` / `{{{ COMPANY_NAME }}}` → `Appquarium`
+- `{{{ PRODUCT_VERSION }}}` → `1.2.1`
 
 ---
 

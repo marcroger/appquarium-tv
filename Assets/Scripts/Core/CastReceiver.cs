@@ -51,6 +51,10 @@ public class CastReceiver : MonoBehaviour
                 TvSceneBootstrap.Instance?.ApplyUpdate(upd);
                 break;
 
+            case "PING":
+            case "KEEPALIVE":
+                break;
+
             default:
                 Debug.LogWarning($"[CastReceiver] Unknown message type: {msg.type}");
                 break;
