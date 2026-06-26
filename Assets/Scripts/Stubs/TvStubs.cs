@@ -47,10 +47,21 @@ public class OwnedFishSave
     public bool   isBred;
     public string sex;
 
+    // Multiplicador de tamaño por edad que envía el móvil por Cast (0.40/0.65/1.00/1.18).
+    // El receiver no traquea edad real; reconstruimos el grupo desde este valor para que
+    // FishAgent (synced, sin tocar) calcule baseSize × AgeScaleFactor(GetAgeGroup()) correcto.
+    public float ageScale = 1f;
+
     public FishAgeGroup GetAgeGroup()
     {
-        // In TV mode we always treat fish as adults
-        return FishAgeGroup.Adult;
+        // Round-trip exacto: el móvil manda AgeScaleFactor(grupo), reconstruimos el grupo
+        // por umbrales (puntos medios entre los 4 valores discretos). Tolera pequeño drift.
+        // Fallback: ageScale <= 0 (cliente viejo / campo ausente en JsonUtility) → Adult.
+        if (ageScale <= 0f)    return FishAgeGroup.Adult;
+        if (ageScale < 0.525f) return FishAgeGroup.Cria;      // ~0.40
+        if (ageScale < 0.825f) return FishAgeGroup.Juvenile;  // ~0.65
+        if (ageScale < 1.09f)  return FishAgeGroup.Adult;     // ~1.00
+        return FishAgeGroup.Senior;                            // ~1.18
     }
 }
 

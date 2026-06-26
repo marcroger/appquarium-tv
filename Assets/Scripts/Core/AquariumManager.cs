@@ -107,7 +107,7 @@ public class AquariumManager : MonoBehaviour
             foreach (var entry in state.activeFish)
             {
                 string uid = Guid.NewGuid().ToString();
-                castSave.ownedFish.Add(new OwnedFishSave { uid = uid, speciesId = entry.speciesId, nickname = entry.nickname });
+                castSave.ownedFish.Add(new OwnedFishSave { uid = uid, speciesId = entry.speciesId, nickname = entry.nickname, ageScale = entry.ageScale });
                 castSave.activeFishUids.Add(uid);
             }
         }
@@ -213,7 +213,8 @@ public class AquariumManager : MonoBehaviour
                 {
                     uid       = uid,
                     speciesId = entry.speciesId,
-                    nickname  = entry.nickname
+                    nickname  = entry.nickname,
+                    ageScale  = entry.ageScale
                 });
                 castSave.activeFishUids.Add(uid);
             }

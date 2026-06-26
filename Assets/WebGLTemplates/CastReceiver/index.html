@@ -82,6 +82,15 @@
       transition:opacity 1.5s ease;
     "></div>
 
+    <!-- Sello de versión del receiver — esquina inf. derecha, discreto.
+         Sirve para confirmar QUÉ index.html está corriendo en el device (el Cast
+         puede mantener cacheado el viejo con disableIdleTimeout). Bump en cada deploy. -->
+    <div id="rcv-tag" style="
+      position:fixed;bottom:1vh;right:1vw;z-index:10001;
+      color:rgba(255,255,255,0.40);font:bold 12px monospace;
+      pointer-events:none;letter-spacing:1px;
+    ">rcv 2026-06-23b</div>
+
     <!-- FPS meter — esquina sup. derecha, legible desde el sofá.
          Mide la cadencia de requestAnimationFrame (el mismo loop con el que
          Unity WebGL pinta el canvas) → proxy directo del framerate real en el
@@ -172,6 +181,33 @@
       };
 
       dbg('page loaded');
+
+      // ── Última desconexión persistente ────────────────────────────────────
+      // SHUTDOWN destruye la página → pintar el reason en pantalla NO es fiable.
+      // Lo guardamos en localStorage (setItem es síncrono, da tiempo antes del
+      // teardown) y lo mostramos en el arranque siguiente al re-castear. Así el
+      // motivo del corte sobrevive aunque el receiver se mate a sí mismo.
+      function saveLastDisco(reason, elapsed) {
+        try {
+          localStorage.setItem('aq_lastDisco', JSON.stringify({
+            reason: reason, elapsed: elapsed || 0, ts: Date.now()
+          }));
+        } catch (e) {}
+      }
+      (function() {
+        try {
+          var raw = localStorage.getItem('aq_lastDisco');
+          if (!raw) return;
+          var d = JSON.parse(raw);
+          var ago = Math.round((Date.now() - d.ts) / 1000);
+          var m = Math.floor(d.elapsed / 60), s = d.elapsed % 60;
+          var panel = document.getElementById('dbg-panel');
+          if (panel) panel.style.display = 'block';
+          dbg('⚠ ÚLTIMA CAÍDA → reason:' + d.reason +
+              ' | sesión duró ' + m + ':' + (s < 10 ? '0' : '') + s +
+              ' | hace ' + ago + 's');
+        } catch (e) {}
+      })();
 
       // ── FPS meter ─────────────────────────────────────────────────────────
       // rAF-based. Ventana de 1s: avg = media, ▼ = peor frame (stutter).
@@ -362,14 +398,17 @@
           '<div style="font-size:52px;margin-bottom:20px">📱</div>' +
           '<div style="font-size:26px;font-weight:700;color:#3BB8A0;letter-spacing:2px;margin-bottom:10px">Sender desconectado</div>' +
           '<div style="font-size:17px;color:#6A9888;line-height:1.7">Abre Appquarium en el móvil<br>y vuelve a castear para reconectar</div>' +
-          '<div id="rc-timer" style="margin-top:22px;font-size:13px;color:#4A7868;letter-spacing:1px"></div>';
+          '<div id="rc-timer" style="margin-top:22px;font-size:13px;color:#4A7868;letter-spacing:1px"></div>' +
+          '<div id="rc-reason" style="margin-top:8px;font-size:13px;color:#D98A6A;letter-spacing:1px;font-family:monospace"></div>';
         document.body.appendChild(el);
         return el;
       })();
       var _rcTimer = null, _rcStart = 0;
 
-      function showReconnect() {
+      function showReconnect(reason) {
         _rcStart = Date.now();
+        var rEl = document.getElementById('rc-reason');
+        if (rEl) rEl.textContent = reason ? ('reason: ' + reason) : '';
         _reconnectEl.style.display = 'flex';
         setTimeout(function(){ _reconnectEl.style.opacity='1'; }, 16);
         clearInterval(_rcTimer);
@@ -392,6 +431,11 @@
       });
       ctx.addEventListener(cast.framework.system.EventType.SHUTDOWN, function(e) {
         dbg('Cast SDK SHUTDOWN — reason:'+(e.reason||'?'));
+        // SHUTDOWN = the RECEIVER itself is ending the session (idle timeout etc.).
+        // Persist it (page is about to die) and surface it if the overlay survives.
+        var _el = sessionStart ? Math.round((Date.now()-sessionStart)/1000) : 0;
+        saveLastDisco('SHUTDOWN:'+(e.reason||'?'), _el);
+        showReconnect('SHUTDOWN:'+(e.reason||'?'));
       });
 
       ctx.addCustomMessageListener(NAMESPACE, function(event) {
@@ -423,16 +467,23 @@
         var elapsed = sessionStart ? Math.round((Date.now()-sessionStart)/1000) : 0;
         var m = Math.floor(elapsed/60), s = elapsed%60;
         dbg('Sender DISCONNECTED — reason:'+reason+' after '+m+':'+(s<10?'0':'')+s+' remaining:'+senderCount);
-        if (senderCount === 0) showReconnect();
+        saveLastDisco(reason, elapsed);
+        if (senderCount === 0) showReconnect(reason);
         var payload = JSON.stringify({ senderId:e.senderId, reason:reason, elapsedSeconds:elapsed });
         if (unityInst) unityInst.SendMessage('CastReceiver','OnSenderDisconnected',payload);
       });
 
       try {
-        // disableIdleTimeout: keep receiver alive when 0 senders connected.
+        // Use a real CastReceiverOptions instance (NOT a plain literal) so the SDK
+        // actually honors disableIdleTimeout. For custom-channel (no-media) apps the
+        // receiver kills the session at ~2-3 min ("no active playback") unless this
+        // flag takes effect — a literal can get maxInactivity read but the flag ignored.
         // maxInactivity:3600 = 1h; SDK rejects values ≤5 with runtime error.
-        ctx.start({ disableIdleTimeout: true, maxInactivity: 3600 });
-        dbg('ctx.start() OK');
+        var opts = new cast.framework.CastReceiverOptions();
+        opts.disableIdleTimeout = true;
+        opts.maxInactivity = 3600;
+        ctx.start(opts);
+        dbg('ctx.start() OK (disableIdleTimeout=true maxInactivity=3600)');
       } catch(e) {
         showSplashError('📡','Error Cast SDK',
           'ctx.start() falló: '+e.message+'<br>Reinicia el dispositivo e inténtalo de nuevo.',

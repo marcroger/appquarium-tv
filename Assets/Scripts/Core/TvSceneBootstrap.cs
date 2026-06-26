@@ -458,7 +458,8 @@ public class TvSceneBootstrap : MonoBehaviour
         {
             uid       = System.Guid.NewGuid().ToString(),
             speciesId = payload.speciesId,
-            nickname  = payload.nickname ?? ""
+            nickname  = payload.nickname ?? "",
+            ageScale  = payload.ageScale
         };
         var agent = mgr.fishSpawner.SpawnFish(data, bounds, save);
         if (agent != null) { agent.SetNickname(save.nickname); agent.SetUid(save.uid); }

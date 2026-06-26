@@ -11,6 +11,10 @@ public class TvFishEntry
 {
     public string speciesId;
     public string nickname;
+    // Multiplicador de tamaño por EDAD del pez (0.40 cría / 0.65 juvenil / 1.00 adulto / 1.18 senior).
+    // El móvil lo manda = SaveSystem.AgeScaleFactor(GetAgeGroup()). El baseSize de especie lo aplica
+    // el receiver aparte. Clientes viejos: campo ausente → ver fallback en OwnedFishSave.GetAgeGroup().
+    public float ageScale = 1f;
 }
 
 [Serializable]
@@ -56,6 +60,7 @@ public class TvAddFishPayload
 {
     public string speciesId;
     public string nickname;
+    public float  ageScale = 1f;  // ver TvFishEntry.ageScale
 }
 
 [Serializable]
