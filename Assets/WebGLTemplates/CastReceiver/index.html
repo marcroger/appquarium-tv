@@ -89,7 +89,7 @@
       position:fixed;bottom:1vh;right:1vw;z-index:10001;
       color:rgba(255,255,255,0.40);font:bold 12px monospace;
       pointer-events:none;letter-spacing:1px;
-    ">rcv 2026-06-23b</div>
+    ">rcv 2026-06-26a</div>
 
     <!-- FPS meter — esquina sup. derecha, legible desde el sofá.
          Mide la cadencia de requestAnimationFrame (el mismo loop con el que
@@ -482,8 +482,13 @@
         var opts = new cast.framework.CastReceiverOptions();
         opts.disableIdleTimeout = true;
         opts.maxInactivity = 3600;
+        // Declare the custom channel up front (official CAF pattern). The channel also
+        // works via addCustomMessageListener alone; declaring JSON here just makes the
+        // message type explicit. Does NOT affect the idle timeout.
+        opts.customNamespaces = {};
+        opts.customNamespaces[NAMESPACE] = cast.framework.system.MessageType.JSON;
         ctx.start(opts);
-        dbg('ctx.start() OK (disableIdleTimeout=true maxInactivity=3600)');
+        dbg('ctx.start() OK (disableIdleTimeout=true maxInactivity=3600 ns declared)');
       } catch(e) {
         showSplashError('📡','Error Cast SDK',
           'ctx.start() falló: '+e.message+'<br>Reinicia el dispositivo e inténtalo de nuevo.',
