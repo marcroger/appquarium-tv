@@ -25,6 +25,11 @@ public class FoodItem : MonoBehaviour
     private bool  _consumed;
     [HideInInspector] public float driftPhase;  // fase inicial del swing (asignada al spawnear)
 
+    // Shared across all FoodItem instances — built once, reused forever.
+    // Using sharedMesh/sharedMaterial avoids per-instance GPU resource leaks.
+    private static Mesh     _sharedMesh;
+    private static Material _sharedMat;
+
     void Start()
     {
         BuildPelletVisual();
@@ -35,8 +40,8 @@ public class FoodItem : MonoBehaviour
         var rootRend = GetComponent<Renderer>();
         if (rootRend != null) rootRend.enabled = false;
 
-        var mat  = BuildPelletMaterial();
-        var mesh = BuildQuadMesh();
+        if (_sharedMesh == null) _sharedMesh = BuildQuadMesh();
+        if (_sharedMat  == null) _sharedMat  = BuildPelletMaterial();
 
         // Cluster de 3 pellets: uno central grande + dos satélites más pequeños
         var pellets = new (float size, Vector2 offset)[]
@@ -54,12 +59,12 @@ public class FoodItem : MonoBehaviour
             pellet.transform.localPosition = new Vector3(offset.x, offset.y, 0f);
             pellet.transform.localScale    = new Vector3(size, size, 1f);
 
-            pellet.AddComponent<MeshFilter>().mesh = mesh;
+            pellet.AddComponent<MeshFilter>().sharedMesh = _sharedMesh;
             var mr = pellet.AddComponent<MeshRenderer>();
-            mr.material            = mat;
-            mr.sortingOrder        = 10;
-            mr.shadowCastingMode   = UnityEngine.Rendering.ShadowCastingMode.Off;
-            mr.receiveShadows      = false;
+            mr.sharedMaterial  = _sharedMat;
+            mr.sortingOrder    = 10;
+            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            mr.receiveShadows  = false;
         }
     }
 
@@ -144,7 +149,7 @@ public class FoodItem : MonoBehaviour
                 tex.SetPixel(x, y, c);
             }
         }
-        tex.Apply();
+        tex.Apply(true, true); // makeNoLongerReadable frees the CPU-side copy after GPU upload
         return tex;
     }
 

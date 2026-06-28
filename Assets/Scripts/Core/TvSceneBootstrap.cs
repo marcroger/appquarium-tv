@@ -180,18 +180,30 @@ public class TvSceneBootstrap : MonoBehaviour
         int done  = 0;
         UpdateProgress(done, total);
 
-        // ── 2. Launch all loads in parallel ──────────────────────────────────
+        // ── 2. Load serially — one bundle at a time to avoid simultaneous LZ4
+        //    decompression peak that can crash the WASM heap on memory-limited devices.
+        //    Per-bundle logs let us pinpoint which bundle was active when a crash occurs.
         var fishHandles = new List<AsyncOperationHandle<FishData>>();
         foreach (var key in fishKeys)
-            fishHandles.Add(Addressables.LoadAssetAsync<FishData>(key));
+        {
+            JsBridge.Log($"BDL {done+1}/{total} fish: {key}");
+            var h = Addressables.LoadAssetAsync<FishData>(key);
+            yield return h;
+            fishHandles.Add(h);
+            UpdateProgress(++done, total);
+            JsBridge.Log($"BDL {done}/{total} {(h.Status == AsyncOperationStatus.Succeeded ? "OK" : "FAIL")}: {key}");
+        }
 
         var decoHandles = new List<AsyncOperationHandle<DecorationData>>();
         foreach (var key in decoKeys)
-            decoHandles.Add(Addressables.LoadAssetAsync<DecorationData>(key));
-
-        // ── 3. Wait for each, update progress counter ─────────────────────────
-        foreach (var h in fishHandles) { yield return h; UpdateProgress(++done, total); }
-        foreach (var h in decoHandles) { yield return h; UpdateProgress(++done, total); }
+        {
+            JsBridge.Log($"BDL {done+1}/{total} deco: {key}");
+            var h = Addressables.LoadAssetAsync<DecorationData>(key);
+            yield return h;
+            decoHandles.Add(h);
+            UpdateProgress(++done, total);
+            JsBridge.Log($"BDL {done}/{total} {(h.Status == AsyncOperationStatus.Succeeded ? "OK" : "FAIL")}: {key}");
+        }
 
         // ── 4. Collect results ────────────────────────────────────────────────
         var fishData = new List<FishData>();

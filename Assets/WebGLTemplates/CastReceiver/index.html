@@ -89,7 +89,7 @@
       position:fixed;bottom:1vh;right:1vw;z-index:10001;
       color:rgba(255,255,255,0.40);font:bold 12px monospace;
       pointer-events:none;letter-spacing:1px;
-    ">rcv 2026-06-26a</div>
+    ">rcv 2026-06-26b</div>
 
     <!-- FPS meter — esquina sup. derecha, legible desde el sofá.
          Mide la cadencia de requestAnimationFrame (el mismo loop con el que
@@ -203,9 +203,26 @@
           var m = Math.floor(d.elapsed / 60), s = d.elapsed % 60;
           var panel = document.getElementById('dbg-panel');
           if (panel) panel.style.display = 'block';
-          dbg('⚠ ÚLTIMA CAÍDA → reason:' + d.reason +
+          var txt = '⚠ ÚLTIMA CAÍDA → reason:' + d.reason +
               ' | sesión duró ' + m + ':' + (s < 10 ? '0' : '') + s +
-              ' | hace ' + ago + 's');
+              ' | hace ' + ago + 's';
+          dbg(txt);
+          // Banner PEGAJOSO: el dbg-panel se auto-oculta 8s tras AQUARIUM READY y rota
+          // líneas (máx 26), así que la razón de la última caída se perdía de vista.
+          // Este banner persiste 25s, legible desde el sofá, y no bloquea (pointer-events:none).
+          var b = document.createElement('div');
+          b.id = 'last-disco';
+          b.style.cssText = [
+            'position:fixed;top:3vh;left:3vw;right:3vw;z-index:10002',
+            'background:rgba(40,8,8,0.92);color:#FFB4A0',
+            "font:bold 16px/1.4 monospace;padding:10px 16px;border-radius:8px",
+            'border:1px solid rgba(255,107,107,0.4);pointer-events:none;text-align:center',
+            'transition:opacity 1s ease'
+          ].join(';');
+          b.textContent = txt;
+          document.body.appendChild(b);
+          setTimeout(function(){ if (b) b.style.opacity = '0'; }, 24000);
+          setTimeout(function(){ if (b && b.parentNode) b.parentNode.removeChild(b); }, 25000);
         } catch (e) {}
       })();
 
@@ -372,12 +389,15 @@
       if (!hasWebGL2) return;  // ya hay error de WebGL2
       if (window.__castSdkFailed || typeof cast === 'undefined' || !cast.framework) return;
 
-      var NAMESPACE     = 'urn:x-cast:dev.unknownaerials.appquarium';
-      var unityInst     = null;
-      var pendingMsgs   = [];
-      var senderCount   = 0;
-      var sessionStart  = 0;   // Date.now() when first sender connected
-      var keepAliveOk   = 0;
+      var NAMESPACE        = 'urn:x-cast:dev.unknownaerials.appquarium';
+      var unityInst        = null;
+      var pendingMsgs      = [];
+      var senderCount      = 0;
+      var sessionStart     = 0;   // Date.now() when first sender connected
+      var keepAliveOk      = 0;
+      var _lastDiscoMs     = 0;   // Date.now() when last SENDER_DISCONNECTED fired
+      var _initForwarded   = false; // true once INIT has been forwarded to Unity at least once
+      var _overlayTimer    = null;  // pending showReconnect() call — cancelled on fast reconnect
       var keepAliveFail = 0;
 
       var ctx = cast.framework.CastReceiverContext.getInstance();
@@ -431,8 +451,6 @@
       });
       ctx.addEventListener(cast.framework.system.EventType.SHUTDOWN, function(e) {
         dbg('Cast SDK SHUTDOWN — reason:'+(e.reason||'?'));
-        // SHUTDOWN = the RECEIVER itself is ending the session (idle timeout etc.).
-        // Persist it (page is about to die) and surface it if the overlay survives.
         var _el = sessionStart ? Math.round((Date.now()-sessionStart)/1000) : 0;
         saveLastDisco('SHUTDOWN:'+(e.reason||'?'), _el);
         showReconnect('SHUTDOWN:'+(e.reason||'?'));
@@ -442,7 +460,27 @@
         var raw  = typeof event.data==='string' ? event.data : JSON.stringify(event.data);
         var type = (function(r){try{return JSON.parse(r).type;}catch(e){return '?';}})(raw);
         dbg('Cast msg: '+type);
-        if (type === 'INIT') setSplashStatus('Cast conectado — cargando acuario…');
+        if (type === 'INIT') {
+          var msSinceDisco = _lastDiscoMs > 0 ? (Date.now() - _lastDiscoMs) : Infinity;
+          // Quick reconnect: aquarium already running, Unity loaded, disconnect < 30s ago.
+          // Skip re-INIT so the scene doesn't reload.
+          if (_initForwarded && unityInst && msSinceDisco < 30000) {
+            dbg('INIT skip — reconnect after ' + Math.round(msSinceDisco/1000) + 's, aquarium up');
+            return;
+          }
+          _initForwarded = true;
+          setSplashStatus('Cast conectado — cargando acuario…');
+        }
+
+        if (type === 'PING') {
+          var t = sessionStart ? Math.round((Date.now()-sessionStart)/1000) : 0;
+          try {
+            ctx.sendCustomMessage(NAMESPACE, event.senderId,
+              JSON.stringify({type:'PONG', t:t}));
+            dbg('PONG → '+event.senderId+' t='+t+'s');
+          } catch(e2) { dbg('PONG FAIL: '+e2.message); }
+          return;
+        }
 
         if (unityInst) {
           unityInst.SendMessage('CastReceiver','OnMessageReceived',raw);
@@ -457,7 +495,9 @@
         if (senderCount === 1) sessionStart = Date.now();
         dbg('Sender CONNECTED #'+senderCount+': '+e.senderId);
         setSplashStatus('Conectado — cargando…');
+        if (_overlayTimer) { clearTimeout(_overlayTimer); _overlayTimer = null; }
         hideReconnect();
+        try { ctx.setApplicationStatus('Appquarium Active'); } catch(e2) {}
         if (unityInst) unityInst.SendMessage('CastReceiver','OnSenderConnected',e.senderId);
       });
 
@@ -466,29 +506,35 @@
         var reason  = (e.reason != null ? String(e.reason) : 'unknown');
         var elapsed = sessionStart ? Math.round((Date.now()-sessionStart)/1000) : 0;
         var m = Math.floor(elapsed/60), s = elapsed%60;
+        _lastDiscoMs = Date.now();
         dbg('Sender DISCONNECTED — reason:'+reason+' after '+m+':'+(s<10?'0':'')+s+' remaining:'+senderCount);
         saveLastDisco(reason, elapsed);
-        if (senderCount === 0) showReconnect(reason);
+        if (senderCount === 0) {
+          // Delay the overlay: CastPlugin auto-reconnects automatically.
+          // If reconnect arrives within 90s we cancel the overlay (invisible to user).
+          // Only show overlay if no reconnect after 90s (genuine disconnect: app killed, WiFi lost).
+          var _discoReason = reason;
+          _overlayTimer = setTimeout(function() { _overlayTimer = null; showReconnect(_discoReason); }, 90000);
+        }
         var payload = JSON.stringify({ senderId:e.senderId, reason:reason, elapsedSeconds:elapsed });
         if (unityInst) unityInst.SendMessage('CastReceiver','OnSenderDisconnected',payload);
       });
 
       try {
-        // Use a real CastReceiverOptions instance (NOT a plain literal) so the SDK
-        // actually honors disableIdleTimeout. For custom-channel (no-media) apps the
-        // receiver kills the session at ~2-3 min ("no active playback") unless this
-        // flag takes effect — a literal can get maxInactivity read but the flag ignored.
-        // maxInactivity:3600 = 1h; SDK rejects values ≤5 with runtime error.
         var opts = new cast.framework.CastReceiverOptions();
         opts.disableIdleTimeout = true;
         opts.maxInactivity = 3600;
-        // Declare the custom channel up front (official CAF pattern). The channel also
-        // works via addCustomMessageListener alone; declaring JSON here just makes the
-        // message type explicit. Does NOT affect the idle timeout.
         opts.customNamespaces = {};
         opts.customNamespaces[NAMESPACE] = cast.framework.system.MessageType.JSON;
+
         ctx.start(opts);
-        dbg('ctx.start() OK (disableIdleTimeout=true maxInactivity=3600 ns declared)');
+        dbg('ctx.start() OK');
+
+        setInterval(function() {
+          if (senderCount === 0) return;
+          try { ctx.setApplicationStatus('Appquarium Active'); } catch(e2) {}
+        }, 20000);
+
       } catch(e) {
         showSplashError('📡','Error Cast SDK',
           'ctx.start() falló: '+e.message+'<br>Reinicia el dispositivo e inténtalo de nuevo.',
@@ -496,20 +542,18 @@
         return;
       }
 
-      // Keepalive: receiver→sender every 60s. Logs failures — if sendCustomMessage starts
-      // throwing while senderCount>0, it signals the channel died before SENDER_DISCONNECTED.
-      // Logged every 5 ticks (5 min) on success to avoid noise.
       setInterval(function() {
-        if (!unityInst || senderCount === 0) return;
+        if (senderCount === 0) return;
+        var t = sessionStart ? Math.round((Date.now()-sessionStart)/1000) : 0;
         try {
-          ctx.sendCustomMessage(NAMESPACE, undefined, JSON.stringify({ type:'KEEPALIVE', t:Math.round((Date.now()-sessionStart)/1000) }));
+          ctx.sendCustomMessage(NAMESPACE, undefined, JSON.stringify({ type:'KEEPALIVE', t:t }));
           keepAliveOk++;
           if (keepAliveOk % 5 === 0) dbg('Keepalive ok×'+keepAliveOk+' fail×'+keepAliveFail);
         } catch(e) {
           keepAliveFail++;
           dbg('Keepalive FAIL ×'+keepAliveFail+': '+e.message);
         }
-      }, 60000);
+      }, 30000);
 
       window.__castOnUnityReady = function(instance) {
         dbg('Unity READY — flushing '+pendingMsgs.length+' msgs');
