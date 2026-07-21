@@ -484,9 +484,22 @@ Pista del research (2026-07-20): la firma "muere sin CLOSE, invisible a CAF" enc
 
 ---
 
-# 🏁 VEREDICTO FINAL — RUNG 22 (escena vacía) · 2026-07-21
+# ⚠ RUNG 22 (escena vacía) · 2026-07-21 — RESULTADO + CORRECCIÓN DEL VEREDICTO
 
-**La investigación queda CERRADA. No hay fix desde la aplicación.**
+> **CORRECCIÓN (misma sesión):** la primera redacción de esta sección decía "investigación CERRADA,
+> es el engine core, infixeable". **Eso era una extrapolación no probada.** Lo que RUNG 22 demuestra
+> es que **no es el contenido de la ESCENA** — nada más.
+>
+> Motivo: el build "vacío" **NO era un Unity mínimo**. Su `.wasm` pesa 44.249.290 B contra los
+> 44.250.183 B de producción — es decir, **sigue conteniendo todo nuestro C# compilado, Addressables,
+> URP entero**, y el `.data` sigue llevando `StreamingAssets/aa`. Solo se vació la escena.
+>
+> **Un Unity mínimo de verdad (proyecto limpio, hello-world, wasm ~8 MB, sin Addressables, sin URP,
+> sin nuestro código) NUNCA se ha probado.** Esa es la bifurcación real y sigue abierta:
+> - Unity mínimo CORTA → entonces sí es el engine core.
+> - Unity mínimo AGUANTA → es NUESTRO BUILD (tamaño del wasm, nuestro C#, Addressables, URP) → HAY fix.
+>
+> La investigación **NO está cerrada**. Ver § "Frentes abiertos" al final.
 
 ## El test
 
@@ -516,9 +529,9 @@ variaban entre 153 y 209 s en runs consecutivos con contenido idéntico.
 
 Es decir: **la conexión se tira con el receiver perfectamente vivo y sano.**
 
-## Conclusión
+## Conclusión (acotada — ver corrección arriba)
 
-El disparador es el **engine core de Unity WebGL ejecutándose** — no nuestro contenido, no nuestra
+El disparador **no está en la escena**. Sigue vivo en el build de Unity que ejecuta — no nuestro contenido, no nuestra
 escena, no nuestros shaders, no los bundles. Una escena con un cubo corta igual que el acuario entero.
 
 Combinado con la bisección de 21 escalones (ninguna operación aislada ni combinada desde JS lo
@@ -551,3 +564,65 @@ memoria 64→512MB, saturación de cores, descarga de 64MB… todos aguantaron >
 - Backup del receiver previo: `scratchpad/r2-index-backup-2026-07-21.html`.
 - ⚠ **Pendiente real de producción:** el `index.html` vivo sigue siendo un receiver de DIAGNÓSTICO
   (panel debug visible + 22 rungs). Antes de cualquier uso real hay que desplegar un receiver limpio.
+
+---
+
+## 🔬 FRENTES ABIERTOS (2026-07-21) — la investigación NO está cerrada
+
+Lo que la bisección de 22 escalones agotó es la **superficie JS-proxy** y el **contenido de la escena**.
+Quedan ejes enteros sin tocar, y varios son baratos.
+
+### Activo nuevo: tenemos un REPRODUCTOR MÍNIMO
+El build de escena vacía **reproduce el corte** (217 s) y se rebuildeó en ~1 h. Eso convierte los
+Player Settings en variables A/B testeables por primera vez — antes cada intento costaba el build
+del acuario entero.
+
+### F1 · ¿Es solo el Xiaomi? (coste ~0, valor de producto máximo)
+Castear el receiver actual a **otro dispositivo** (Chromecast con Google TV, otra Android TV, Cast
+Built-in de otra marca). Toda la investigación se ha hecho sobre UN device. Si el corte no ocurre en
+otros, el problema es de firmware Xiaomi y el producto puede salir.
+
+### F2 · Unity MÍNIMO de verdad (la bifurcación decisiva)
+Proyecto Unity **nuevo y limpio**: hello-world, Built-in RP (no URP), sin Addressables, sin nuestro
+C#. Objetivo: `.wasm` de ~8 MB en vez de 44 MB. Castearlo igual.
+- **CORTA** → es el engine core / runtime emscripten → escalar a Unity y/o Google, o cambiar stack.
+- **AGUANTA** → es **nuestro build**: tamaño del wasm, nuestro código C#, Addressables o URP → HAY fix
+  y se bisecta por partes.
+
+No toca este repo (proyecto aparte). Build mucho más rápido que el nuestro.
+
+### F3 · Knobs de Player Settings sobre el rig vacío (1 rebuild cada uno)
+Ninguno testeable por proxy JS; todos plausibles:
+- **Disable Unity Audio** — RUNG 16 vio que Unity crea `AudioContext` real (~23 s). RUNG 4 solo lo
+  *suspendía después* de crearlo, y RUNG 17 lo creó sin engine. **Nunca se ha probado un Unity que
+  jamás cree AudioContext.** El foco de audio interactúa con el ciclo de vida de apps en Android TV.
+- **`PlayerSettings.WebGL.powerPreference` → LowPower** — RUNG 17 lo falsó *aislado*, no combinado
+  con el engine real.
+- **WebGL 1.0 en vez de 2.0** — cambia el path GL entero.
+- **Initial Memory 32 MB / otra Memory Growth Mode.**
+- **Decompression fallback / Compression Format.**
+
+### F4 · Versiones
+- **Otra versión de Unity** (2022 LTS ⇒ emscripten distinto). Caro pero es un eje real.
+- **Versión del CAF Receiver SDK** — ¿se puede pinnear `cast_receiver_framework.js`?
+
+### F5 · Chrome Remote Debugger (`IP:9222`)
+Infravalorado antes. Es la única vía de ver el **código de cierre real** del WebSocket de transporte.
+Nombrar el mecanismo (heartbeat, kill del WebView, lifecycle) es lo que permite buscar el workaround.
+Requiere registrar el nº de serie del Xiaomi en la Cast Console.
+
+### F6 · Research externo
+Casos conocidos de Unity WebGL sobre Cast, límites documentados de la plataforma, comportamiento del
+`cast.tp.heartbeat`. (Lanzado 2026-07-21.)
+
+---
+
+## ▶▶ 2026-07-22 — EMPEZAR POR `CAST_NEXT_SESSION_2026-07-22.md`
+
+Handoff turnkey con: el research que reabrió la investigación (WebGL no soportado oficialmente en
+Web Receiver · el watchdog de Cast mide `MemAvailable` del SISTEMA, no el heap ⇒ nuestros
+indicadores de "receiver sano" son ciegos · `maxInactivity:3600` contraproducente · heartbeat en el
+proceso nativo · `STANDBY_CHANGED`/`VISIBILITY_CHANGED` sin loguear · adb Android TV = 4321/5555 no
+9222 · **Cast Connect reaprovecha Unity entero**), el plan de tests baratos (captura forense adb —
+script listo en `Tools/cast-adb-capture.sh`), el bloqueo actual (activar depuración por red en la
+caja) y el estado completo del entorno.
