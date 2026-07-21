@@ -481,3 +481,73 @@ Pista del research (2026-07-20): la firma "muere sin CLOSE, invisible a CAF" enc
 - **RUNG 9** (idea del user): vídeo primero, Unity a los 4min. Aísla si el corte es "X min tras cargar Unity" (llegue cuando llegue) o si una conexión ya asentada sobrevive.
 - Opción nuclear: **Chrome Remote Debugger** (`IP:9222`) para ver el cierre WebSocket real. Requiere registrar el Xiaomi en la Cast Console + abrir 9222 (cerrado).
 - Fallback pragmático: aceptar el corte + reconexión (el CastPlugin móvil ya reconecta ~5s; el receiver ya salta re-INIT en reconexión rápida).
+
+---
+
+# 🏁 VEREDICTO FINAL — RUNG 22 (escena vacía) · 2026-07-21
+
+**La investigación queda CERRADA. No hay fix desde la aplicación.**
+
+## El test
+
+Build WebGL de una **escena vacía** (cámara con clear azul + 1 cubo + 1 luz direccional; sin
+acuario, sin peces, sin shaders nuestros, sin bundles), desplegado a R2 como
+`Build/webgl-output-empty.*` y casteado con el mismo receiver de producción en RUNG 2 (`unity:true`).
+Confirmado visualmente en la TV: **cubo azul, no el acuario** → se cargó el build vacío de verdad.
+
+## El resultado
+
+| Contenido | Corte |
+|---|---|
+| Acuario completo (RUNG 2 original) | 198 s |
+| **Escena vacía (RUNG 22)** | **217.4 s** |
+
+Mismo rango que toda la serie histórica (153–217 s). La diferencia de 19 s es ruido — los cortes ya
+variaban entre 153 y 209 s en runs consecutivos con contenido idéntico.
+
+## Estado del receiver AL MORIR (log completo capturado)
+
+- `Unity loaded ✅` a 33.8 s · STALL de 5809 ms solo en el arranque del engine.
+- **Memoria PLANA todo el run:** `WASM:64MB JS:98MB` desde MEM#1 hasta MEM#37 (sin fuga, sin OOM).
+- Hilo **responsivo**: `lag peor=207ms` en el último tick.
+- Vídeo keepalive **reproduciendo** hasta el final (`KA pm PLAYING ✅`, `cmp:PLAYING`).
+- Canal de streaming **sano**: `sent=134 fail=0`.
+- Sin eventos de página, sin errores, sin razón de cierre.
+
+Es decir: **la conexión se tira con el receiver perfectamente vivo y sano.**
+
+## Conclusión
+
+El disparador es el **engine core de Unity WebGL ejecutándose** — no nuestro contenido, no nuestra
+escena, no nuestros shaders, no los bundles. Una escena con un cubo corta igual que el acuario entero.
+
+Combinado con la bisección de 21 escalones (ninguna operación aislada ni combinada desde JS lo
+reproduce: contexto WebGL, huella GPU, fences, FBO 1440p, compilación WASM, instanciación con
+memoria 64→512MB, saturación de cores, descarga de 64MB… todos aguantaron >5 min), la conclusión es:
+
+> **Cap duro de la plataforma Cast del Xiaomi TV Box S, disparado por la ejecución del runtime
+> WASM/emscripten de Unity. Infixeable desde la app.**
+
+**No queda nada que bisecar en `TvScene`.** Cerrar la vía técnica.
+
+## Qué queda (decisión de producto, no técnica)
+
+1. **Aceptar el corte + reconexión** — el CastPlugin móvil ya reconecta (~5 s) y el receiver ya hace
+   re-INIT en reconexión rápida. Coste: parpadeo cada ~3 min. *El user rechazó esta opción en su día
+   por UX; ahora es esto o cambiar de stack.*
+2. **Chrome Remote Debugger** (`IP:9222`) — vería el código de cierre real del WebSocket de
+   transporte. Requiere registrar el Xiaomi en la Cast Console. Es diagnóstico, **no** un fix:
+   como mucho confirma firmware o revela un workaround conocido de terceros.
+3. **Cambiar de stack** — receiver no-Unity (three.js/WebGL nativo). Los RUNGs 11/12/17/19/20/21
+   demuestran que WebGL crudo con carga GPU real aguanta >9 min. Reescritura completa del render.
+
+## Artefactos del test (limpieza pendiente, inofensivos)
+
+- R2: `Build/webgl-output-empty.*` (4 ficheros) — nadie los carga, se pueden borrar cuando se quiera.
+- R2 `index.html`: **rollback ya hecho** y verificado byte-idéntico al backup previo.
+  Producción `Build/webgl-output.wasm` (44.250.183 B, 23-jun) **nunca se tocó** — verificado por ETag
+  antes y después del deploy.
+- Local: `webgl-output-empty/` (gitignorado), `Assets/_EmptyCastTest/` (escena regenerable).
+- Backup del receiver previo: `scratchpad/r2-index-backup-2026-07-21.html`.
+- ⚠ **Pendiente real de producción:** el `index.html` vivo sigue siendo un receiver de DIAGNÓSTICO
+  (panel debug visible + 22 rungs). Antes de cualquier uso real hay que desplegar un receiver limpio.

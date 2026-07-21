@@ -95,3 +95,19 @@ print('OK: index.html restaurado (KA9-probe backup)')
 
 ## Hipótesis (prior)
 Dado que los 21 rungs apuntan al engine, lo MÁS probable es que la escena vacía **también corte** (→ engine core). Pero si aguanta, es el mejor resultado posible: nuestro contenido es fixeable. Merece la pena verificarlo, no asumirlo.
+
+---
+
+# 🏁 RESULTADO — 2026-07-21
+
+**CORTÓ a 217.4s** (acuario completo = 198s). Mismo rango → **es el engine core de Unity, NO nuestro contenido.**
+
+Cubo azul confirmado en la TV (no era caché). Receiver 100% sano al morir: memoria plana 64/98MB,
+hilo responsivo, vídeo keepalive playing, streaming sin fallos.
+
+**Investigación CERRADA.** No queda nada que bisecar en TvScene. Veredicto completo, log y opciones
+de producto en `CAST_DISCONNECT_INVESTIGATION.md` § VEREDICTO FINAL.
+
+Rollback ejecutado y verificado byte-idéntico. Prod `Build/webgl-output.*` nunca se tocó (ETag
+verificado antes y después). Backup usado: `scratchpad/r2-index-backup-2026-07-21.html` (el que citaba
+este spec, `r2-index-backup-KA9probe.html`, NO existía — se creó descargando el vivo de R2).
