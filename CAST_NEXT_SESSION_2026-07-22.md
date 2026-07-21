@@ -185,3 +185,51 @@ abierta y quedan frentes reales. Pero conviene tener presente H1 y H7: puede que
 esto no sea "arreglar el Web Receiver", sino **mover Unity a una app nativa Android TV con Cast
 Connect** — que reaprovecha el proyecto entero y es el camino soportado. Eso **no** es tirar el
 trabajo a la basura.
+
+---
+
+## 6. 🔙 VOLVER A PRODUCCIÓN (el acuario con peces) — verificado 2026-07-21
+
+**Un solo comando. No depende de ningún rebuild.**
+
+```bash
+bash Tools/restore-production-receiver.sh
+```
+
+### Por qué basta con eso
+El **player de producción NUNCA se ha tocado** en toda la investigación del disconnect. Sigue en R2:
+
+| Fichero en R2 | Estado |
+|---|---|
+| `Build/webgl-output.wasm` | 44.250.183 B · 23-jun · ETag verificado antes y después de cada deploy |
+| `Build/webgl-output.data` | intacto |
+| `Build/webgl-output.framework.js` | intacto |
+| `Build/webgl-output.loader.js` | intacto |
+
+Es el build **06-23b**: peces, sombras PlanarShadow y ageScale ya dentro. Lo único que hemos ido
+cambiando durante toda la bisección es `/index.html`.
+
+### Qué restaura exactamente
+`webgl-output/index.html` (53.896 B, sello `rcv 2026-07-17`) — receiver **ya procesado por Unity**
+(0 placeholders `{{{ }}}`), apunta a `Build/webgl-output.*` y **no lleva el harness de los 22 rungs**.
+
+El script hace guardas antes de subir nada: aborta si detecta placeholders sin procesar (sería el
+template → "Error de red", ver `CLAUDE.md`), aborta si no apunta al player de producción, avisa si
+detecta `RUNG_CONFIG`, y **respalda el `index.html` vivo** en
+`scratchpad/r2-index-antes-de-restaurar.html` antes de pisarlo. Al terminar verifica el MD5 subido y
+lista los 4 ficheros del player.
+
+### Después de restaurar
+**Reiniciar el Xiaomi** (cache) y castear → debe salir **el acuario con peces**. Si sale el cubo azul
+o un panel de debug, es cache vieja: reiniciar otra vez.
+
+### ⚠ Cuándo NO ejecutarlo
+Mientras haya tests de la bisección en marcha — pisa el receiver de diagnóstico que necesitan.
+
+### Lo que sigue pendiente (no bloquea volver a producción)
+El receiver de `rcv 2026-07-17` **lleva panel de debug** (es de la época de diagnóstico, aunque sin
+rungs). Para un release de verdad hace falta un receiver limpio con auto-hide del panel. Es una tarea
+acotada y aparte.
+
+### Artefactos del test que se pueden borrar cuando se quiera (inofensivos)
+`Build/webgl-output-empty.*` en R2 — solo los carga `Tools/rcv-empty-test.html`, nadie más.
