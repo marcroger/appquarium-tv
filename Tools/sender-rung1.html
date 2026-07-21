@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Appquarium — RUNG 1: receiver mínimo (custom, sin Unity)</title>
+  <style>
+    body { font: 16px/1.5 system-ui, sans-serif; background:#0b1622; color:#dee; margin:0; padding:32px; }
+    h1 { font-size:20px; color:#3BB8A0; margin:0 0 4px; }
+    p.sub { color:#6A9888; margin:0 0 24px; }
+    #timer { font:bold 72px monospace; color:#0DE8FF; margin:16px 0; }
+    #state { font:bold 18px monospace; margin-bottom:16px; }
+    .on  { color:#6f6; } .off { color:#FF6B6B; }
+    #log { background:#000; border-radius:8px; padding:12px; font:13px/1.5 monospace;
+           height:280px; overflow:auto; white-space:pre-wrap; color:#0ff; }
+    google-cast-launcher { width:44px; height:44px; --connected-color:#6f6; --disconnected-color:#dee; cursor:pointer; }
+    .row { display:flex; align-items:center; gap:16px; margin-bottom:8px; }
+    .hint { color:#6A9888; font-size:14px; }
+    b.rung { color:#0DE8FF; }
+  </style>
+</head>
+<body>
+  <h1>RUNG 1 — <b class="rung">nuestro receiver custom, DESNUDO</b></h1>
+  <p class="sub">
+    App ID <b>8F6C873F</b> → ahora sirve <b>rcv-min</b> (CAF v3 + vídeo negro en REPEAT_SINGLE, <b>SIN Unity</b>,
+    sin mensajes). El sender solo conecta y cronometra — el receiver carga su propio vídeo.
+    Rung 0 aguantó >8min. Si este también → nuestro shell está limpio. Si cae ~190s → el bug está en nuestro arranque.
+  </p>
+
+  <div class="row">
+    <google-cast-launcher id="btn"></google-cast-launcher>
+    <span class="hint">Pulsa el icono → elige el Xiaomi → no toques nada. Debe verse NEGRO con "rcv-min RUNG1 v1" abajo.</span>
+  </div>
+
+  <div id="state" class="off">DESCONECTADO</div>
+  <div id="timer">0:00</div>
+  <div id="log"></div>
+
+<script src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1"></script>
+<script>
+  // ── RUNG 1 ────────────────────────────────────────────────────────────────
+  // Mismo App ID de producción (8F6C873F) pero apuntando al receiver MÍNIMO.
+  // El sender NO manda nada (ni PROBE ni media): solo abre la sesión y mide
+  // cuánto aguanta. La única diferencia vs rung 0 es: receiver custom nuestro
+  // (CAF v3 + ctx.start) en vez del oficial de Google. Mínimo incremento.
+  // ──────────────────────────────────────────────────────────────────────────
+  var APP_ID = '8F6C873F';
+  var t0 = 0, tick = null;
+  var logEl = document.getElementById('log');
+  var timerEl = document.getElementById('timer');
+  var stateEl = document.getElementById('state');
+
+  function log(m) {
+    var t = t0 ? ((Date.now()-t0)/1000).toFixed(1) : '-';
+    logEl.textContent = '['+t+'s] '+m+'\n' + logEl.textContent;
+    console.log('['+t+'s] '+m);
+  }
+  function fmt(s) { var m = Math.floor(s/60); s = s%60; return m+':'+(s<10?'0':'')+s; }
+
+  function startTimer() {
+    t0 = Date.now();
+    if (tick) clearInterval(tick);
+    tick = setInterval(function() {
+      timerEl.textContent = fmt(Math.floor((Date.now()-t0)/1000));
+    }, 500);
+  }
+  function stopTimer() {
+    if (tick) { clearInterval(tick); tick = null; }
+    return t0 ? Math.round((Date.now()-t0)/1000) : 0;
+  }
+
+  window['__onGCastApiAvailable'] = function(available, err) {
+    if (!available) { log('❌ Cast API no disponible: '+err); return; }
+    var ctx = cast.framework.CastContext.getInstance();
+    // PAGE_SCOPED: si la sesión cae, se queda caída (no reenganche automático
+    // que finja el flapping del móvil).
+    ctx.setOptions({
+      receiverApplicationId: APP_ID,
+      autoJoinPolicy: chrome.cast.AutoJoinPolicy.PAGE_SCOPED
+    });
+    log('Cast API lista — App ID '+APP_ID+' (rcv-min). Pulsa el icono de cast.');
+
+    ctx.addEventListener(cast.framework.CastContextEventType.SESSION_STATE_CHANGED, function(e) {
+      log('SESSION_STATE: '+e.sessionState + (e.errorCode ? ' err='+e.errorCode : ''));
+      switch (e.sessionState) {
+        case cast.framework.SessionState.SESSION_STARTED:
+        case cast.framework.SessionState.SESSION_RESUMED:
+          startTimer();
+          stateEl.textContent = 'CONECTADO'; stateEl.className = 'on';
+          log('✅ Sesión arrancada — cronómetro a cero. El receiver debe cargar el vídeo negro solo. NO TOQUES NADA.');
+          break;
+        case cast.framework.SessionState.SESSION_ENDED:
+          var dur = stopTimer();
+          stateEl.textContent = 'DESCONECTADO tras ' + fmt(dur); stateEl.className = 'off';
+          log('💥 SESIÓN CAÍDA tras ' + dur + 's');
+          log(dur > 240
+              ? '→ AGUANTA. Nuestro receiver custom (sin Unity) está limpio → el bug lo mete un componente POSTERIOR. Subir al rung 2.'
+              : '→ Cae ~'+dur+'s. Con rung 0 aguantando >8min, el bug está en NUESTRO arranque del receiver (CAF/ctx.start/load). Aquí está.');
+          break;
+      }
+    });
+  };
+</script>
+</body>
+</html>

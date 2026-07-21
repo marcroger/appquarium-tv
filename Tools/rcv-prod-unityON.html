@@ -384,7 +384,7 @@
              opacity:0.02;pointer-events:none;object-fit:cover;"></video>
 
     <div id="unity-container" class="unity-desktop">
-      <canvas id="unity-canvas" width={{{ WIDTH }}} height={{{ HEIGHT }}} style="width:100%;height:100%;display:block;" tabindex="-1"></canvas>
+      <canvas id="unity-canvas" width=960 height=600 style="width:100%;height:100%;display:block;" tabindex="-1"></canvas>
       <div id="unity-loading-bar" style="display:none">
         <div id="unity-logo"></div>
         <div id="unity-progress-bar-empty">
@@ -395,7 +395,7 @@
       <div id="unity-footer">
         <div id="unity-logo-title-footer"></div>
         <div id="unity-fullscreen-button"></div>
-        <div id="unity-build-title">{{{ PRODUCT_NAME }}}</div>
+        <div id="unity-build-title">Appquarium</div>
       </div>
     </div>
 
@@ -908,13 +908,23 @@
          Timeout de 120s — si no termina, muestra error de memoria/red.
     ════════════════════════════════════════════════════════════════════════ -->
     <script>
-    if (hasWebGL2 && (isDevTest || !window.__castSdkFailed)) {
+    // ═══ INTERRUPTOR DE BISECCIÓN — Unity ON/OFF ═══════════════════════════════
+    // Test: mismo receiver de producción, ÚNICA variable = Unity carga o no.
+    // NO_UNITY=true → NO se carga Unity; queda el vídeo keepalive + el Cast bridge
+    // (idénticos a producción). Ocultamos la splash para que el vídeo de 8px no
+    // quede tapado. Si así AGUANTA >4min y con Unity corta ~190s → Unity es la causa.
+    // Para el build "Unity ON" (comparación) basta con poner NO_UNITY=false y redeploy.
+    var NO_UNITY = false;
+    if (NO_UNITY) {
+      dbg('⚙⚙ NO_UNITY=true → Unity loader OMITIDO. Solo vídeo keepalive + Cast bridge.');
+      try { hideSplash(); } catch(e) { dbg('hideSplash fail: '+e.message); }
+    } else if (hasWebGL2 && (isDevTest || !window.__castSdkFailed)) {
       setSplashStatus('Cargando…');
       dbg('Starting Unity loader...');
 
       var canvas    = document.querySelector('#unity-canvas');
       var buildUrl  = 'Build';
-      var loaderUrl = buildUrl + '/{{{ LOADER_FILENAME }}}';
+      var loaderUrl = buildUrl + '/webgl-output.loader.js';
 
       // Timeout: si Unity no carga en 120s → error con pista de causa
       var _loadTimeout = setTimeout(function() {
@@ -930,13 +940,13 @@
 
       var config = {
         arguments:          [],
-        dataUrl:            buildUrl + '/{{{ DATA_FILENAME }}}',
-        frameworkUrl:       buildUrl + '/{{{ FRAMEWORK_FILENAME }}}',
-        codeUrl:            buildUrl + '/{{{ CODE_FILENAME }}}',
+        dataUrl:            buildUrl + '/webgl-output.data',
+        frameworkUrl:       buildUrl + '/webgl-output.framework.js',
+        codeUrl:            buildUrl + '/webgl-output.wasm',
         streamingAssetsUrl: 'StreamingAssets',
-        companyName:        '{{{ COMPANY_NAME }}}',
-        productName:        '{{{ PRODUCT_NAME }}}',
-        productVersion:     '{{{ PRODUCT_VERSION }}}',
+        companyName:        'Appquarium',
+        productName:        'Appquarium',
+        productVersion:     '1.2.1',
         showBanner:         function(msg, type) {
           if (type === 'error') dbg('Unity banner ERR: '+msg.substring(0,60));
         },

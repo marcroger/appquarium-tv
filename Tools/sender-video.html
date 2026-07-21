@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Appquarium — Bisección disconnect (un solo puerto: 3003)</title>
+  <style>
+    body { font: 16px/1.5 system-ui, sans-serif; background:#0b1622; color:#dee; margin:0; padding:32px; }
+    h1 { font-size:20px; color:#3BB8A0; margin:0 0 4px; }
+    p.sub { color:#6A9888; margin:0 0 20px; }
+    #timer { font:bold 72px monospace; color:#0DE8FF; margin:12px 0; }
+    #state { font:bold 18px monospace; margin-bottom:12px; }
+    .on  { color:#6f6; } .off { color:#FF6B6B; }
+    #log { background:#000; border-radius:8px; padding:12px; font:13px/1.5 monospace;
+           height:260px; overflow:auto; white-space:pre-wrap; color:#0ff; }
+    google-cast-launcher { width:44px; height:44px; --connected-color:#6f6; --disconnected-color:#dee; cursor:pointer; }
+    .row { display:flex; align-items:center; gap:16px; margin-bottom:10px; flex-wrap:wrap; }
+    .hint { color:#6A9888; font-size:14px; }
+    fieldset { border:1px solid #234; border-radius:8px; margin:0 0 18px; padding:10px 14px; }
+    legend { color:#0DE8FF; font-weight:bold; padding:0 6px; }
+    label.rung { display:block; padding:4px 0; cursor:pointer; }
+    label.rung input { margin-right:8px; }
+    label.rung b { color:#0DE8FF; }
+    label.rung.sel { color:#fff; }
+    .who { color:#6A9888; font-size:13px; margin-left:26px; }
+  </style>
+</head>
+<body>
+  <h1>Bisección del corte a ~3min</h1>
+  <p class="sub">Un solo puerto (<b>3003</b>). Elige escalón, pulsa cast, no toques nada. Cronómetro fiable (reloj del PC).</p>
+
+  <fieldset>
+    <legend>Escalón</legend>
+    <label class="rung" id="l0"><input type="radio" name="rung" value="0"><b>RUNG 0</b> — receiver OFICIAL de Google (vídeo loop)
+      <span class="who">CC1AD845 · el sender carga el mp4 · cero código nuestro · <b>ya validado: aguantó &gt;8min ✅</b></span>
+    </label>
+    <label class="rung sel" id="l1"><input type="radio" name="rung" value="1" checked><b>RUNG 1</b> — receiver de PRODUCCIÓN, <b>Unity OFF</b>
+      <span class="who">8F6C873F · vídeo keepalive + Cast bridge byte-idénticos a prod · el sender manda <code>RUNG_CONFIG unity:false</code> · TV = negro + panel, sin peces · <b>validado: aguantó &gt;4:25 ✅</b></span>
+    </label>
+    <label class="rung" id="l2"><input type="radio" name="rung" value="2"><b>RUNG 2</b> — receiver de PRODUCCIÓN, <b>Unity ON</b> (producción entera)
+      <span class="who">8F6C873F · MISMO receiver, única variable = Unity carga · <code>RUNG_CONFIG unity:true</code> · TV = acuario con peces · <b>validado: cortó 198s ❌ (Unity es la causa)</b></span>
+    </label>
+    <label class="rung" id="l3"><input type="radio" name="rung" value="3"><b>RUNG 3</b> — Unity ON + <b>vídeo keepalive FULLSCREEN</b> (caza-fix)
+      <span class="who">8F6C873F · Unity detrás + vídeo a pantalla completa invisible (opacity 0.02) · <code>RUNG_CONFIG unity:true kaBig:true</code> · TV = acuario con peces (el vídeo no se ve) · <b>cortó 196s ❌ — agrandar no basta</b></span>
+    </label>
+    <label class="rung" id="l4"><input type="radio" name="rung" value="4"><b>RUNG 4</b> — Unity ON + <b>MATAR el audio de Unity</b> (drástico)
+      <span class="who">8F6C873F · suspende el AudioContext de Unity en bucle · <code>RUNG_CONFIG unity:true killAudio:true</code> · TV = acuario con peces · <b>si aguanta &gt;4min = era el foco de audio/media-session</b></span>
+    </label>
+    <label class="rung" id="l5"><input type="radio" name="rung" value="5"><b>RUNG 5</b> — Unity ON + <b>LOGS INTERNOS del framework</b> (diagnóstico)
+      <span class="who">8F6C873F · <code>setLoggerLevel(DEBUG)</code> + captura de <code>console</code> → al PC · <code>verbose:true</code> · <b>cortó 186s — CAF sano, sin razón: es la capa de transporte</b></span>
+    </label>
+    <label class="rung" id="l6"><input type="radio" name="rung" value="6"><b>RUNG 6</b> — Unity ON + <b>rAF estrangulado a 4fps</b> (caza-fix)
+      <span class="who">8F6C873F · reemplaza <code>requestAnimationFrame</code> → Unity renderiza a ~4fps · <code>throttleRaf:true</code> · <b>cortó 163s — no es la carga de render</b></span>
+    </label>
+    <label class="rung" id="l7"><input type="radio" name="rung" value="7"><b>RUNG 7</b> — Unity ON, luego <b>Quit()</b> a los 15s (existencia vs carga)
+      <span class="who">8F6C873F · carga Unity, lo destruye tras 15s · <code>quitUnity:true</code> · <b>cortó 153s con Unity ya muerto → daño al CARGAR, irreversible</b></span>
+    </label>
+    <label class="rung" id="l8"><input type="radio" name="rung" value="8"><b>RUNG 8</b> — <b>SIN Unity + bloqueo artificial 7s</b> (¿es el stall?)
+      <span class="who">8F6C873F · parte de RUNG 1 (aguanta) + busy-wait que congela el hilo 7s a los 15s · <code>stall:true</code> · TV = negro + panel · <b>si CORTA ~3min = el stall del hilo mata el heartbeat → fix = WASM async</b></span>
+    </label>
+    <label class="rung" id="l9"><input type="radio" name="rung" value="9"><b>RUNG 9</b> — vídeo primero, <b>cargar Unity a los 4min</b> (idea user)
+      <span class="who">8F6C873F · solo vídeo y a los 240s carga Unity · <code>delayedUnity:true</code> · <b>cortó 255s = 15s tras cargar Unity, a mitad de carga → cargar tarde NO ayuda, es peor</b></span>
+    </label>
+    <label class="rung" id="l10"><input type="radio" name="rung" value="10"><b>RUNG 10</b> — <b>descargar 64MB de Unity SIN instanciarlo</b> (¿red o WebGL?)
+      <span class="who">8F6C873F · solo vídeo y a los 240s fetch de .wasm+.data (64MB) tirados, sin crear contexto WebGL · <code>netLoad:true</code> · <b>aguantó &gt;6:02 ✅ — NO es la red → es el WebGL/WASM</b></span>
+    </label>
+    <label class="rung" id="l11"><input type="radio" name="rung" value="11"><b>RUNG 11</b> — <b>contexto WebGL2 crudo SIN Unity</b> (¿WebGL o WASM?)
+      <span class="who">8F6C873F · a los 15s crea un WebGL2 + render loop, sin Unity/WASM · <code>rawWebGL:true</code> · TV = color cambiante · <b>aguantó &gt;8:12 ✅ — NO es el contexto WebGL → es el WASM/engine</b></span>
+    </label>
+    <label class="rung" id="l12"><input type="radio" name="rung" value="12"><b>RUNG 12</b> — <b>WebGL2 PESADO sin Unity</b> (¿huella GPU o WASM?)
+      <span class="who">8F6C873F · a los 15s asigna ~192MB de texturas GPU reales + draw calls, sin WASM · <code>gpuHeavy:true</code> · TV = color cambiante · <b>aguantó &gt;9:14 ✅ — NO es la huella GPU → es el WASM/CPU</b></span>
+    </label>
+    <label class="rung" id="l13"><input type="radio" name="rung" value="13"><b>RUNG 13</b> — <b>SATURAR TODOS LOS CORES sin Unity</b> (¿hilos de fondo del WASM?)
+      <span class="who">8F6C873F · a los 15s lanza (cores+2) Web Workers pegando la CPU ~30s, sin Unity/WASM · <code>coreSaturate:true</code> · TV = negro + panel · <b>aguantó &gt;6:26 ✅ — NO es la saturación multi-core → intrínseco del WASM</b></span>
+    </label>
+    <label class="rung" id="l14"><input type="radio" name="rung" value="14"><b>RUNG 14</b> — <b>COMPILAR el .wasm real sin instanciar</b> (¿compilar o instanciar?)
+      <span class="who">8F6C873F · a los 15s: fetch del .wasm real (44MB) + <code>WebAssembly.compile()</code>, SIN instanciar/correr · <code>wasmCompile:true</code> · TV = negro + panel · <b>aguantó &gt;7:31 ✅ (con STALL de 18s) — NO es la compilación → es la instanciación/memoria</b></span>
+    </label>
+    <label class="rung" id="l15"><input type="radio" name="rung" value="15"><b>RUNG 15</b> — <b>INSTANCIAR WASM con memoria 64→512MB sin Unity</b> (¿memoria o engine?)
+      <span class="who">8F6C873F · a los 15s instancia un módulo WASM sintético con memoria 64MB (máx 512MB, = config Unity) + commit, sin código de Unity · <code>wasmMem:true</code> · TV = negro + panel · <b>aguantó &gt;7:34 ✅ — NO es la memoria/instanciación → es el CÓDIGO del engine de Unity</b></span>
+    </label>
+    <label class="rung" id="l16"><input type="radio" name="rung" value="16"><b>RUNG 16</b> — <b>ESPÍA del init de Unity</b> (Unity ON + hooks a APIs globales)
+      <span class="who">8F6C873F · Unity ON con hooks a getContext/getExtension/AudioContext/Worker/SharedArrayBuffer/fullscreen/WebAssembly · <code>spyInit:true</code> · TV = acuario con peces · <b>reveló: powerPreference:high-performance + 18 exts + AudioContext; SIN pthreads</b></span>
+    </label>
+    <label class="rung" id="l17"><input type="radio" name="rung" value="17"><b>RUNG 17</b> — <b>replicar el CONTEXTO de Unity sin engine</b> (aditivo dirigido)
+      <span class="who">8F6C873F · RUNG 11 + atributos EXACTOS del contexto de Unity (powerPreference:high-performance + stencil/depth) + 18 extensiones + new AudioContext(), sin engine · <code>unityCtx:true</code> · TV = color cambiante · <b>aguantó &gt;9:24 ✅ — powerPreference/contexto/audio NO son → es la EJECUCIÓN del engine</b></span>
+    </label>
+    <label class="rung" id="l18"><input type="radio" name="rung" value="18"><b>RUNG 18</b> — <b>ESPÍA de operaciones GL de Unity</b> (Unity ON + contadores de render)
+      <span class="who">8F6C873F · Unity ON + hooks contadores a FBO/renderbuffer/linkProgram/texImage2D/readPixels/finish/clientWaitSync/draws · <code>glSpy:true</code> · TV = acuario con peces · <b>reveló: fenceSync/clientWaitSync continuos + FBO 1440p; readPixels/finish=0</b></span>
+    </label>
+    <label class="rung" id="l19"><input type="radio" name="rung" value="19"><b>RUNG 19</b> — <b>replicar las FENCES GPU de Unity</b> (single variable = A)
+      <span class="who">8F6C873F · WebGL2 high-perf + draws reales + fenceSync/clientWaitSync por frame, sin engine · <code>glFence:true</code> · TV = color cambiante · <b>aguantó &gt;5:03 ✅ (32.670 clientWaitSync) — fences GPU NO son → queda el FBO 1440p</b></span>
+    </label>
+    <label class="rung" id="l20"><input type="radio" name="rung" value="20"><b>RUNG 20</b> — <b>replicar el FBO render-to-texture 1440p</b> (candidato B)
+      <span class="who">8F6C873F · WebGL2 high-perf + FBO 2560x1440 (color+depth24_stencil8) + draw dentro + blitFramebuffer a pantalla por frame, sin engine · <code>glFbo:true</code> · TV = color cambiante · <b>aguantó &gt;6:07 ✅ — FBO 1440p NO es → ninguna op GL aislada es</b></span>
+    </label>
+    <label class="rung" id="l21"><input type="radio" name="rung" value="21"><b>RUNG 21</b> — <b>KITCHEN SINK: todo junto</b> (¿combinación emergente?)
+      <span class="who">8F6C873F · canvas present 1920x1080 + FBO 1440p + 12 texturas + depth/blend + blit + fenceSync/clientWaitSync por frame, TODO junto sin engine · <code>glCombo:true</code> · TV = color cambiante · <b>si CORTA ~180-216s = la combinación/intensidad es el disparador (reproducido); si aguanta = es el engine WASM/present de emscripten</b></span>
+    </label>
+  </fieldset>
+
+  <div class="row">
+    <google-cast-launcher id="btn"></google-cast-launcher>
+    <span class="hint">Pulsa el icono → elige el Xiaomi. TV: RUNG 1 = negro + panel · RUNG 2 = acuario con peces.</span>
+  </div>
+
+  <div id="state" class="off">DESCONECTADO</div>
+  <div id="timer">0:00</div>
+  <div id="log"></div>
+
+<script src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1"></script>
+<script>
+  // ── Sender de bisección, UN SOLO PUERTO (3003) ────────────────────────────
+  // Dos modos, elegibles arriba SIN cambiar de página ni de puerto:
+  //   RUNG 0: receiver oficial de Google (CC1AD845). El sender carga el vídeo.
+  //   RUNG 1+: nuestro receiver en 8F6C873F. El sender solo conecta; el receiver
+  //            (rcv-min en R2) carga su propio vídeo. Para rungs 2/3/… NO se
+  //            toca esta página: solo cambia el fichero del receiver en R2.
+  // ──────────────────────────────────────────────────────────────────────────
+  var VIDEO_URL = 'https://pub-2b11cc17bdef4f75bd4d34eeabbd6042.r2.dev/keepalive_black.mp4';
+  var GOOGLE_DEFAULT = null; // se rellena cuando la API está lista (CC1AD845)
+  var OUR_APP = '8F6C873F';
+  var NS = 'urn:x-cast:dev.unknownaerials.appquarium'; // canal de diag del receiver
+
+  var t0 = 0, tick = null, ctx = null, apiReady = false;
+  var logEl = document.getElementById('log');
+  var timerEl = document.getElementById('timer');
+  var stateEl = document.getElementById('state');
+
+  function curRung() {
+    var r = document.querySelector('input[name=rung]:checked');
+    return r ? r.value : '1';
+  }
+  function log(m) {
+    var t = t0 ? ((Date.now()-t0)/1000).toFixed(1) : '-';
+    logEl.textContent = '['+t+'s] '+m+'\n' + logEl.textContent;
+    console.log('['+t+'s] '+m);
+  }
+  function fmt(s) { var m = Math.floor(s/60); s = s%60; return m+':'+(s<10?'0':'')+s; }
+  function startTimer() {
+    t0 = Date.now();
+    if (tick) clearInterval(tick);
+    tick = setInterval(function(){ timerEl.textContent = fmt(Math.floor((Date.now()-t0)/1000)); }, 500);
+  }
+  function stopTimer() {
+    if (tick) { clearInterval(tick); tick = null; }
+    return t0 ? Math.round((Date.now()-t0)/1000) : 0;
+  }
+
+  // Aplica el App ID del escalón elegido. Se puede llamar varias veces mientras
+  // no haya sesión activa.
+  function applyRung() {
+    if (!apiReady) return;
+    var rung = curRung();
+    var appId = (rung === '0') ? GOOGLE_DEFAULT : OUR_APP;
+    ctx.setOptions({
+      receiverApplicationId: appId,
+      autoJoinPolicy: chrome.cast.AutoJoinPolicy.PAGE_SCOPED
+    });
+    ['0','1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16','17','18','19','20','21'].forEach(function(n){
+      document.getElementById('l'+n).classList.toggle('sel', rung === n);
+    });
+    var tag = rung==='1'?' (Unity OFF)':rung==='2'?' (Unity ON)':rung==='3'?' (Unity ON + vídeo fullscreen)':rung==='4'?' (Unity ON + kill audio)':rung==='5'?' (Unity ON + logs internos)':rung==='6'?' (Unity ON + rAF 4fps)':rung==='7'?' (Unity ON + Quit 15s)':rung==='8'?' (SIN Unity + stall 7s)':rung==='9'?' (vídeo, Unity a 4min)':rung==='10'?' (descarga 64MB sin Unity)':rung==='11'?' (WebGL crudo sin Unity)':rung==='12'?' (WebGL PESADO sin Unity)':rung==='13'?' (saturar cores sin Unity)':rung==='14'?' (compilar wasm sin instanciar)':rung==='15'?' (instanciar wasm+memoria sin Unity)':rung==='16'?' (Unity ON + espía de init)':rung==='17'?' (contexto Unity sin engine)':rung==='18'?' (Unity ON + espía GL)':rung==='19'?' (fences GPU sin engine)':rung==='20'?' (FBO 1440p sin engine)':rung==='21'?' (kitchen sink sin engine)':'';
+    log('▶ Escalón '+rung+' seleccionado — App ID '+appId+tag+'. Pulsa el icono de cast.');
+  }
+
+  // Solo RUNG 0: el sender carga el vídeo en el receiver oficial.
+  function loadLoopRung0(castSession) {
+    var sessionObj = castSession.getSessionObj();
+    var mediaInfo = new chrome.cast.media.MediaInfo(VIDEO_URL, 'video/mp4');
+    mediaInfo.streamType = chrome.cast.media.StreamType.BUFFERED;
+    var item = new chrome.cast.media.QueueItem(mediaInfo);
+    item.autoplay = true;
+    var req = new chrome.cast.media.QueueLoadRequest([item]);
+    req.repeatMode = chrome.cast.media.RepeatMode.SINGLE;
+    req.startIndex = 0;
+    sessionObj.queueLoad(req,
+      function(ms) {
+        log('✅ vídeo cargado en REPEAT_SINGLE (receiver de Google).');
+        ms.addUpdateListener(function(alive) {
+          if (alive && ms.playerState === chrome.cast.media.PlayerState.IDLE) {
+            log('⚠ IDLE → recargo bucle'); loadLoopRung0(castSession);
+          }
+        });
+      },
+      function(err){ log('❌ queueLoad falló: '+JSON.stringify(err)); });
+  }
+
+  window['__onGCastApiAvailable'] = function(available, err) {
+    if (!available) { log('❌ Cast API no disponible: '+err); return; }
+    GOOGLE_DEFAULT = chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID; // 'CC1AD845'
+    ctx = cast.framework.CastContext.getInstance();
+    apiReady = true;
+    applyRung();
+    log('Cast API lista. Elige escalón arriba y pulsa cast.');
+
+    // Cambiar de escalón re-aplica el App ID (sin sesión activa).
+    Array.prototype.forEach.call(document.querySelectorAll('input[name=rung]'), function(r){
+      r.addEventListener('change', applyRung);
+    });
+
+    ctx.addEventListener(cast.framework.CastContextEventType.SESSION_STATE_CHANGED, function(e) {
+      log('SESSION_STATE: '+e.sessionState + (e.errorCode ? ' err='+e.errorCode : ''));
+      switch (e.sessionState) {
+        case cast.framework.SessionState.SESSION_STARTED:
+        case cast.framework.SessionState.SESSION_RESUMED:
+          startTimer();
+          stateEl.textContent = 'CONECTADO (rung '+curRung()+')'; stateEl.className = 'on';
+          log('✅ Sesión arrancada — cronómetro a cero. NO TOQUES NADA.');
+          if (curRung() === '0') {
+            try { loadLoopRung0(ctx.getCurrentSession()); } catch (ex) { log('⚠ error al cargar vídeo: '+ex.message); }
+          } else {
+            var rn = curRung();
+            var unityOn = (rn === '2' || rn === '3' || rn === '4' || rn === '5' || rn === '6' || rn === '7' || rn === '16' || rn === '18');
+            var kaBig = (rn === '3');
+            var killAudio = (rn === '4');
+            var verbose = (rn === '5');
+            var throttleRaf = (rn === '6');
+            var quitUnity = (rn === '7');
+            var stall = (rn === '8');
+            var delayedUnity = (rn === '9');
+            var netLoad = (rn === '10');
+            var rawWebGL = (rn === '11');
+            var gpuHeavy = (rn === '12');
+            var coreSat = (rn === '13');
+            var wasmComp = (rn === '14');
+            var wasmMem = (rn === '15');
+            var spyInit = (rn === '16');
+            var unityCtxSel = (rn === '17');
+            var glSpy = (rn === '18');
+            var glFence = (rn === '19');
+            var glFbo = (rn === '20');
+            var glCombo = (rn === '21');
+            log('(RUNG '+rn+') Unity '+(unityOn?'ON':'OFF')+(kaBig?' + vídeo FULLSCREEN':'')+(killAudio?' + KILL AUDIO':'')+(verbose?' + LOGS INTERNOS':'')+(throttleRaf?' + rAF 4fps':'')+(quitUnity?' + QUIT 15s':'')+(stall?' + STALL 7s':'')+(delayedUnity?' + UNITY A 4MIN':'')+(netLoad?' + DESCARGA 64MB':'')+(rawWebGL?' + WEBGL CRUDO':'')+(gpuHeavy?' + WEBGL PESADO':'')+(coreSat?' + SATURAR CORES':'')+(wasmComp?' + COMPILAR WASM':'')+(wasmMem?' + INSTANCIAR WASM+MEM':'')+(spyInit?' + ESPÍA INIT':'')+(unityCtxSel?' + CONTEXTO UNITY':'')+(glSpy?' + ESPÍA GL':'')+(glFence?' + FENCES GPU':'')+(glFbo?' + FBO 1440p':'')+(glCombo?' + KITCHEN SINK':'')+'. El receiver carga su propio vídeo keepalive.');
+            try {
+              var s = ctx.getCurrentSession();
+              // Escuchar el log de diagnóstico que el receiver transmite por el canal.
+              s.addMessageListener(NS, function(ns, message) {
+                var d = message;
+                if (typeof message === 'string') { try { d = JSON.parse(message); } catch (e) { d = null; } }
+                if (d && d.type === 'LOG') log('RCV ' + d.line);
+                else log('RCV(?) ' + (typeof message === 'string' ? message : JSON.stringify(message)));
+              });
+              log('📡 Escuchando diag del receiver por el canal…');
+              // ⭐ Decir al receiver si cargar Unity o no. Reintentos por si el
+              // receiver aún no tiene el listener listo justo al conectar.
+              var cfg = { type:'RUNG_CONFIG', unity: unityOn, kaBig: kaBig, killAudio: killAudio, verbose: verbose, throttleRaf: throttleRaf, quitUnity: quitUnity, stall: stall, delayedUnity: delayedUnity, netLoad: netLoad, rawWebGL: rawWebGL, gpuHeavy: gpuHeavy, coreSaturate: coreSat, wasmCompile: wasmComp, wasmMem: wasmMem, spyInit: spyInit, unityCtx: unityCtxSel, glSpy: glSpy, glFence: glFence, glFbo: glFbo, glCombo: glCombo };
+              var sent = 0;
+              (function sendCfg() {
+                try { s.sendMessage(NS, cfg); sent++; log('→ RUNG_CONFIG unity:'+unityOn+' delayedUnity:'+delayedUnity+' stall:'+stall+' quitUnity:'+quitUnity+' enviado (#'+sent+')'); }
+                catch (ex) { log('⚠ RUNG_CONFIG falló: '+ex.message); }
+                if (sent < 3) setTimeout(sendCfg, 700);
+              })();
+            } catch (ex) { log('⚠ no pude escuchar/enviar en el canal: '+ex.message); }
+          }
+          break;
+        case cast.framework.SessionState.SESSION_ENDED:
+          var dur = stopTimer();
+          stateEl.textContent = 'DESCONECTADO tras ' + fmt(dur); stateEl.className = 'off';
+          log('💥 SESIÓN CAÍDA tras ' + dur + 's (rung '+curRung()+')');
+          if (curRung() === '11') {
+            log(dur < 280
+                ? '→ 🎯 CORTA con un contexto WebGL crudo SIN Unity → el WebView del Xiaomi mata Cast cuando hay WebGL activo. Infixeable desde la app (Unity ES WebGL) → solo reconexión.'
+                : '→ Aguanta >4:40: el contexto WebGL NO es la causa → es la instanciación del WASM/engine de Unity específicamente → Remote Debugger.');
+          } else if (curRung() === '10') {
+            log(dur < 280
+                ? '→ 🎯 CORTA descargando 64MB SIN Unity → es la SATURACIÓN DE RED, no el WebGL. Fix = servir los assets sin reventar la conexión Cast (throttle/serializar descargas, HTTP/2, o precargar antes de castear).'
+                : '→ Aguanta >4:40: la descarga NO es la causa. Es el WebGL/WASM al instanciar → Remote Debugger.');
+          } else if (curRung() === '9') {
+            log(dur > 360
+                ? '→ 🎉 La conexión asentada SOBREVIVE a la carga de Unity a 4min → el corte es la carga temprana; fix = diferir/asentar antes de cargar Unity.'
+                : (dur > 260 && dur < 340)
+                  ? '→ Cortó ~'+dur+'s = ~'+(dur-240)+'s TRAS cargar Unity a 240s → el corte es "~X tras cargar Unity", llegue cuando llegue. Confirma que es la carga.'
+                  : '→ Cortó a '+dur+'s. Interpretar: ¿antes de los 240s (raro, el vídeo solo aguanta)? ¿o ~3min tras cargar Unity?');
+          } else if (curRung() === '8') {
+            log(dur < 240
+                ? '→ 🎯 ¡CORTA sin Unity, solo con el bloqueo de 7s! MECANISMO ENCONTRADO: el stall del hilo mata el heartbeat de transporte. FIX = eliminar el bloqueo largo al cargar Unity (WASM async / build más pequeño).'
+                : '→ Aguanta >4min: el bloqueo del hilo NO es la causa. Es específico del contexto WebGL de Unity → Remote Debugger.');
+          } else if (curRung() === '7') {
+            log(dur > 240
+                ? '→ 🎉 ¡AGUANTA tras Quit()! El daño era la EXISTENCIA continua del runtime WebGL → idea de fix: cargar/descargar Unity bajo demanda.'
+                : '→ Cae ~'+dur+'s aun tras destruir Unity. El daño se hace al CARGAR Unity y es irreversible en esta sesión → Remote Debugger / reconexión.');
+          } else if (curRung() === '6') {
+            log(dur > 240
+                ? '→ 🎉 ¡AGUANTA con Unity a 4fps! El corte era la carga de render de Unity acaparando el event loop → FIX = bajar framerate / ceder hilo.'
+                : '→ Cae ~'+dur+'s aun con Unity a 4fps. No es la carga de render → es la mera existencia de Unity (contexto WebGL). Toca Remote Debugger.');
+          } else if (curRung() === '5') {
+            log('→ Diagnóstico: revisa las líneas RCV CON.* de arriba (framework CAF) en los últimos ~10s antes del corte. Busca heartbeat / SENDER_DISCONNECTED / reason / timeout.');
+          } else if (curRung() === '4') {
+            log(dur > 240
+                ? '→ 🎉 ¡AGUANTA! Matar el audio de Unity cura el corte → era el FOCO DE AUDIO/media-session. Fix = suprimir audio de Unity.'
+                : '→ Cae ~'+dur+'s aun sin audio de Unity. No es el foco de audio → es el WebGL/GPU. Toca buscar en internet el síntoma.');
+          } else if (curRung() === '3') {
+            log(dur > 240
+                ? '→ 🎉 ¡AGUANTA con Unity ON! El vídeo keepalive FULLSCREEN cura el corte → FIX ENCONTRADO. Integrar en prod.'
+                : '→ Cae ~'+dur+'s aun con vídeo fullscreen. No basta agrandar el vídeo → probar bajar carga GPU de Unity / otra vía.');
+          } else if (curRung() === '2') {
+            log(dur < 240
+                ? '→ Unity ON corta ~'+dur+'s y Unity OFF aguantó >4min → UNITY ES LA CAUSA. Confirmado por A/B de 1 variable.'
+                : '→ ¡Unity ON también aguanta >4min! Sorpresa: no era Unity en sí. Bisecar más.');
+          } else {
+            log(dur > 240
+                ? '→ AGUANTA. Este escalón está limpio → subir al siguiente (RUNG 2, Unity ON).'
+                : '→ Cae ~'+dur+'s. Con el rung 0 aguantando >8min, el bug lo mete ESTE escalón.');
+          }
+          break;
+      }
+    });
+  };
+</script>
+</body>
+</html>

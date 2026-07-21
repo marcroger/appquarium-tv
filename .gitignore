@@ -31,6 +31,7 @@
 
 # WebGL deploy output (sube a R2, no a git)
 /webgl-output/
+/webgl-output-empty/
 /webgl-build/
 
 # Addressables build output — bundles generados por Build Player Content (389MB+)
