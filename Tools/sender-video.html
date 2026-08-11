@@ -96,6 +96,9 @@
     <label class="rung" id="l21"><input type="radio" name="rung" value="21"><b>RUNG 21</b> — <b>KITCHEN SINK: todo junto</b> (¿combinación emergente?)
       <span class="who">8F6C873F · canvas present 1920x1080 + FBO 1440p + 12 texturas + depth/blend + blit + fenceSync/clientWaitSync por frame, TODO junto sin engine · <code>glCombo:true</code> · TV = color cambiante · <b>si CORTA ~180-216s = la combinación/intensidad es el disparador (reproducido); si aguanta = es el engine WASM/present de emscripten</b></span>
     </label>
+    <label class="rung" id="l23"><input type="radio" name="rung" value="23"><b>RUNG 23</b> — <b>Unity ON + SIN vídeo keepalive</b> (A/B de la fuga) ⭐
+      <span class="who">8F6C873F · producción entera pero el receiver NO carga el clip keepalive · <code>unity:true noKa:true</code> · TV = acuario con peces · <b>la captura adb del 27-jul localizó una fuga LINEAL de +20 MB/min en el Native Heap del renderer; lo único periódico permanente es el bucle del clip (kEnded→seek cada ~10s). Native Heap PLANO = el vídeo es la fuga → se elimina. Sigue fugando = es churn de Unity/WebGL</b></span>
+    </label>
   </fieldset>
 
   <div class="row">
@@ -210,7 +213,7 @@
             try { loadLoopRung0(ctx.getCurrentSession()); } catch (ex) { log('⚠ error al cargar vídeo: '+ex.message); }
           } else {
             var rn = curRung();
-            var unityOn = (rn === '2' || rn === '3' || rn === '4' || rn === '5' || rn === '6' || rn === '7' || rn === '16' || rn === '18');
+            var unityOn = (rn === '2' || rn === '3' || rn === '4' || rn === '5' || rn === '6' || rn === '7' || rn === '16' || rn === '18' || rn === '23');
             var kaBig = (rn === '3');
             var killAudio = (rn === '4');
             var verbose = (rn === '5');
@@ -230,7 +233,8 @@
             var glFence = (rn === '19');
             var glFbo = (rn === '20');
             var glCombo = (rn === '21');
-            log('(RUNG '+rn+') Unity '+(unityOn?'ON':'OFF')+(kaBig?' + vídeo FULLSCREEN':'')+(killAudio?' + KILL AUDIO':'')+(verbose?' + LOGS INTERNOS':'')+(throttleRaf?' + rAF 4fps':'')+(quitUnity?' + QUIT 15s':'')+(stall?' + STALL 7s':'')+(delayedUnity?' + UNITY A 4MIN':'')+(netLoad?' + DESCARGA 64MB':'')+(rawWebGL?' + WEBGL CRUDO':'')+(gpuHeavy?' + WEBGL PESADO':'')+(coreSat?' + SATURAR CORES':'')+(wasmComp?' + COMPILAR WASM':'')+(wasmMem?' + INSTANCIAR WASM+MEM':'')+(spyInit?' + ESPÍA INIT':'')+(unityCtxSel?' + CONTEXTO UNITY':'')+(glSpy?' + ESPÍA GL':'')+(glFence?' + FENCES GPU':'')+(glFbo?' + FBO 1440p':'')+(glCombo?' + KITCHEN SINK':'')+'. El receiver carga su propio vídeo keepalive.');
+            var noKa = (rn === '23');
+            log('(RUNG '+rn+') Unity '+(unityOn?'ON':'OFF')+(kaBig?' + vídeo FULLSCREEN':'')+(killAudio?' + KILL AUDIO':'')+(verbose?' + LOGS INTERNOS':'')+(throttleRaf?' + rAF 4fps':'')+(quitUnity?' + QUIT 15s':'')+(stall?' + STALL 7s':'')+(delayedUnity?' + UNITY A 4MIN':'')+(netLoad?' + DESCARGA 64MB':'')+(rawWebGL?' + WEBGL CRUDO':'')+(gpuHeavy?' + WEBGL PESADO':'')+(coreSat?' + SATURAR CORES':'')+(wasmComp?' + COMPILAR WASM':'')+(wasmMem?' + INSTANCIAR WASM+MEM':'')+(spyInit?' + ESPÍA INIT':'')+(unityCtxSel?' + CONTEXTO UNITY':'')+(glSpy?' + ESPÍA GL':'')+(glFence?' + FENCES GPU':'')+(glFbo?' + FBO 1440p':'')+(glCombo?' + KITCHEN SINK':'')+(noKa?' + SIN VÍDEO KEEPALIVE':'')+'. '+(noKa?'⚠ El receiver NO cargará el vídeo keepalive (A/B de la fuga).':'El receiver carga su propio vídeo keepalive.'));
             try {
               var s = ctx.getCurrentSession();
               // Escuchar el log de diagnóstico que el receiver transmite por el canal.
@@ -243,7 +247,7 @@
               log('📡 Escuchando diag del receiver por el canal…');
               // ⭐ Decir al receiver si cargar Unity o no. Reintentos por si el
               // receiver aún no tiene el listener listo justo al conectar.
-              var cfg = { type:'RUNG_CONFIG', unity: unityOn, kaBig: kaBig, killAudio: killAudio, verbose: verbose, throttleRaf: throttleRaf, quitUnity: quitUnity, stall: stall, delayedUnity: delayedUnity, netLoad: netLoad, rawWebGL: rawWebGL, gpuHeavy: gpuHeavy, coreSaturate: coreSat, wasmCompile: wasmComp, wasmMem: wasmMem, spyInit: spyInit, unityCtx: unityCtxSel, glSpy: glSpy, glFence: glFence, glFbo: glFbo, glCombo: glCombo };
+              var cfg = { type:'RUNG_CONFIG', unity: unityOn, kaBig: kaBig, killAudio: killAudio, verbose: verbose, throttleRaf: throttleRaf, quitUnity: quitUnity, stall: stall, delayedUnity: delayedUnity, netLoad: netLoad, rawWebGL: rawWebGL, gpuHeavy: gpuHeavy, coreSaturate: coreSat, wasmCompile: wasmComp, wasmMem: wasmMem, spyInit: spyInit, unityCtx: unityCtxSel, glSpy: glSpy, glFence: glFence, glFbo: glFbo, glCombo: glCombo, noKa: noKa };
               var sent = 0;
               (function sendCfg() {
                 try { s.sendMessage(NS, cfg); sent++; log('→ RUNG_CONFIG unity:'+unityOn+' delayedUnity:'+delayedUnity+' stall:'+stall+' quitUnity:'+quitUnity+' enviado (#'+sent+')'); }

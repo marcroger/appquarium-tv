@@ -89,7 +89,7 @@
       position:fixed;bottom:1vh;right:1vw;z-index:10001;
       color:rgba(255,255,255,0.40);font:bold 12px monospace;
       pointer-events:none;letter-spacing:1px;
-    ">rcv 2026-07-27 noKa-ab2</div>
+    ">rcv 2026-08-11 visual</div>
 
     <!-- FPS meter — esquina sup. derecha, legible desde el sofá.
          Mide la cadencia de requestAnimationFrame (el mismo loop con el que
@@ -145,7 +145,8 @@
 
           // El panel permanece visible toda la sesión: el corte que se investiga
           // ocurre a los ~200s, mucho después del auto-hide de 8s que había aquí.
-          el.style.opacity = '1';
+          // 2026-08-11: salvo en MODO REVISIÓN VISUAL (ver __fadeDebugUI abajo).
+          el.style.opacity = window.__cleanUI ? '0' : '1';
         }
         _sessLogDirty = true;   // → se persiste en el próximo tick (ver abajo)
       }
@@ -841,6 +842,24 @@
         }
       }, 3000);
 
+      // ── MODO REVISIÓN VISUAL (2026-08-11) ──────────────────────────
+      // Apaga los PIXELES del diagnóstico, nada más. Sigue funcionando igual:
+      // console.log (chrome://inspect), el sumidero al sender (sender.log),
+      // localStorage y el muestreo de FPS/heap. Las medidas no cambian.
+      window.__cleanUI = false;
+      window.__fadeDebugUI = function(delayMs) {
+        setTimeout(function() {
+          window.__cleanUI = true;
+          ['dbg-panel', 'fps-meter', 'stats-panel', 'rcv-tag'].forEach(function(id) {
+            var e = document.getElementById(id);
+            if (!e) return;
+            e.style.transition = 'opacity 1.5s ease';
+            e.style.opacity = '0';
+          });
+          dbg('👁 UI de diagnóstico oculta — revisión visual (logs siguen activos)');
+        }, delayMs);
+      };
+
       window.__castOnUnityReady = function(instance) {
         dbg('Unity READY — flushing '+pendingMsgs.length+' msgs');
         unityInst = instance;
@@ -849,6 +868,8 @@
         });
         pendingMsgs = [];
         hideSplash();
+        // Deja 12s de margen para ver que la carga fue limpia, luego despeja.
+        window.__fadeDebugUI(12000);
       };
     })();
 

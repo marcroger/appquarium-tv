@@ -89,7 +89,7 @@
       position:fixed;bottom:1vh;right:1vw;z-index:10001;
       color:rgba(255,255,255,0.40);font:bold 12px monospace;
       pointer-events:none;letter-spacing:1px;
-    ">rcv 2026-07-27 noKa-ab2</div>
+    ">rcv 2026-07-27 MIN-unity</div>
 
     <!-- FPS meter — esquina sup. derecha, legible desde el sofá.
          Mide la cadencia de requestAnimationFrame (el mismo loop con el que
@@ -542,10 +542,6 @@
         } catch(e) { return { state: 'ERR:'+e.message, ct: null }; }
       }
       function kaLoad() {
-        // RUNG 23 (A/B de la fuga, 2026-07-27): con noKa el vídeo keepalive NO
-        // arranca. Mide si la fuga de +20MB/min del Native Heap del renderer la
-        // causa el bucle del clip (kEnded→seek(0) cada ~10s).
-        if (window.__kaKilled) { dbg('⚙ KA: OMITIDO (noKa — A/B de la fuga)'); return; }
         if (!_kaLoaded && !_kaInFlight && _kaLoadTries < 8) {
           _kaLoadTries++;
           _kaInFlight = true;
@@ -682,10 +678,7 @@
           // receiver en R2 sirve TODOS los escalones; la variable la manda el sender.
           var _cfg = {}; try { _cfg = JSON.parse(raw); } catch(e) {}
           var _u = !!_cfg.unity;
-          dbg('⚙ RUNG_CONFIG: unity=' + _u + ' kaBig=' + !!_cfg.kaBig + ' killAudio=' + !!_cfg.killAudio + ' verbose=' + !!_cfg.verbose + ' throttleRaf=' + !!_cfg.throttleRaf + ' quitUnity=' + !!_cfg.quitUnity + ' stall=' + !!_cfg.stall + ' delayedUnity=' + !!_cfg.delayedUnity + ' rawWebGL=' + !!_cfg.rawWebGL + ' gpuHeavy=' + !!_cfg.gpuHeavy + ' coreSaturate=' + !!_cfg.coreSaturate + ' wasmCompile=' + !!_cfg.wasmCompile + ' wasmMem=' + !!_cfg.wasmMem + ' spyInit=' + !!_cfg.spyInit + ' unityCtx=' + !!_cfg.unityCtx + ' glSpy=' + !!_cfg.glSpy + ' glFence=' + !!_cfg.glFence + ' glFbo=' + !!_cfg.glFbo + ' glCombo=' + !!_cfg.glCombo + ' noKa=' + !!_cfg.noKa);
-          // RUNG 23: matar el keepalive lo ANTES posible — kaLoad() ya corrió en
-          // SENDER_CONNECTED, así que aquí lo paramos además de bloquear reintentos.
-          if (_cfg.noKa && window.__noKa) window.__noKa();
+          dbg('⚙ RUNG_CONFIG: unity=' + _u + ' kaBig=' + !!_cfg.kaBig + ' killAudio=' + !!_cfg.killAudio + ' verbose=' + !!_cfg.verbose + ' throttleRaf=' + !!_cfg.throttleRaf + ' quitUnity=' + !!_cfg.quitUnity + ' stall=' + !!_cfg.stall + ' delayedUnity=' + !!_cfg.delayedUnity + ' rawWebGL=' + !!_cfg.rawWebGL + ' gpuHeavy=' + !!_cfg.gpuHeavy + ' coreSaturate=' + !!_cfg.coreSaturate + ' wasmCompile=' + !!_cfg.wasmCompile + ' wasmMem=' + !!_cfg.wasmMem + ' spyInit=' + !!_cfg.spyInit + ' unityCtx=' + !!_cfg.unityCtx + ' glSpy=' + !!_cfg.glSpy + ' glFence=' + !!_cfg.glFence + ' glFbo=' + !!_cfg.glFbo + ' glCombo=' + !!_cfg.glCombo);
           if (_cfg.verbose && window.__verbose) window.__verbose();
           // spyInit (RUNG 16) DEBE ir ANTES de arrancar Unity: instala los hooks a
           // las APIs globales para capturar qué toca Unity durante su init.
@@ -739,11 +732,7 @@
         setSplashStatus('Conectado — cargando…');
         if (_overlayTimer) { clearTimeout(_overlayTimer); _overlayTimer = null; }
         hideReconnect();
-        // ⚠ 2026-07-27: NO llamar a kaLoad() aquí de inmediato. El RUNG_CONFIG del
-        // sender llega ~300ms después de CONNECTED; si el load ya salió, REPEAT_SINGLE
-        // deja el clip en bucle para siempre y `noKa` llega tarde (bug del 1er intento
-        // del RUNG 23). 1.5s de margen es irrelevante para runs de 4 minutos.
-        setTimeout(function(){ kaLoad(); }, 1500);
+        kaLoad();  // STEP 1: arrancar vídeo keepalive (reemplaza setApplicationStatus)
         if (unityInst) unityInst.SendMessage('CastReceiver','OnSenderConnected',e.senderId);
       });
 
@@ -807,7 +796,6 @@
       // Reemplazado por watchdog del vídeo + log de currentTime cada 3s/10s.
       setInterval(function() {
         if (senderCount === 0) return;
-        if (window.__kaKilled) return;   // RUNG 23: sin watchdog, sin resurrección del clip
         var ka = kaPlayerState(), fb = document.getElementById('ka-fallback');
         if (fb && fb.paused) { var p2 = fb.play(); if (p2 && p2.catch) p2.catch(function(){}); }
         // Solo el cast-media-player cuenta para el heartbeat de Cast; el fallback es
@@ -975,7 +963,7 @@
 
       var canvas    = document.querySelector('#unity-canvas');
       var buildUrl  = 'Build';
-      var loaderUrl = buildUrl + '/webgl-output.loader.js';
+      var loaderUrl = buildUrl + '/webgl-min.loader.js';
 
       // Timeout: si Unity no carga en 120s → error con pista de causa
       var _loadTimeout = setTimeout(function() {
@@ -991,9 +979,9 @@
 
       var config = {
         arguments:          [],
-        dataUrl:            buildUrl + '/webgl-output.data',
-        frameworkUrl:       buildUrl + '/webgl-output.framework.js',
-        codeUrl:            buildUrl + '/webgl-output.wasm',
+        dataUrl:            buildUrl + '/webgl-min.data',
+        frameworkUrl:       buildUrl + '/webgl-min.framework.js',
+        codeUrl:            buildUrl + '/webgl-min.wasm',
         streamingAssetsUrl: 'StreamingAssets',
         companyName:        'Appquarium',
         productName:        'Appquarium',
@@ -1089,7 +1077,7 @@
       try { hideSplash(); } catch(e) {}
       dbg('⚙ NET diferido — a los ' + Math.round(delayMs/1000) + 's descargará ~64MB de assets (sin Unity)');
       setTimeout(function() {
-        var urls = ['Build/webgl-output.wasm', 'Build/webgl-output.data', 'Build/webgl-output.framework.js'];
+        var urls = ['Build/webgl-min.wasm', 'Build/webgl-output.data', 'Build/webgl-min.framework.js'];
         dbg('⚙ NET: descargando ~64MB de assets Unity por fetch, SIN instanciar…');
         urls.forEach(function(u) {
           fetch(u, { cache: 'no-store' })
@@ -1113,31 +1101,6 @@
         if (f) f.style.cssText = css + 'z-index:461;';
         dbg('⚙ ka video → FULLSCREEN (compositing real encima de Unity)');
       } catch(e) { dbg('kaBig fail: '+e.message); }
-    };
-
-    // ═══ RUNG 23 — MATAR el vídeo keepalive (A/B de la fuga de Native Heap) ═════
-    // 2026-07-27: la captura adb localizó una fuga LINEAL de +20 MB/min en el
-    // Native Heap del renderer (Graphics=0, GPU plano, Unknown sin tendencia).
-    // Ritmo constante ⇒ algo periódico. Lo único periódico permanente es el bucle
-    // del keepalive (REPEAT_SINGLE: kEnded→seek(0) cada ~10s).
-    // Plano sin él ⇒ el vídeo es la fuga (y encima nació de una teoría que RUNG 5
-    // ya refutó: CAF no era quien cerraba la sesión).
-    window.__noKa = function() {
-      window.__kaKilled = true;
-      // ⚠ `ctx` vive dentro de otro closure y aquí NO está en scope (bug del 1er
-      // intento: "ctx is not defined" → el pm.stop() nunca corrió y el clip siguió
-      // en bucle toda la sesión). Se coge la instancia global del SDK.
-      try {
-        var pm = cast.framework.CastReceiverContext.getInstance().getPlayerManager();
-        if (pm && pm.stop) { pm.stop(); dbg('⚙ noKa: playerManager.stop() OK'); }
-      } catch(e) { dbg('⚙ noKa: stop falló: '+e.message); }
-      try {
-        var f = document.getElementById('ka-fallback');
-        if (f) { f.pause(); f.removeAttribute('src'); f.load(); }
-        var p = document.getElementById('ka-player');
-        if (p) p.style.display = 'none';
-      } catch(e) {}
-      dbg('⚙ VÍDEO KEEPALIVE DESACTIVADO — midiendo la fuga sin él');
     };
 
     // ═══ RUNG 11 — contexto WebGL2 crudo + render loop, SIN Unity ══════════════
@@ -1314,7 +1277,7 @@
       try { hideSplash(); } catch(e) {}
       dbg('⚙ wasmCompile diferido — a los ' + Math.round(delayMs/1000) + 's: fetch .wasm real (44MB) + WebAssembly.compile() SIN instanciar');
       setTimeout(function() {
-        var u = 'Build/webgl-output.wasm';
+        var u = 'Build/webgl-min.wasm';
         var t0 = performance.now();
         dbg('⚙ wasmCompile: descargando ' + u + ' (44MB), SIN instanciar…');
         fetch(u, { cache: 'no-store' })
