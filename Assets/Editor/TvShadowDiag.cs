@@ -131,6 +131,22 @@ public static class TvShadowDiag
         Debug.Log($"[SHDIAG] Appquarium/FishShadow AÑADIDO a Always Included ({arr.arraySize} shaders)");
     }
 
+    /// <summary>
+    /// Suelta comida a mano. El auto-feed va cada 4 minutos, que no sirve para revisar
+    /// el tamaño de los pellets en pantalla.
+    /// </summary>
+    [MenuItem("Appquarium TV/ShadowDiag 5 Feed", priority = 204)]
+    public static void Feed()
+    {
+        if (!Application.isPlaying) { Debug.LogError("[SHDIAG] Feed necesita play mode."); return; }
+        var fm = Object.FindFirstObjectByType<FoodManager>();
+        if (fm == null) { Debug.LogError("[SHDIAG] no hay FoodManager en la escena"); return; }
+
+        for (int i = 0; i < 5; i++)
+            fm.SpawnFood(new Vector3(-2.5f + i * 1.25f, 1.5f, 0f));
+        Debug.Log("[SHDIAG] 5 raciones soltadas a y=1,5 (caerán hacia el suelo)");
+    }
+
     [MenuItem("Appquarium TV/ShadowDiag 2 Dump", priority = 201)]
     public static void Dump()
     {

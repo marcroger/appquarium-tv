@@ -16,6 +16,12 @@ using UnityEngine;
 /// </summary>
 public class FoodManager : MonoBehaviour
 {
+    /// <summary>
+    /// Escala global de la comida. Ver el comentario en SpawnFood(): los pellets que
+    /// construye FoodItem son de tamaño móvil y en la TV se ven descomunales.
+    /// </summary>
+    public const float FoodScale = 0.33f;
+
     // ── Singleton ──────────────────────────────────────────────────────────────
 
     private static FoodManager _instance;
@@ -58,6 +64,18 @@ public class FoodManager : MonoBehaviour
     {
         var go = new GameObject("FoodItem");
         go.transform.position = position;
+
+        // ⚠ 2026-08-11 — La comida se veía ENORME en la tele.
+        // FoodItem construye 3 pellets de 0,45-0,52 / 0,30-0,36 / 0,28-0,34 unidades de
+        // mundo. Para situarlo: el tanque mide 8,4 de alto y un Banggai ronda 1 ⇒ el pellet
+        // central era MEDIO PEZ (~25 px en la Xiaomi con renderScale 0,7).
+        // Se escala aquí y NO en FoodItem.cs porque ese fichero se sincroniza desde el móvil
+        // (existe allí con los mismos valores, ver SYNC_NOTES.md) y el próximo sync
+        // deshacería el cambio sin avisar. TvFoodManager es TV-only, así que esto sobrevive.
+        // 0,33 deja el pellet central en ~0,16 de mundo ≈ 8 px en el device: se ve desde el
+        // sofá sin parecer una pelota de playa.
+        go.transform.localScale = Vector3.one * FoodScale;
+
         var fi = go.AddComponent<FoodItem>();
         fi.driftFreq  = Random.Range(1.5f, 2.5f);
         fi.driftAmp   = Random.Range(0.012f, 0.025f);
