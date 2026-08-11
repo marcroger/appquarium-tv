@@ -1,7 +1,398 @@
 # Cast Disconnect Investigation — Appquarium TV
 
-> Iniciada: 2026-06-27 | Última actualización: 2026-07-20  
+> Iniciada: 2026-06-27 | Última actualización: **2026-07-27**  
 > Branch activo: `feat/netflix-architecture`
+
+---
+
+# 🏆 2026-07-27 — **FIX VALIDADO EN EL RIG: 660 s SIN CORTARSE** (antes 239 s)
+
+> ▶▶ Para retomar: **`CAST_NEXT_SESSION_2026-07-28.md`**. Falta solo medir el acuario real.
+
+Dos cambios, ninguno toca gameplay ni calidad visual:
+
+1. **7 paquetes de runtime eliminados** del `manifest.json`, ninguno referenciado por el código de
+   TV: `purchasing` (IAP), `visualscripting`, `inputsystem`, `mobile.notifications`, `timeline`,
+   `ai.navigation`, `postprocessing` (v2 legacy). Verificado `activeInputHandler: 0` antes de tocar.
+2. **Code Optimization de WebGL: `BuildTimes` → `DiskSizeLTO`.** Estaba en el valor por defecto de
+   Unity, el que produce el `.wasm` más grande. **No está en git** (vive en
+   `Library/EditorUserBuildSettings.asset`), por eso nunca se auditó pese a tener documentados
+   stripping, IL2CPP y memoria. Confirmado en el log: `[WasmOpt] BuildTimes → DiskSizeLTO`.
+
+| Rig vacío | Antes | **Después** |
+|---|---|---|
+| `.wasm` | 44.249.290 B | **25.428.426 B** (−42,5 %) |
+| `.data` | 20.814.692 B | **16.902.606 B** (−18,8 %) |
+| Pico del renderer | 794 MB | **653,6 MB** |
+| Renderer en régimen | 400-500 MB | **239 MB** |
+| Fuga `Native Heap` | +18,8 MB/min | **+0,1 MB/min** |
+| `MemAvailable` en régimen | 6-10 % | **23-24 %** |
+| **Duración** | **239 s ❌** | **660,7 s ✅ (límite del sender, 0 crashes)** |
+
+La sesión terminó porque el sender manda `STOP` al llegar a su límite de 11 minutos, no por caída.
+**Primera vez en toda la investigación que hubo que parar una sesión porque no se moría sola.**
+
+### La fuga también desapareció, y no era URP
+
+De 18,8 a 0,1 MB/min. La hipótesis era URP — **falsa**, URP sigue instalado. La fuga venía de alguno
+de los 7 paquetes eliminados. Sospecha no confirmada: `inputsystem`, que sondea dispositivos cada
+frame aunque no haya nada que leer. **No aislado, no darlo por hecho.**
+
+### Estado: el acuario real está construido y desplegado, SIN MEDIR
+
+Build de producción con las dos palancas: `.wasm` 25.430.429 · `.data` 16.874.702 (56 min, 0 errores).
+Desplegado a R2 junto con el catálogo. ⚠ **El player de junio ya solo existe en
+`scratchpad/prod-backup-2026-07-27/`.** Falta castearlo: la caja entró en standby y cierra `adbd`.
+
+---
+
+# ✅✅✅ 2026-07-27 — **UN UNITY MÍNIMO NO CORTA.** El problema es NUESTRO BUILD, y tiene arreglo.
+
+Proyecto Unity **nuevo y limpio** (hello-world, Built-in RP, sin Addressables, sin una línea de
+nuestro C#), construido en batchmode con los mismos Player Settings, desplegado a R2 y casteado con
+la misma captura forense:
+
+| | Nuestro build (acuario) | Nuestro build (escena vacía) | **Unity MÍNIMO** |
+|---|---|---|---|
+| `.wasm` | 44.250.183 B | 44.249.290 B | **10.632.074 B** |
+| `.data` | 20.814.692 B | 20.814.692 B | **2.926.283 B** |
+| Pico del renderer | 778-797 MB | 794 MB | **380,9 MB** |
+| Fuga `Native Heap` | +20 a +26 MB/min | +18,8 MB/min | **+0,1 MB/min** |
+| mín. `MemAvailable` | 6-10 % | 6 % | **17 %** |
+| Duración | 148-274 s ❌ | 239 s ❌ | **>660 s ✅ SIN CAÍDA** |
+
+**Unity WebGL SÍ cabe en el Xiaomi TV Box S.** No es la plataforma, ni Cast, ni WebGL, ni el motor.
+Queda REFUTADO el veredicto que arrastraba la investigación desde el 20-jul ("el disparador es
+intrínseco al motor WASM de Unity, no hay fix app-side"): sí lo hay, y es cuantitativo.
+
+**Desaparecen los DOS síntomas a la vez** — el pico se reduce a menos de la mitad y la fuga
+prácticamente a cero. Ambos los mete nuestro build, no el engine.
+
+## Presupuesto de memoria (objetivos medidos, no estimados)
+
+| Métrica | Ahora | Objetivo | Recorte |
+|---|---|---|---|
+| `.wasm` | 44,2 MB | ≤ ~15 MB | **−33,6 MB** de C# + URP + Addressables |
+| Pico del renderer | ~795 MB | < 500 MB | −300 MB |
+| `MemAvailable` mínimo | 6-10 % | **> 25 %** | no cruzar el umbral crítico de Cast |
+| Fuga | +20 MB/min | ~0 | eliminar |
+
+## ⭐ Sospechoso nº1 de la fuga: URP
+
+Nuestra **escena vacía fugaba 18,8 MB/min sin ejecutar un solo script nuestro**. Con cámara, cubo y
+luz no corre ningún `MonoBehaviour` de gameplay: lo único que trabaja cada frame es el render
+pipeline. Y ahí está la diferencia entre los dos proyectos — el mínimo usa **Built-in RP**, el
+nuestro **URP 17.3.0** configurado a nivel de proyecto.
+
+A/B en curso: proyecto mínimo + URP 17.3.0, misma escena (fondo naranja para distinguirlo del verde).
+
+## Herramientas nuevas que hicieron esto posible (2026-07-27)
+
+- **`Tools/cast-headless.js`** — sender Cast **sin navegador**: habla el protocolo Cast v2 (TCP+TLS
+  8009) con `castv2`, lanza el App ID, manda `RUNG_CONFIG` y recibe el log del receiver por el canal.
+  Elimina el único paso que exigía un humano (el selector nativo de dispositivos de Chrome).
+- **`Tools/cast-run.sh <rung> [etiqueta]`** — ciclo completo sin intervención: reinicio por adb →
+  espera de asentamiento (≥40 % y 0 matanzas del lmkd) → 4 sondas → cast → análisis automático.
+  `FREE_MEM=1` hace force-stop de apps de fondo antes de castear.
+- **`Tools/status-server.js`** — panel en `http://localhost:3005`, se refresca solo.
+- **`D:\dev\_unity-min-test\`** — proyecto Unity mínimo + scripts de build en batchmode. Fuera del repo.
+
+## Otros resultados del 2026-07-27
+
+- **RUNG 7 (Unity destruido a los 15 s):** con Unity muerto el `Native Heap` **decrece** (111 → 82 MB)
+  ⇒ la fuga es del bucle de render de Unity. Pero la sesión murió igual a los 174 s ⇒ **la fuga no es
+  el gatillo**.
+- **Gatillo real = presión crítica sostenida.** En el crash del RUNG 7 `MemAvailable` llevaba 2,5 min
+  estable en 20-21 %, no cayendo. Encaja con `kCriticalMemoryFraction = 0.25` del monitor de presión
+  de Cast, y explica las 7 duraciones (148-274 s) sin necesidad de la fuga.
+- **Dos formas de morir:** crash del renderer (`crashpad`/`tombstoned`) en 6 runs; en el run con
+  memoria liberada la plataforma **retiró la app limpiamente, sin crash**.
+- **`FREE_MEM=1`** (force-stop de apps de fondo) dio la sesión más larga con nuestro build: **274,6 s**.
+
+---
+
+# 🎯🎯🎯 CAUSA RAÍZ ENCONTRADA — 2026-07-27 (TEST A, captura forense adb)
+
+**El renderer de Chromium que ejecuta nuestro receiver SE ESTRELLA por agotamiento de memoria del
+sistema. El crash es SILENCIOSO porque `crashpad` y `tombstoned` están rotos en este device.**
+
+Todo lo que llevábamos meses observando ("el receiver muere estando 100% sano", "CAF no da razón",
+"la conexión se tira desde la plataforma") era el síntoma de un proceso que desaparece de golpe.
+Nuestros indicadores (heap WASM 64 MB / heap JS 98 MB / lag del hilo) eran **ciegos** a esto:
+medían el interior del renderer, no su coste real para el sistema. **H2 del research CONFIRMADA.**
+
+## Cómo se obtuvo
+
+Se activó por fin la depuración por red en la caja (bloqueo que arrastrábamos desde el 21-jul) y se
+lanzó `Tools/cast-adb-capture.sh`: `logcat` + `MemAvailable` del sistema cada 2 s + RSS de los
+procesos de `mediashell` cada 5 s, mientras se casteaba RUNG 2 (Unity ON) desde el harness del PC.
+
+⚠ **La caja había cambiado de IP: `192.168.1.33`, no `192.168.1.47`** (DHCP). Toda la doc anterior
+apunta a la IP vieja. Verificar siempre con `curl -s http://<IP>:8008/setup/eureka_info | grep name`.
+
+## Device (medido, no supuesto)
+
+| Dato | Valor |
+|---|---|
+| Modelo | `MiTV-AFMU0` (`twilight`) · Android **14** (SDK 34) · build `UKG3.250826.001` |
+| `MemTotal` | **1.963.668 kB (1,92 GB)** |
+| `MemAvailable` en reposo, recién reiniciada | 629.360 kB = **32 %** |
+| Umbral *moderado* del watchdog Cast (40 %) | 785.467 kB |
+| Umbral **crítico** (25 %) | **490.917 kB** |
+
+La caja **ya arranca por debajo del umbral moderado**. Le sobran ~139 MB para cruzar el crítico.
+
+## Timeline del corte (run del 2026-07-27, 236 s)
+
+```
+10:04:58.98  App starting: app_id=8F6C873F (Appquarium), session_id=40bc6edb
+10:05:01     renderer  92 MB · GPU 112 MB          (Unity empezando a cargar)
+10:05:15     ▼ PRIMERA OLEADA lowmemorykiller
+10:05:34     renderer 778,7 MB ← PICO  · GPU 118 MB   (instanciación del WASM)
+10:05:15-54  lmkd mata ~18 procesos: tvhome, dreamx, launcherx, youtube.tv,
+             netflix.ninja, vending, gapps, gms.unstable, keychain, acore,
+             permissioncontroller, providers.tv, gservices, tv.settings…
+             razones: "low watermark is breached and swap is low"
+                      "device is not responding"
+10:05:26     MemAvailable cruza el CRÍTICO: 451.536 kB (22 %)
+10:06:08     renderer 274 MB · GPU 283 MB   (asentado tras el pico)
+10:07:15     renderer 280 MB · GPU 276 MB
+10:08:21     renderer 334 MB · GPU 276 MB   ← FUGA sostenida ~+50 MB/min
+10:08:54     renderer 392-401 MB · GPU 273 MB   (último tick con vida)
+10:08:55.438 F/crashpad(8435): dlopen failed: library "libicu.so" not found
+10:08:55.440 E/libc(6497): failed to connect to tombstoned: Operation not permitted
+             ↑ pid 6497 = mediashell:sandboxed_process0 = NUESTRO RENDERER
+10:08:59     procesos del receiver desaparecidos. MemAvailable se recupera al 45 %.
+```
+
+`MemAvailable` estuvo **82 ticks en CRÍTICO** y 63 en moderado; mínimo observado **206.564 kB (10 %)**.
+
+## El mecanismo, en orden
+
+1. **Pico de carga: el renderer llega a 778,7 MB** instanciando el WASM de 44 MB. En una caja de
+   1,92 GB eso es demoledor.
+2. **El `lowmemorykiller` destripa el sistema** para hacerle sitio: ~18 procesos muertos, swap
+   agotada (`swap is low (1052kB < 64800kB)` en el peor momento).
+3. El receiver se asienta en ~275 MB (renderer) + ~276 MB (GPU) = **~550 MB permanentes**, con el
+   sistema ya sin colchón y por debajo del umbral crítico del watchdog.
+4. **Fuga sostenida de ~50 MB/min en el renderer** (274 → 392 MB en 2 min). El proceso GPU NO crece.
+5. Sobre los 400 MB, con el sistema exhausto, **una asignación falla y el renderer se estrella**.
+6. `crashpad` no puede ni cargar sus librerías (`libicu.so`) y `tombstoned` rechaza la conexión →
+   **no hay tombstone, no hay stack, no hay reporte**. El crash es invisible desde dentro y desde CAF.
+7. La sesión Cast cae porque el proceso que la sostenía ya no existe.
+
+## Segundo hallazgo: error de compositing GPU cada frame
+
+```
+E/cast_shell(6519): [ERROR:shared_image_manager.cc(221)] SharedImageManager::ProduceSkia:
+                    Trying to produce a Skia representation from an incompatible mailbox.
+```
+
+Se repite **cada ~65 ms (por frame)** durante toda la sesión, desde el proceso GPU. El buffer que
+produce WebGL no es compatible con lo que Skia espera al componer. Sospechoso directo de la fuga.
+
+## Qué explica esto de todo lo anterior
+
+| Observación histórica | Explicación |
+|---|---|
+| "Receiver 100% SANO al morir" | Sano por dentro; el proceso entero desaparece de golpe |
+| CAF nunca da razón de desconexión | El renderer se estrella; no queda nadie que loguee |
+| Cortes decrecientes en tests seguidos (198→153 s) | Menos memoria libre acumulada ⇒ se llega antes al fallo |
+| Escena vacía cortó igual (RUNG 22, 217 s) | El `.wasm` es el mismo 44 MB ⇒ mismo pico ⇒ mismo final |
+| Ningún proxy JS reproduce el corte (RUNGs 10-21) | Ninguno llegó a 778 MB de RSS ni fugaba |
+| RUNG 7 (Quit a 43 s) cortó igual | El destrozo del sistema por el lmkd ya estaba hecho |
+| RUNG 9 (Unity a los 4 min) mató la sesión en 15 s | El pico de carga es el evento letal, llegue cuando llegue |
+| Varianza 153-217 s | Es una carrera fuga-vs-memoria-libre, no un temporizador |
+
+**"Cap duro del device" y "engine core infixeable" quedan REFUTADOS.** No hay watchdog de ~180 s:
+hay un crash por memoria cuyo instante depende de cuánta queda.
+
+## Por qué ahora SÍ hay fixes
+
+El problema es **cuantitativo** (huella de memoria), no un límite arbitrario de plataforma. Dos
+frentes independientes, ambos accionables:
+
+**A · Bajar el pico de carga (778 MB).** Es lo que destripa el sistema.
+- `.wasm` de 44 MB → más stripping, quitar URP si sobra, quitar Addressables del arranque.
+- `Initial Memory Size` 64 MB → 32 MB · `Maximum Memory Size` 512 MB → menos.
+- Revisar si la descompresión del `.data` duplica memoria en el pico.
+
+**B · Encontrar la fuga de ~50 MB/min.** Sin ella la sesión duraría indefinidamente aunque el pico
+siga siendo alto (a 275 MB estables llevaba minutos sin morir).
+- Sospechoso nº1: **el bucle del vídeo keepalive** (recarga cada ~10 s vía `REPEAT_SINGLE`) —
+  y es **código nuestro, eliminable**. Encaja con el spam de `ProduceSkia` por frame.
+- Sospechoso nº2: nuestro panel de debug / streaming de logs al sender.
+- Sospechoso nº3: acumulación de shared images en el compositing WebGL↔Skia.
+
+## Siguiente medición (gratis, ya con adb)
+
+`dumpsys meminfo <pid del renderer>` cada 10 s → desglosa la fuga por categoría (Native heap /
+Graphics / GL mtrack / EGL mtrack). Eso dice **qué** crece, no solo que crece. Y A/B inmediato:
+misma captura con el **vídeo keepalive desactivado** para confirmar o descartar al sospechoso nº1.
+
+## RUN 2 (2026-07-27, mismo día) — LA FUGA LOCALIZADA + confirmación del modelo
+
+Segunda captura, misma config (RUNG 2, receiver `rcv 2026-07-17 KA9-probe` verificado byte-idéntico
+entre R2 y local), añadiendo `dumpsys meminfo` cada 10 s. Caja reiniciada por adb antes de empezar.
+
+| | Run 1 | Run 2 |
+|---|---|---|
+| `MemAvailable` al arrancar | 32 % | **41,7 %** |
+| Pico del renderer al cargar | 778,7 MB | **797 MB** |
+| RSS del renderer al morir | 392-401 MB | **493,7 MB** |
+| Duración | 236 s | **243 s** |
+| Firma del crash | `crashpad` + `tombstoned` | **idéntica** (pid 5586) |
+
+**Con más memoria libre, el renderer creció más y la sesión duró más.** El instante de la muerte lo
+fija la memoria disponible, no un reloj. **Reproducible al megabyte** (778,7 vs 797 MB de pico).
+
+### La fuga está en el `Native Heap` del RENDERER, y es lineal
+
+```
+10:25:37   46,7 MB      10:27:17   79,7 MB
+10:26:11   55,3 MB      10:27:50   92,7 MB
+10:26:44   68,3 MB      10:28:12   98,9 MB
+→ +52 MB en 155 s = +20 MB/min, sin una sola meseta
+```
+
+- **`Graphics` del renderer = 0** — no es memoria gráfica en el renderer.
+- **`Unknown` oscila 105-310 MB sin tendencia** — es la `WebAssembly.Memory` + transitorios, NO fuga.
+- **El proceso GPU está PLANO en ~285 MB** todo el run (`procs.log`) — **no fuga**.
+
+⇒ La fuga son asignaciones C++ del proceso renderer de Chromium (PartitionAlloc / media / Blink),
+a ritmo constante. Un ritmo constante apunta a algo **periódico**, y lo único periódico que corre
+todo el rato es **el bucle del vídeo keepalive** (`kEnded` → `seek(0)` cada ~10 s).
+
+### Siguiente test decisivo (A/B de una variable)
+
+Nuevo escalón: **Unity ON + vídeo keepalive DESACTIVADO**, misma captura.
+- `Native Heap` plano → **el vídeo keepalive es la fuga** → se elimina (es código nuestro, y nació de
+  una teoría —"mantener media activa evita el idle timeout"— que RUNG 5 ya refutó).
+- Sigue fugando → es churn de Unity/WebGL en el renderer → atacar por huella (F3).
+
+⚠ Bug del arnés detectado y corregido: dentro del bucle de `dumpsys`, `adb shell` se comía el stdin
+y solo dumpeaba el primer proceso. Arreglado con `< /dev/null` (por eso el proceso GPU del run 2 se
+midió por `procs.log` y no por `dumpsys`).
+
+## RUNG 23 (2026-07-27) — ❌ EL VÍDEO KEEPALIVE **NO** ES LA FUGA. Hipótesis REFUTADA.
+
+A/B limpio: producción entera con `noKa:true` (el receiver no carga el clip). Verificado por eventos
+de media en logcat, no por fe:
+
+| Evento de media | Sesión con vídeo | RUNG 23 (sin vídeo) |
+|---|---|---|
+| `kLoad` | 18 | **3** |
+| `kWebMediaPlayerCreated` | 18 | **3** |
+| `kBufferingStateChanged` | 95 | **5** |
+| `kPipelineStateChange` | 66 | **9** |
+
+El bucle estaba efectivamente muerto (`kSuspended` en el pipeline). **Y la fuga siguió igual:**
+
+```
+Native Heap del renderer, SIN vídeo:
+11:01:05   87,8 MB      11:01:39  101,1 MB
+11:01:16   93,3 MB      11:01:50  105,3 MB
+11:01:28   98,3 MB      11:01:55  109,0 MB
+→ +21 MB en 50 s = +25 MB/min   (con vídeo era +20 a +26 MB/min)
+```
+
+**Duración 148 s** — la más corta de las cuatro. Quitar el vídeo no ayudó en absoluto.
+
+⇒ **La fuga es intrínseca a Unity ejecutándose en el renderer**, no al keepalive. El sospechoso nº1
+queda descartado con evidencia directa.
+
+### ⚠ Dos bugs propios que costaron un run entero (lección)
+
+1. `window.__noKa` se definió **fuera del closure de `ctx`** → `ctx is not defined` → el `pm.stop()`
+   nunca corrió y el clip siguió en bucle toda la sesión con el log diciendo `noKa=true`. Arreglado
+   usando `cast.framework.CastReceiverContext.getInstance()`.
+2. `kaLoad()` salía en `SENDER_CONNECTED` (~0,2 s) **antes** de que llegara `RUNG_CONFIG` (~0,3 s):
+   con `REPEAT_SINGLE` el clip ya quedaba en bucle para siempre. Arreglado retrasando el load 1,5 s.
+
+**Lección de método:** no dar por bueno un flag porque el log diga que está activo — verificar el
+EFECTO en el sistema (aquí, los eventos de media del logcat). Ver [[feedback-verify-diagnoses-with-logs]].
+
+## Tabla de los 4 runs con adb (2026-07-27)
+
+| Run | Config | Mem libre inicial | Duración | RSS al morir | Fuga Native Heap | mín. MemAvailable |
+|---|---|---|---|---|---|---|
+| 1 | producción | 32 % | 236 s | 401 MB | (no medida) | 10 % |
+| 2 | producción | 41,7 % | 243 s | 494 MB | +20 MB/min | — |
+| 3 | producción | 48 % | 186 s | 360 MB | +26 MB/min | 7 % |
+| 4 | **sin vídeo KA** | 43 % | **148 s** | 387 MB | **+25 MB/min** | 7 % |
+
+**La duración NO escala limpiamente con la memoria libre inicial** (el run 3 arrancó con la mejor
+cifra y fue de los más cortos): lo que cuenta es la demanda total del sistema en ese momento, no el
+número de partida. El mecanismo sí es idéntico en los 4: mismo crash del renderer, misma firma
+`crashpad`+`tombstoned`, `MemAvailable` desplomado al 7-10 %, matanzas del lmkd.
+
+## ▶ SIGUIENTE — medir el build de ESCENA VACÍA con adb (0 rebuilds, ya está desplegado)
+
+`Build/webgl-output-empty.*` sigue en R2 y `Tools/rcv-empty-test.html` lo carga. Castearlo con la
+captura adb responde la pregunta que ahora importa:
+
+- **Pico y fuga IGUALES** → es el engine/runtime de Unity ⇒ atacar por Player Settings (Initial
+  Memory 32 MB, Max Memory, Disable Unity Audio, stripping, wasm más pequeño) sobre el rig vacío.
+- **Sin fuga (o mucho menor)** → la fuga la mete **nuestro contenido/C#** ⇒ hay que bisecar la escena,
+  y esta vez con un instrumento que sí ve el problema (RSS del sistema, no el heap del panel).
+
+Es el test de mayor valor por coste cero que queda.
+
+## ESCENA VACÍA + adb (2026-07-27) — 🎯 ES EL ENGINE, NO NUESTRO CONTENIDO
+
+Mismo test que RUNG 22 (build de escena vacía: cubo azul, confirmado en la TV) pero **midiendo el
+sistema con adb** en vez de solo cronometrar. Receiver `rcv 2026-07-27 EMPTY-mem`, vídeo keepalive
+ON para ser comparable con producción.
+
+| | Producción (runs 1-3) | **Escena VACÍA** |
+|---|---|---|
+| Pico del renderer | 778 · 797 MB | **794 MB** |
+| Fuga `Native Heap` | +20 a +26 MB/min | **+18,8 MB/min** (55,1 → 99,4 MB en 141 s) |
+| Duración | 186-243 s | **239 s** |
+| RSS al morir | 360-494 MB | 479 MB |
+| mín. `MemAvailable` | 7-10 % | **6 %** |
+| Firma del crash | `crashpad`+`tombstoned` | **idéntica** |
+
+**Un cubo y una luz consumen exactamente lo mismo que el acuario entero con 25 peces.**
+
+⇒ El pico y la fuga son del **engine/runtime de Unity**, no de nuestra escena, assets, shaders,
+bundles ni C# de gameplay. Bisecar `TvScene` no habría servido de nada — y ahora se sabe con una
+medición, no por descarte.
+
+⇒ **El rig vacío es un banco de pruebas válido y barato** para los knobs de Player Settings: se
+comporta igual que producción y se rebuildea en ~1 h en vez de las 2-4 h del acuario.
+
+### Dato de severidad para producto
+
+El `lowmemorykiller` mata el **launcher de Android TV** (`launcherx` + `:coreservices`), GMS, Play
+Services y providers del sistema. Al usuario le parece que **la caja se ha reiniciado sola** (pantalla
+en negro y home recargándose), aunque `system_server` (pid 692) sobrevive: no es un reboot real.
+**Nuestro receiver degrada el device entero, no solo su propia sesión.**
+
+### ▶ SIGUIENTE test (0 rebuilds, alto valor): ¿la fuga es POR FRAME?
+
+Correr **RUNG 6 (`throttleRaf` → 4 fps) sobre el rig vacío, con captura adb**.
+- Si la fuga cae de ~19 MB/min a ~2-3 MB/min ⇒ **fuga por frame** ⇒ encaja con el error
+  `SharedImageManager::ProduceSkia: incompatible mailbox` que aparece **una vez por frame**, y el fix
+  pasa por el present path / `renderScale` / framerate.
+- Si la fuga no cambia ⇒ es por tiempo, no por frame ⇒ atacar footprint (Initial Memory, wasm).
+
+Después, y solo después, los knobs con rebuild sobre el rig vacío: `Initial Memory` 64→32 MB,
+`Maximum Memory` 512 MB→menos, **Disable Unity Audio**, y sobre todo **reducir el `.wasm` de 44 MB**
+(el pico de `Native Heap` de 419 MB al instanciar sugiere que compilar ese wasm es el grueso del
+pico). Sigue pendiente **F2** (Unity mínimo de verdad) para saber cuánto de esos 44 MB es suelo del
+engine y cuánto es nuestro build.
+
+## Artefactos
+
+- Escena vacía en `_cast_adb_capture/`.
+- Run 1 en `_cast_adb_capture_run1/`, run 2 en `_cast_adb_capture_run2/`, run 4 (RUNG 23) en
+  `_cast_adb_capture/`. ⚠ Los ficheros del run 3 se perdieron (el `mv` falló con la captura anterior
+  aún escribiendo); sus números están en la tabla de arriba.
+  (logcat.log, meminfo.log, procs.log, memdetail.log, thresholds.txt).
+- `Tools/cast-adb-capture.sh` reescrito: IP correcta, umbrales calculados sobre el `MemTotal` real,
+  marcado `[MODERADO]`/`[CRITICO]` por tick y RSS de `mediashell` en cada muestra.
+  Copia previa en `Tools/cast-adb-capture.sh.bak`.
 
 ---
 
