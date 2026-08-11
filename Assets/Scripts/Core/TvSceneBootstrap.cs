@@ -33,6 +33,10 @@ public class TvSceneBootstrap : MonoBehaviour
     private bool          _spinning;
     private Coroutine     _fadeRoutine;
 
+    [Header("Diagnóstico")]
+    [Tooltip("Overlay amarillo con PostFX/CAM/Lighting/BG sobre el acuario. OFF en producción.")]
+    [SerializeField] private bool showDebugOverlay = false;
+
     static readonly Color C_BG     = new Color(0.024f, 0.051f, 0.102f, 1f); // #060D1A
     static readonly Color C_ACCENT = new Color(0.0f,   0.85f,  1.0f,   1f); // cyan
     static readonly Color C_MUTED  = new Color(0.6f,   0.6f,   0.6f,   1f);
@@ -41,7 +45,18 @@ public class TvSceneBootstrap : MonoBehaviour
     {
         if (Instance != null && Instance != this) { Destroy(gameObject); return; }
         Instance = this;
-        gameObject.AddComponent<TvLayerDebug>();
+
+        // ⚠ 2026-08-11 — el overlay amarillo (PostFX/CAM/Lighting/BG) tapaba la esquina
+        // superior izquierda del acuario EN PRODUCCIÓN: se añadía siempre, sin condición.
+        // Las llamadas a TvLayerDebug.Set() repartidas por el código son inofensivas si el
+        // componente no existe (Set() hace early return con Instance == null), así que
+        // basta con no añadirlo. Para recuperarlo en una sesión de diagnóstico: poner
+        // showDebugOverlay a true en el inspector de TvSceneBootstrap en la escena.
+        if (showDebugOverlay) gameObject.AddComponent<TvLayerDebug>();
+
+        // Sombras de contacto de los peces. Va aquí y no en FishSpawner porque ese fichero
+        // se sincroniza desde el móvil y el siguiente sync se llevaría el cambio por delante.
+        gameObject.AddComponent<TvFishShadows>();
     }
 
     void Start()

@@ -75,6 +75,9 @@
 *.bak
 *.bak-*
 
+# Capturas del Game view que saca Appquarium TV → ShadowDiag 3 Shot
+/_shadowdiag/
+
 # OS-specific
 .DS_Store
 Thumbs.db

@@ -78,12 +78,12 @@ const SPECIES = [
 //   instanceId sin guion bajo ⇒ InvalidKeyException y 0 decos colocadas.
 // ⚠ Claves verificadas contra ServerData/WebGL/decos_remote_assets_*.bundle.
 const DECOS = [
-  { instanceId: 'deco_anchor_0',            itemId: 'deco_anchor',            position: { x: -2.6, y: -1.2, z: 0 }, scaleFactor: 1.0, flipped: false, rotationY:   0 },
-  { instanceId: 'deco_coral_acropora_0',    itemId: 'deco_coral_acropora',    position: { x: -1.3, y: -1.2, z: 0 }, scaleFactor: 1.0, flipped: false, rotationY:  30 },
-  { instanceId: 'deco_coral_pocillopora_0', itemId: 'deco_coral_pocillopora', position: { x:  0.0, y: -1.2, z: 0 }, scaleFactor: 0.9, flipped: true,  rotationY:  90 },
-  { instanceId: 'deco_rock_hq_1_0',         itemId: 'deco_rock_hq_1',         position: { x:  1.3, y: -1.2, z: 0 }, scaleFactor: 1.1, flipped: false, rotationY: 150 },
-  { instanceId: 'deco_shell_tridacna_0',    itemId: 'deco_shell_tridacna',    position: { x:  2.4, y: -1.2, z: 0 }, scaleFactor: 0.8, flipped: false, rotationY: 200 },
-  { instanceId: 'deco_starfish_blue_0',     itemId: 'deco_starfish_blue',     position: { x:  3.2, y: -1.2, z: 0 }, scaleFactor: 0.7, flipped: false, rotationY: 260 },
+  { instanceId: 'deco_anchor_0',            itemId: 'deco_anchor',            position: { x: -2.6, y: -2.8, z: 2.0 }, scaleFactor: 1.0, flipped: false, rotationY:   0 },
+  { instanceId: 'deco_coral_acropora_0',    itemId: 'deco_coral_acropora',    position: { x: -1.3, y: -2.8, z: 2.0 }, scaleFactor: 1.0, flipped: false, rotationY:  30 },
+  { instanceId: 'deco_coral_pocillopora_0', itemId: 'deco_coral_pocillopora', position: { x:  0.0, y: -2.8, z: 2.0 }, scaleFactor: 0.9, flipped: true,  rotationY:  90 },
+  { instanceId: 'deco_rock_hq_1_0',         itemId: 'deco_rock_hq_1',         position: { x:  1.3, y: -2.8, z: 2.0 }, scaleFactor: 1.1, flipped: false, rotationY: 150 },
+  { instanceId: 'deco_shell_tridacna_0',    itemId: 'deco_shell_tridacna',    position: { x:  2.4, y: -2.8, z: 2.0 }, scaleFactor: 0.8, flipped: false, rotationY: 200 },
+  { instanceId: 'deco_starfish_blue_0',     itemId: 'deco_starfish_blue',     position: { x:  3.2, y: -2.8, z: 2.0 }, scaleFactor: 0.7, flipped: false, rotationY: 260 },
 ];
 
 const t0 = Date.now();
@@ -203,7 +203,13 @@ client.connect(HOST, () => {
           lightId: 'light_white',
           ambientMode: 'day',
           fishSpeed: 1.0,
-          selectedTankId: '',
+          // ⚠ tank_l + y:-2.8 van EN PAREJA. La Y del suelo sale de _tankBounds
+          //   (DecorationPlacer.BuildFloorVisual), asi que depende del tanque: cambiar
+          //   uno sin el otro vuelve a dejar las decos flotando. Este par es el unico
+          //   verificado (es el que usa el ?devtest=1 del receiver, visto apoyando bien).
+          // ⚠ Las tandas de estabilidad 4/4 del 2026-08-11 se midieron con tank ''.
+          //   Si se compara con ellas, tenerlo en cuenta.
+          selectedTankId: 'tank_l',
           tankHalfWidth: 0.0,
         };
         try {

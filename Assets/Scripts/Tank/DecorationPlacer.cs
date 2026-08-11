@@ -258,6 +258,13 @@ public class DecorationPlacer : MonoBehaviour
     /// </summary>
     private float FloorY(float z) => FloorSurfaceY(z) + floorSnapYOffset;
 
+    /// <summary>
+    /// Superficie del suelo en world-space a una Z dada. Público para TvFishShadows,
+    /// que necesita saber dónde cae la sombra de los peces sin duplicar la geometría
+    /// del suelo (que se calcula en BuildFloorVisual a partir de _tankBounds).
+    /// </summary>
+    public float GetFloorSurfaceY(float z) => FloorSurfaceY(z);
+
     /// <summary>Posición Y correcta del pivot de una deco en su Z actual.</summary>
     private float GetDecoFloorY(PlacedDeco pd, float z)
         => FloorY(z) + pd.data.floorYOffset + pd.pivotBaseHeight;
@@ -1699,10 +1706,21 @@ public class DecorationPlacer : MonoBehaviour
                 string sname = mat.shader != null ? mat.shader.name : "";
                 JsBridge.Log($"FixMat {go.name}: mat={mat.name} shader={sname}");
 
-                // Ya device-safe → dejar intacto: Sprites/UI, FishUnlit, DecoLit, o ya procesado.
-                if (sname.Contains("Sprites") || sname.Contains("UI/Default")
-                    || sname.Contains("Appquarium/")
-                    || mat.name.EndsWith("_DECOLIT"))
+                // ⚠ 2026-08-11 — FishUnlit en una DECO la deja SIN ILUMINACIÓN.
+                // El ancla venía de fábrica con Appquarium/FishUnlit y esta guarda la
+                // dejaba pasar por "ya es device-safe": salía como una silueta negra en la
+                // tele mientras la roca y el coral (que sí caían en DecoLit) tenían volumen.
+                // FishUnlit es plano a propósito —vale para peces— pero una deco necesita
+                // el lambert de DecoLit para que se le note el relieve del mesh.
+                bool unlitEnDeco = decoLit != null
+                                   && sname.Contains("Appquarium/FishUnlit")
+                                   && !mat.name.EndsWith("_DECOLIT");
+
+                // Ya device-safe → dejar intacto: Sprites/UI, DecoLit, o ya procesado.
+                if (!unlitEnDeco
+                    && (sname.Contains("Sprites") || sname.Contains("UI/Default")
+                        || sname.Contains("Appquarium/")
+                        || mat.name.EndsWith("_DECOLIT")))
                 { newMats[i] = mat; continue; }
 
                 // Todo lo demás que NO ejecuta en el Cast (URP/Lit, Standard, glTF/PbrMetallic,
@@ -1710,7 +1728,8 @@ public class DecorationPlacer : MonoBehaviour
                 // tres convenios de propiedades: URP (_BaseMap), Standard (_MainTex), glTFast
                 // (baseColorTexture). Antes el glTF se escapaba ("glTF/PbrMetallicRoughness" no
                 // contiene "glTFPbr") → corales/estatuas salían magenta en el device.
-                bool needsFix = sname.Contains("Universal Render Pipeline/Lit")
+                bool needsFix = unlitEnDeco
+                             || sname.Contains("Universal Render Pipeline/Lit")
                              || sname.Contains("Hidden/InternalError")
                              || sname.Contains("Standard")
                              || sname.Contains("glTF")
@@ -2493,6 +2512,15 @@ public class DecorationPlacer : MonoBehaviour
         Vector3 decoPos     = pd.go.transform.position;
         float   floorSurface = Mathf.Max(FloorSurfaceY(decoPos.z), FloorSurfaceY(0f));
         float   floorY       = floorSurface + PlanarShadowLift;
+
+        // ⚠ 2026-08-11 — NO derivar esta Y de los bounds de la deco. Probado y descartado
+        // dos veces:
+        //   · pegarla a bounds.min.y  ⇒ la propia deco tapa la sombra entera, invisible.
+        //   · bounds.min.y - margen   ⇒ la roca tiene la base ENTERRADA (bounds hasta
+        //     -3,80, por debajo del suelo en -3,13; el occluder tapa lo de abajo), así que
+        //     su sombra se iba al sótano, muy separada del objeto.
+        // La superficie del suelo es la referencia correcta para las dos. El grosor visible
+        // lo da _Flatten en el shader, no la posición.
 
         if (pd.planarShadowPairs != null)
         {

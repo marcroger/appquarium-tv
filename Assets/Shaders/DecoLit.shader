@@ -21,7 +21,7 @@ Shader "Appquarium/DecoLit"
         _MainTex   ("Texture", 2D)       = "white" {}
         _Color     ("Color", Color)      = (1,1,1,1)
         _Brightness("Brightness", Float) = 1.0
-        _Ambient   ("Ambient", Range(0,1)) = 0.45
+        _Ambient   ("Ambient", Range(0,1)) = 0.32
     }
     SubShader
     {
@@ -71,9 +71,20 @@ Shader "Appquarium/DecoLit"
             {
                 fixed4 tex = tex2D(_MainTex, i.uv) * _Color;
                 // Luz direccional fija (arriba-frente) — independiente del binding de luces del SRP.
+                float3 N    = normalize(i.wnormal);
                 float3 L    = normalize(float3(0.3, 1.0, -0.4));
-                float  ndl  = saturate(dot(normalize(i.wnormal), L));
-                float  lite = _Ambient + (1.0 - _Ambient) * ndl; // ambiente evita sombras negras
+                float  ndl  = saturate(dot(N, L));
+
+                // ⚠ 2026-08-11 — AMBIENTE HEMISFÉRICO en vez de una constante.
+                // Antes: lite = _Ambient + (1-_Ambient)*ndl con _Ambient=0,45. Ese suelo
+                // plano de 0,45 lavaba las sombras propias y dejaba las decos mates: los
+                // corales tienen ~100.000 triángulos de relieve real y no se les notaba.
+                // Ahora el ambiente depende de hacia dónde mira la normal —más luz por
+                // arriba (agua iluminada), menos por abajo (arena en sombra)—, que es como
+                // se ilumina algo bajo el agua. Cuesta un lerp: gratis en GPU.
+                float  hemi = saturate(N.y * 0.5 + 0.5);          // 1 arriba, 0 abajo
+                float  amb  = _Ambient * lerp(0.5, 1.3, hemi);
+                float  lite = saturate(amb + (1.0 - _Ambient) * ndl);
                 fixed3 col  = tex.rgb * lite * _Brightness;
                 return fixed4(col, 1.0); // forzar opaco
             }
