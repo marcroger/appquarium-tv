@@ -49,6 +49,19 @@ public static class TvEmptyTestBuild
                 "Construir", "Cancelar"))
             return;
 
+        BuildEmptyBatch();
+    }
+
+    /// <summary>
+    /// Misma build SIN diálogos, para batchmode:
+    ///   Unity.exe -batchmode -quit -projectPath . -buildTarget WebGL \
+    ///             -executeMethod TvEmptyTestBuild.BuildEmptyBatch -logFile -
+    /// Añadido 2026-07-27 para poder medir variantes del rig vacío sin intervención
+    /// humana (el rig vacío reproduce el corte igual que producción: ver
+    /// CAST_DISCONNECT_INVESTIGATION.md).
+    /// </summary>
+    public static void BuildEmptyBatch()
+    {
         // 1. Guardar el setup de escenas del editor para restaurarlo al final.
         var prevSetup = EditorSceneManager.GetSceneManagerSetup();
 

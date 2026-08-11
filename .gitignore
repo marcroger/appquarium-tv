@@ -61,7 +61,19 @@
 /local-test-screenshot.png
 /local-test-zoom.png
 /local-test-anchor-zoom.png
+/local-test-postinput.png
+/r2-test-screenshot.png
+/test-updates-result.png
 /catalog_1.2.1.hash
+
+# Capturas forenses de las tandas Cast (logcat + meminfo + RSS) — 100MB+ y
+# regenerables con Tools/cast-run.sh. El análisis que importa va en los .md.
+/_cast_runs/
+/_cast_adb_capture*/
+
+# Copias de seguridad puntuales
+*.bak
+*.bak-*
 
 # OS-specific
 .DS_Store
