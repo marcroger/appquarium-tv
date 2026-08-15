@@ -68,12 +68,45 @@ screencap es la única vía de leerlo automáticamente.
 
 ---
 
+## 1.5. Auditoría con subagentes (2026-08-15, tarde)
+
+Cuatro revisiones en paralelo: C#, capa Cast, build/deploy y documentación. **El patrón de casi
+todo lo encontrado es el mismo: fallos silenciosos.** Nada petaba; simplemente no pasaba lo que
+creíamos. Arreglado en `41bf883` (compilación verificada en batchmode, 0 errores CS).
+
+| Bug | Efecto real |
+|---|---|
+| `remove_fish` → `DespawnBySpecies` | Sacas 1 pez de 3 en el móvil → desaparecen los 3 en la tele |
+| `FromJson` del payload fuera del `try` | Un UPDATE malformado **aborta el runtime IL2CPP** (`Exception Support: None`) → tele congelada, sin mensaje |
+| `TankLightingController` sin limpiar | 3 spots + Volume nuevos **por INIT**; 10 reconexiones = 30 spots |
+| `TankNightOverlay` fuera de la limpieza | El acuario se oscurece en escalera hasta negro |
+| Carrera `Start()` ambiente | Castear a las 22:00 → tele en modo noche con el móvil en día |
+| Corrutina de carga sin parar la anterior | Reconectar durante la carga → dos cargas pisándose |
+| Biolum reaplicada antes de `_placed` | Corales apagados toda la sesión si reconectas de noche |
+| `fishSpeed` sin guarda | Un `0` congela todos los peces |
+
+**Verificado end-to-end en el device por primera vez:** `ambient=night` bajó la luminancia media
+del agua de **170 a 92**. Hasta hoy los 11 UPDATEs sólo estaban probados en Chrome local.
+
+**Producción más limpia:** los HUD de FPS/stats van apagados y se encienden en caliente con el
+mensaje `DIAG` (`cast-headless --diag`). Ya no hace falta editar y resubir el `index.html` para
+dejar de mostrarlos. Receiver vivo: `rcv 2026-08-15b limpio`.
+
 ## 2. Siguiente
 
-- [ ] **Decidir el merge a main.** Ya no hay motivo técnico para no hacerlo: el lote está validado
-      en el device. Falta la confirmación del user (regla hard del proyecto).
-- [ ] Apagar el `#fps-meter` → receiver definitivo. Dejarlo encendido mientras se sigan midiendo
-      cosas: cuesta nada y es el único instrumento de FPS que hay.
+- [x] ~~Decidir el merge a main~~ ✅ hecho: `325a931` (local, sin push).
+- [x] ~~Apagar el `#fps-meter`~~ ✅ hecho de otra forma: apagado por defecto + mensaje `DIAG`.
+- [ ] ⭐ **REBUILD DEL PLAYER + DEPLOY.** Nada de lo arreglado hoy en C# se ve en la tele hasta
+      rebuildear (~55 min). Incluye el audio (los 3 canales) y los 8 bugs de arriba.
+      Ruta: `-executeMethod TvProdBuild.BuildProd` con el Editor cerrado.
+- [ ] ⭐ **Decidir: Managed Stripping a High.** Está en `Minimal` (`WebGL: 4`), no en High como
+      decía `CLAUDE.md`. Comprobado empíricamente: `Unity.Addressables.dll` no encoge nada al
+      strippear. High reduciría el `.wasm`, que es **la causa raíz de los cortes de sesión**.
+      Riesgo: `TypeLoadException` en runtime. Si se hace, va en el mismo rebuild.
+- [ ] **Los 11 fondos viajan dos veces**: horneados en el `.data` vía `Resources/` **y** como
+      bundles remotos que ningún código pide. Sacar `Backgrounds/` y `Audio/` de `Resources/`.
+- [ ] **Hueco del protocolo (pide tocar el móvil):** editar una deco ya colocada (girar, escalar,
+      voltear) NO manda ningún UPDATE. La tele se queda con la orientación del primer frame.
 - [ ] Arreglar la guarda de `Tools/restore-production-receiver.sh` (falso negativo: busca
       `Build/webgl-output.loader.js` literal y el receiver arma esa URL en dos trozos).
 - [ ] Decidir si `Assets/AddressableAssetsData/link.xml` (+`.meta`) va a git o a `.gitignore`.
