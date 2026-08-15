@@ -25,7 +25,14 @@ SRC="webgl-output/index.html"
 
 # Guardas: que sea el receiver bueno y no un template ni un diagnóstico.
 grep -q '{{{' "$SRC" && { echo "FALLO: $SRC tiene placeholders sin procesar ({{{ ... }}}). Es el TEMPLATE, no el build. Abortando."; exit 1; }
-grep -q "Build/webgl-output.loader.js" "$SRC" || { echo "FALLO: $SRC no apunta al player de producción. Abortando."; exit 1; }
+# ⚠ 2026-08-15 — esta guarda buscaba la cadena literal "Build/webgl-output.loader.js" y
+# SIEMPRE daba falso negativo: el receiver arma esa URL en dos trozos
+#   var buildUrl  = 'Build';
+#   var loaderUrl = buildUrl + '/webgl-output.loader.js';
+# Resultado: el script abortaba siempre y quedó inservible (había que subir a mano).
+# Ahora se comprueban las dos piezas por separado.
+grep -q "webgl-output.loader.js" "$SRC" || { echo "FALLO: $SRC no carga webgl-output.loader.js. Abortando."; exit 1; }
+grep -qE "buildUrl[[:space:]]*=[[:space:]]*'Build'|\"Build/webgl-output" "$SRC" || { echo "FALLO: $SRC no apunta al directorio Build/ del player. Abortando."; exit 1; }
 grep -q "RUNG_CONFIG" "$SRC" && { echo "AVISO: $SRC contiene el harness de rungs (receiver de diagnóstico)."; }
 
 python - <<'PY'

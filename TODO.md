@@ -16,7 +16,9 @@ Ordenado por prioridad dentro de cada bloque. Actualizar con fecha al cerrar cad
   **⚠ RECURRENTE:** cada sync desde mobile restaura los .meta de mobile (loadType:0). VERIFICAR DESPUÉS DE CADA SYNC.
   > `Assets/Resources/Audio/ambient_bubbles.wav.meta`
 
-- [ ] **Tint color de corales/decos no visible en TV** — Fix en build, pendiente deploy (R2 timeout red).
+- [x] **Tint color de corales/decos no visible en TV** ✅ 2026-06-20 desplegado. Verificado en código
+  (`DecorationPlacer.cs:377-378` aplica `_Color` Y `_BaseColor`) y visualmente en la tele el 2026-08-15:
+  el coral pocillopora sale rojo. El "pendiente deploy" llevaba meses obsoleto.
   El tintColor del SO (e.g. corallium=rojo-naranja, heliopora=azul, distichopora=morado) no se aplica en TV.
   **Causa:** `FixNonURPMaterials()` convierte todos los materiales a `DecoLit` o `FishUnlit` (shaders CG legacy con `_Color`).
   El tint code posterior busca `mat.HasProperty("_BaseColor")` → false en esos shaders → tint silenciosamente ignorado.
@@ -24,7 +26,10 @@ Ordenado por prioridad dentro de cada bloque. Actualizar con fecha al cerrar cad
   Verificado en local test (screenshot): corallium=rojo, heliopora=azul, distichopora=morado ✅ visible en SwiftShader.
   > `Assets/Scripts/Tank/DecorationPlacer.cs` línea 356
 
-- [ ] **Cast disconnect ~2 min** — Fix en build, pendiente deploy (R2 timeout red).
+- [x] **Cast disconnect ~2 min** ✅ RESUELTO 2026-08-10. ⚠ **La causa que describe este item era FALSA.**
+  No era `maxInactivity` ni el keepalive: era **presión de memoria del sistema** por el tamaño del `.wasm`.
+  Se arregló bajándolo de 44,2 a 25,4 MB (−7 paquetes de runtime + Code Optimization DiskSizeLTO).
+  Validado: 900 s y 420 s sin un solo corte el 2026-08-15. Ver `CAST_DISCONNECT_INVESTIGATION.md`.
   Sesión Cast cae ~2 minutos después de AQUARIUM READY, tenga el móvil en primer plano o no.
   **Causa:** `maxInactivity` en Cast Built-In (Xiaomi) desconecta senders sin actividad bidireccional
   en el canal — incluso con `disableIdleTimeout:true` (que solo previene shutdown con 0 senders).
@@ -53,10 +58,12 @@ Ordenado por prioridad dentro de cada bloque. Actualizar con fecha al cerrar cad
 
 ## ⚙️ Funcionalidad incompleta
 
-- [ ] **Bioluminiscencia — fade día/noche no conectado** — `DecorationPlacer` tiene `FadeBioLum()`
-  pero el trigger en TV depende de que `AmbientModeController` llame al placer con el modo
-  correcto. Verificar si el fade in/out se activa al cambiar a `night` via Cast UPDATE.
-  > `AquariumManager.cs:168` / `DecorationPlacer.cs:99`
+- [~] **Bioluminiscencia — fade día/noche SÍ está conectado** (verificado 2026-08-15):
+  `DecorationPlacer.cs:98` se suscribe a `AmbientModeController.OnModeChanged` y lanza
+  `FadeBioLum(mode == Night ? 1 : 0, 2f)`. El UPDATE `ambient` de la TV llama a `SetNight()`.
+  Lo que falta NO es cableado, es **verlo en la tele**: nunca se ha mandado un UPDATE al device real.
+  Ya se puede: `node Tools/cast-headless.js --fish 12 --update ambient=night@60` (añadido 2026-08-15).
+  > `DecorationPlacer.cs:98` / `TvSceneBootstrap.cs:451`
 
 - [ ] **Disconnect sender → aquarium congelado** — cuando el móvil se desconecta (o bloquea),
   `OnSenderDisconnected` solo loggea. El acuario sigue moviéndose pero nadie puede reconectar
@@ -64,8 +71,12 @@ Ordenado por prioridad dentro de cada bloque. Actualizar con fecha al cerrar cad
   Appquarium" o al menos `alwaysAmbient=true` para que siga animado indefinidamente.
   > `Assets/Scripts/Core/CastReceiver.cs:67` — `OnSenderDisconnected`
 
-- [ ] **Audio** — `ambient_water.wav` + `ambient_music.mp3` + `ambient_bubbles.wav` incluidos en build.
-  Pendiente: verificar que se oyen en Xiaomi tras deploy.
+- [~] **Audio — ESTABA ROTO, arreglado 2026-08-15.** El item daba por hecho que los 3 clips iban en
+  el build; el log del build del 12-ago demuestra que **sólo entró `ambient_music.mp3`**:
+  los `.wav` habían desaparecido del disco (estaban en `.gitignore`, nadie lo vio) y `AudioManager`
+  se los salta en silencio — sólo hace `Debug.Log`, que NO viaja por el canal Cast.
+  Restaurados los 3, ya versionados, y `TvProdBuild.PreflightAudio()` aborta el build si falta alguno
+  o si tiene `loadType:0`. **Sigue pendiente oírlo en el Xiaomi** — requiere rebuild del player.
 
 - [x] **Feed visual** ✅ 2026-06-19 — `TvFoodManager.cs` sustituye el stub null.
   `FeedAll()` spawna 2–5 FoodItems procedurales en la superficie. FishBrain los detecta
@@ -93,9 +104,9 @@ Ordenado por prioridad dentro de cada bloque. Actualizar con fecha al cerrar cad
 
 ## 🚀 Rendimiento y calidad
 
-- [ ] **Medir FPS exacto** — confirmado "fluido" pero sin número. Añadir `Time.unscaledDeltaTime`
-  en el panel debug o usar el FPS meter de `Tools/fps-check.js`. Dato útil para decidir si
-  subir renderScale.
+- [x] **Medir FPS exacto** ✅ 2026-08-15, leyendo el medidor del receiver por `adb screencap`:
+  **12 peces → avg 45 / peor 36. 25 peces → avg 37 / peor 17.** WASM 133 y 191 MB.
+  Con 12 peces hay margen para evaluar renderScale 0.85; con 25 no.
 
 - [ ] **Evaluar renderScale 0.85** — si FPS aguanta por encima de 25fps estable, subir de 0.7
   a 0.85 mejora nitidez notable (72% píxeles vs 49%). Requiere player rebuild.
@@ -164,14 +175,19 @@ Ordenado por prioridad dentro de cada bloque. Actualizar con fecha al cerrar cad
   > `TvSceneBootstrap.cs` `case "change_light"` → `ChangeLight()`
   > Mobile: añadir call en DecoPanel/TankLightingController — ver `CAST_UPDATES.md §2`
 
-- [ ] **ambient** — mobile: conectar botón modo día/noche a `SendUpdate("ambient", mode)`
-  TV: ✅ implementado (`AmbientModeController`)
+- [x] **ambient / speed / feed** ✅ — **el móvil YA los envía**, verificado leyendo su código el
+  2026-08-15: `AmbientModeController.cs` → `SendUpdate("ambient", modeName)`, `AquariumManager.cs`
+  → `SendUpdate("speed", ...)`, `UIManager.cs` → `SendUpdate("feed")`.
+  Este item llevaba meses diciendo "pendiente mobile" cuando ya estaba hecho.
 
-- [ ] **speed** — mobile: conectar slider velocidad peces a `SendUpdate("speed", value)`
-  TV: ✅ implementado (`AquariumManager.FishSpeedMultiplier`)
-
-- [ ] **feed** — mobile: conectar botón comida a `SendUpdate("feed")`.
-  TV: ✅ `TvFoodManager` implementado 2026-06-19.
+> **Estado real del protocolo (2026-08-15):** los **11 tipos están conectados en ambos extremos**.
+> El móvil manda: `ambient` `speed` `feed` `startle` `add_fish` `remove_fish` `add_deco`
+> `remove_deco` `change_bg` `change_sub` `change_light`. La TV los maneja todos
+> (`TvSceneBootstrap.cs:138-165`). `refresh` sólo existe en la TV; el móvil nunca lo manda.
+>
+> ⚠ Lo que NO se ha hecho nunca: **verificarlos end-to-end en el device real**. Estaban probados
+> en código y en Chrome local con `?devtest=1`, pero el harness no sabía mandar UPDATEs.
+> Ya sabe: `node Tools/cast-headless.js --fish 12 --update ambient=night@60 --update feed=@90`.
 
 ---
 

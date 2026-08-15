@@ -31,6 +31,20 @@ const STOP     = argv.includes('--stop');
 // bundle remoto, así que la medida NO representa el coste de memoria real.
 const FISH     = parseInt(arg('fish', '0'), 10);
 
+// --update <tipo>=<valor>@<segundo>  (repetible) → manda un UPDATE en tiempo real.
+//   --update ambient=night@60      cambia a modo noche al minuto
+//   --update feed=@90              dispara comida (valor vacio) a los 90s
+//   --update speed=1.8@120
+// Sirve para verificar EN EL DEVICE los 11 tipos de UPDATE, que hasta el 2026-08-15
+// solo estaban verificados en codigo y en el Chrome local con ?devtest=1.
+const UPDATES = argv.reduce((acc, a, i) => {
+  if (a !== '--update' || !argv[i + 1]) return acc;
+  const m = /^([a-z_]+)=(.*)@(\d+)$/.exec(argv[i + 1]);
+  if (!m) { console.log(`[WARN] --update ignorado (formato tipo=valor@segundos): ${argv[i + 1]}`); return acc; }
+  acc.push({ type: m[1], value: m[2], at: parseInt(m[3], 10) * 1000 });
+  return acc;
+}, []);
+
 const APP_ID = '8F6C873F';
 const NS_APP = 'urn:x-cast:dev.unknownaerials.appquarium';   // canal de diag del receiver
 const NS_CONN = 'urn:x-cast:com.google.cast.tp.connection';
@@ -71,6 +85,13 @@ const SPECIES = [
   'fish_angelfish_emperor', 'fish_goby_firefish', 'fish_parrotfish',
   'fish_boxfish_yellow', 'fish_filefish_orange', 'fish_angelfish_queen',
   'fish_klunzinger_wrasse', 'fish_black_durgon', 'fish_soldierfish_redcoat',
+  // 2026-08-15 — las 13 que faltaban. Antes la lista tenia 12 y `SPECIES.slice(0, FISH)`
+  // capaba EN SILENCIO: pedir --fish 25 medía 12 y el numero parecia bueno por error.
+  'fish_angelfish_blueface', 'fish_angelfish_blueline', 'fish_angelfish_clarion',
+  'fish_angelfish_flagfin', 'fish_angelfish_goldflake', 'fish_angelfish_majestic',
+  'fish_angelfish_multibarred', 'fish_angelfish_queensland', 'fish_angelfish_scribbled',
+  'fish_aweoweo', 'fish_filefish_scrawled', 'fish_napoleon_wrasse',
+  'fish_sunfish_molamola',
 ];
 // Decos repartidas por el tanque — el formato lo consume DecorationPlacer.
 // ⚠ La clave Addressable NO sale de `itemId`: TvSceneBootstrap.ParseDecoItemIds()
@@ -220,6 +241,20 @@ client.connect(HOST, () => {
     } else {
       log('⚠ sin --fish: la escena quedará VACÍA (no se carga ningún bundle remoto)');
     }
+
+    // ── UPDATEs programados ──────────────────────────────────────────────────
+    // Formato = CastMessage { type:'UPDATE', payload:<TvUpdateMessage en JSON> }
+    // (ver CAST_UPDATES.md y TvSceneBootstrap.ApplyUpdate).
+    for (const u of UPDATES) {
+      setTimeout(() => {
+        try {
+          appChan.send({ type: 'UPDATE', payload: JSON.stringify({ type: u.type, value: u.value }) });
+          log(`UPDATE enviado → ${u.type}${u.value ? '=' + u.value : ''}`);
+        } catch (e) { log(`fallo al enviar UPDATE ${u.type}: ` + e.message); }
+      }, u.at);
+    }
+    if (UPDATES.length) log(`${UPDATES.length} UPDATE(s) programados: ` +
+      UPDATES.map(u => `${u.type}@${u.at / 1000}s`).join(' '));
   });
 
   // ⚠ Al acabar por LÍMITE la sesión sigue VIVA en el device: hay que pararla

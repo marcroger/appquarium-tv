@@ -91,16 +91,43 @@ En WebGL/Cast esto causa **OOM → Chrome muere → pantalla azul sin peces** (b
 Después de cada sync, verificar `Assets/Resources/Audio/*.meta`:
 - `loadType: 0` → cambiar a `loadType: 2` (Compressed in Memory) — si no, rebuild + deploy
 - Referencia correcta: `ambient_water.wav.meta` (loadType:2, quality:0.7, forceToMono:0)
-- `ambient_bubbles.wav.meta` corregido 2026-06-20 (loadType:2, forceToMono:1, quality:0.7, 3D:0)
+- `ambient_bubbles.wav.meta` (loadType:2, forceToMono:1, quality:0.7, 3D:0)
+
+**Desde 2026-08-15 esto ya no depende de que alguien se acuerde:** `TvProdBuild.BuildProd`
+ejecuta `PreflightAudio()` y **aborta el build** si falta un clip o si alguno tiene
+`loadType:0`. Un build mudo falla en vez de salir "bien".
+
+**Los 3 clips de ambiente SÍ van a git** (agua 3,9 MB · música 3,8 MB · burbujas 5,5 MB).
+Antes estaban en `.gitignore` y eso costó 2 de los 3 canales durante ~2 meses: los `.wav`
+desaparecieron del disco, git no los veía, `AudioManager` falla en silencio (sólo `Debug.Log`,
+que NO viaja por el canal Cast) y el build del 12-ago salió con música y nada más.
+El original íntegro de burbujas (110 MB, 10 min) está en el repo móvil, en `Assets/Audio/`;
+en TV va recortado a un bucle de 60 s en mono con crossfade (~0,8 MB en el build en vez de ~8 MB).
 
 ---
 
 ## Build pipeline (resumen)
 
-### Estado actual — 2026-06-22
+### Estado actual — 2026-08-15 ⭐
 
-`.data` = 32.0 MB | `.wasm` = 42.2 MB en R2. 🎉 **FLUIDO en Xiaomi TV Box S** — bloom OFF + renderScale 0.7 + targetFrameRate 30.
-**Calidad visual mejorada** — Tonemapping Neutral + saturation +18 + contrast +10 + SMAA Low. Confirmado visualmente en TV (2026-06-22).
+En R2: `.data` = **16,9 MB** | `.wasm` = **25,4 MB** | receiver limpio (sello `rcv 2026-08-15 visual`).
+**Validado en el Xiaomi TV Box S el 2026-08-15**, con acuario real y sin reiniciar la caja:
+
+| | 12 peces + 6 decos | 25 peces + 6 decos |
+|---|---|---|
+| FPS (medio / peor) | **45 / 36** | **37 / 17** |
+| WASM heap | 133 MB, plano | 191 MB, plano |
+| Memoria libre del sistema | — | 19 % (banda estable validada: 22-24 %; peligro ~10 %) |
+| Sesión | 900 s, 0 cortes | 420 s, 0 cortes |
+
+Sale a **~4,5 MB y ~0,6 fps por pez**. El techo no son los peces: **una deco cuesta 8-13 MB**.
+Sombras de decos y de peces **visibles y medidas** (ancla −106 de contraste, roca −130, pez −22).
+
+⚠ El `.wasm` de 25,4 MB depende de `Code Optimization = DiskSizeLTO`, que **no está en git**
+(vive en `Library/EditorUserBuildSettings.asset`). `TvProdBuild.BuildProd` lo fuerza por código;
+si construyes por GUI, comprobarlo antes con `Appquarium TV → 📏 Ver Code Optimization del WASM`.
+
+**Histórico — Build 2026-06-22 (calidad visual + SMAA), sigue vigente:**
 
 **Build 2026-06-22 — DEPLOYADO (calidad visual + SMAA):**
 - `PostProcessingSetup.cs` — Tonemapping Neutral (evita highlights lavados) + saturation +18 + contrast +10
@@ -195,12 +222,23 @@ aws s3 cp ServerData/WebGL/catalog_1.2.1.hash s3://appquarium-tv/bundles/catalog
   --cache-control "public, max-age=60" --content-type "text/plain"
 
 # — Solo player rebuild (bundles intactos en R2) —
-aws s3 sync webgl-output/ s3://appquarium-tv/ `
+#
+# ⚠⚠ NO USAR `--delete` EN LA RAÍZ DEL BUCKET. `--exclude "bundles/*"` NO basta.
+# R2 tiene en la raíz ficheros que NO están en webgl-output/ y que --delete BORRA:
+#   · keepalive_black.mp4  ← el receiver lo usa (vídeo keepalive). Borrarlo revienta
+#                             las sesiones largas, que es justo lo que costó meses arreglar.
+#   · silence.wav
+#   · Build/webgl-min.*  y  Build/webgl-output-empty.*  ← los rigs de diagnóstico
+# El 2026-08-15 se estuvo a un comando de hacerlo. Subir sólo lo que cambia:
+aws s3 sync webgl-output/Build/ s3://appquarium-tv/Build/ `
   --profile r2 `
   --endpoint-url https://2aa2b7914f4ce7ce81e38d694b6219dc.r2.cloudflarestorage.com `
-  --delete `
-  --exclude "bundles/*" `
+  --exclude "*" `
+  --include "webgl-output.data" --include "webgl-output.wasm" `
+  --include "webgl-output.framework.js" --include "webgl-output.loader.js" `
   --cache-control "public, max-age=3600"
+# index.html va aparte con boto3 (ver abajo). StreamingAssets/ sólo si cambió el catálogo:
+# comprobar antes con `diff` contra R2 — suele ser idéntico y no hace falta tocarlo.
 # Archivos pequeños que fallan con sync (catalog.hash, settings.json) → subir con boto3:
 python -c "
 import boto3, configparser, os
@@ -225,13 +263,21 @@ aws s3 sync ServerData/WebGL/ s3://appquarium-tv/bundles/ `
   --profile r2 `
   --endpoint-url https://2aa2b7914f4ce7ce81e38d694b6219dc.r2.cloudflarestorage.com `
   --cache-control "public, max-age=604800"
-# 3. Subir player (SIEMPRE --exclude "bundles/*" con --delete)
-aws s3 sync webgl-output/ s3://appquarium-tv/ `
-  --profile r2 `
-  --endpoint-url https://2aa2b7914f4ce7ce81e38d694b6219dc.r2.cloudflarestorage.com `
-  --delete `
-  --exclude "bundles/*" `
-  --cache-control "public, max-age=3600"
+# 3. Subir player — mismo comando acotado a Build/ del bloque anterior. SIN --delete.
+#    (Ver el aviso de arriba: --delete en la raíz borra keepalive_black.mp4 y los rigs.)
+
+# — index.html (el receiver) — SIEMPRE con boto3, nunca con `aws s3 cp` —
+python -c "
+import boto3, configparser, os
+c = configparser.ConfigParser(); c.read([os.path.expanduser('~/.aws/credentials')])
+client = boto3.client('s3', endpoint_url='https://2aa2b7914f4ce7ce81e38d694b6219dc.r2.cloudflarestorage.com',
+    aws_access_key_id=c.get('r2','aws_access_key_id'), aws_secret_access_key=c.get('r2','aws_secret_access_key'), region_name='auto')
+client.put_object(Bucket='appquarium-tv', Key='index.html', Body=open('webgl-output/index.html','rb').read(),
+                  ContentType='text/html; charset=utf-8', CacheControl='public, max-age=60')
+print('OK index.html')
+"
+# max-age=60 a propósito: el device cachea el receiver (disableIdleTimeout lo permite) y con
+# 3600 te pasas una hora viendo el index viejo sin saberlo. El sello de la esquina lo delata.
 ```
 
 ---
@@ -274,7 +320,7 @@ aws s3 sync webgl-output/ s3://appquarium-tv/ `
 | `Fish_Remote` | PackSeparately | 25 FishData SOs | 25 |
 | `Decos_Remote` | PackSeparately | 54 DecorationData SOs | 54 |
 | `Environments_Remote` | PackSeparately | 11 backgrounds | 11 |
-| `Audio_Remote` | PackSeparately | 2 audio clips | 2 |
+| `Audio_Remote` | PackSeparately | 1 clip (`ambient_music`) | 1 |
 | `Default Local Group` | PackTogether | scaffolding | 1 |
 
 Total bundles en R2: **92+** (fish×25 + decos×54 + envs×11 + audio×2). Algunos tienen versiones duplicadas de builds anteriores — el catalog siempre apunta al correcto.

@@ -82,8 +82,18 @@
 .DS_Store
 Thumbs.db
 
-# Large audio binaries — stored locally only (Addressables, not needed in repo)
-Assets/Resources/Audio/*.wav
-Assets/Resources/Audio/*.mp3
-Assets/Resources/Audio/*.ogg
+# Generado por Addressables/IL2CPP en cada build (preserva tipos del managed stripping,
+# que aquí está en High). Se regenera solo; versionarlo sólo crea ruido y conflictos.
+Assets/AddressableAssetsData/link.xml
+Assets/AddressableAssetsData/link.xml.meta
+
+# Audio de Resources — SÍ va a git desde el 2026-08-15.
+#
+# ⚠ Ignorarlo costó 2 de los 3 canales de audio durante ~2 meses: los .wav
+# desaparecieron del disco sin que nada lo detectara (git no los veía y
+# AudioManager falla en silencio — sólo hace Debug.Log, que NO viaja por el
+# canal Cast). El build del 12-ago sólo incluyó ambient_music.mp3.
+# Ninguno llega a los 100 MB de límite de GitHub: agua 3,9 MB, música 3,8 MB,
+# burbujas 5,5 MB (recortado de los 110 MB originales a un bucle de 60 s mono).
+# El original íntegro de burbujas sigue en el repo móvil, en Assets/Audio/.
 /scratchpad/
