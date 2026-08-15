@@ -136,10 +136,10 @@
         _dbgLines.push(line);
         if (_dbgLines.length > 40) _dbgLines.shift();
         var el = document.getElementById('dbg-panel');
-        // 2026-08-12 — si el panel está oculto NO se toca el DOM. Medido el 11-ago:
-        // repintar estos 40 divs por línea costaba ~35 MB de Native Heap (26,6 MB
-        // oculto vs 61-67 visible) y el instrumento añadía presión al sistema que
-        // medía. Bajar la opacidad NO basta — hay que dejar de construirlos.
+        // 2026-08-12 — REVISIÓN VISUAL: si el panel está oculto NO se toca el DOM.
+        // Medido el 11-ago: repintar estos 40 divs por línea costaba ~35 MB de Native
+        // Heap (26,6 MB oculto vs 61-67 visible) y el instrumento añadía presión al
+        // sistema que medía. Bajar la opacidad NO basta — hay que dejar de construirlos.
         // Para volver a verlo: display:block en #dbg-panel (o desde chrome://inspect).
         if (el && el.style.display !== 'none') {
           // Más reciente ARRIBA → la última línea (donde está el error) nunca
@@ -392,7 +392,7 @@
              opacity:0.02;pointer-events:none;object-fit:cover;"></video>
 
     <div id="unity-container" class="unity-desktop">
-      <canvas id="unity-canvas" width={{{ WIDTH }}} height={{{ HEIGHT }}} style="width:100%;height:100%;display:block;" tabindex="-1"></canvas>
+      <canvas id="unity-canvas" width=960 height=600 style="width:100%;height:100%;display:block;" tabindex="-1"></canvas>
       <div id="unity-loading-bar" style="display:none">
         <div id="unity-logo"></div>
         <div id="unity-progress-bar-empty">
@@ -403,7 +403,7 @@
       <div id="unity-footer">
         <div id="unity-logo-title-footer"></div>
         <div id="unity-fullscreen-button"></div>
-        <div id="unity-build-title">{{{ PRODUCT_NAME }}}</div>
+        <div id="unity-build-title">Appquarium</div>
       </div>
     </div>
 
@@ -922,7 +922,7 @@
 
       var canvas    = document.querySelector('#unity-canvas');
       var buildUrl  = 'Build';
-      var loaderUrl = buildUrl + '/{{{ LOADER_FILENAME }}}';
+      var loaderUrl = buildUrl + '/webgl-output.loader.js';
 
       // Timeout: si Unity no carga en 120s → error con pista de causa
       var _loadTimeout = setTimeout(function() {
@@ -938,13 +938,13 @@
 
       var config = {
         arguments:          [],
-        dataUrl:            buildUrl + '/{{{ DATA_FILENAME }}}',
-        frameworkUrl:       buildUrl + '/{{{ FRAMEWORK_FILENAME }}}',
-        codeUrl:            buildUrl + '/{{{ CODE_FILENAME }}}',
+        dataUrl:            buildUrl + '/webgl-output.data',
+        frameworkUrl:       buildUrl + '/webgl-output.framework.js',
+        codeUrl:            buildUrl + '/webgl-output.wasm',
         streamingAssetsUrl: 'StreamingAssets',
-        companyName:        '{{{ COMPANY_NAME }}}',
-        productName:        '{{{ PRODUCT_NAME }}}',
-        productVersion:     '{{{ PRODUCT_VERSION }}}',
+        companyName:        'Appquarium',
+        productName:        'Appquarium',
+        productVersion:     '1.2.1',
         showBanner:         function(msg, type) {
           if (type === 'error') dbg('Unity banner ERR: '+msg.substring(0,60));
         },
