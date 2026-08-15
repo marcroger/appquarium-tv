@@ -24,6 +24,9 @@ MonoBehaviour:
   turnSpeed: 4
   perceptionRadius: 3
   baseSize: 1
+  wanderJitter: 0
+  wanderRadius: 0
+  wanderDistance: 0
   bodySwingOverride: -1
   bankingAmountOverride: 4
   turnSmoothingOverride: -1
@@ -40,10 +43,11 @@ MonoBehaviour:
   price: 1.49
   rarity: 1
   displayOrder: 0
-  prefab: {fileID: 0}
+  prefab: {fileID: 2197683827049978881, guid: 2401b1299b612f843b08a84cbbffd930, type: 3}
   assetBundleName: pack_fish_uncommon
   assetBundleAssetName: fish14_KlunzingerWrasse
   maturationDays: 6
   seniorDays: 9
+  seniorGoodbyeDays: 7
   pearlPrice: 25
   pearlSellValue: 5

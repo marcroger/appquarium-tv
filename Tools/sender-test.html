@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Appquarium — Sender de prueba (PC)</title>
+  <style>
+    body { font: 16px/1.5 system-ui, sans-serif; background:#0b1622; color:#dee; margin:0; padding:32px; }
+    h1 { font-size:20px; color:#3BB8A0; margin:0 0 4px; }
+    p.sub { color:#6A9888; margin:0 0 24px; }
+    #timer { font:bold 72px monospace; color:#0DE8FF; margin:16px 0; }
+    #state { font:bold 18px monospace; margin-bottom:16px; }
+    .on  { color:#6f6; } .off { color:#FF6B6B; }
+    #log { background:#000; border-radius:8px; padding:12px; font:13px/1.5 monospace;
+           height:320px; overflow:auto; white-space:pre-wrap; color:#0ff; }
+    google-cast-launcher { width:44px; height:44px; --connected-color:#6f6; --disconnected-color:#dee; cursor:pointer; }
+    .row { display:flex; align-items:center; gap:16px; margin-bottom:8px; }
+    .hint { color:#6A9888; font-size:14px; }
+  </style>
+</head>
+<body>
+  <h1>Sender de prueba — Appquarium TV</h1>
+  <p class="sub">Mismo receiver, mismo Unity, mismo Xiaomi. <b>Sin Android, sin Doze, sin CastPlugin.</b></p>
+
+  <div class="row">
+    <google-cast-launcher id="btn"></google-cast-launcher>
+    <span class="hint">Pulsa el icono → elige el Xiaomi (MiTV-AFMU0) → no toques nada más.</span>
+  </div>
+
+  <div id="state" class="off">DESCONECTADO</div>
+  <div id="timer">0:00</div>
+  <div id="log"></div>
+
+<script src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1"></script>
+<script>
+  var APP_ID = '8F6C873F';
+  var NAMESPACE = 'urn:x-cast:dev.unknownaerials.appquarium';
+  var t0 = 0, tick = null, probeTimer = null;
+  var logEl = document.getElementById('log');
+  var timerEl = document.getElementById('timer');
+  var stateEl = document.getElementById('state');
+
+  function log(m) {
+    var t = t0 ? ((Date.now()-t0)/1000).toFixed(1) : '-';
+    logEl.textContent = '['+t+'s] '+m+'\n' + logEl.textContent;
+    console.log('['+t+'s] '+m);
+  }
+  function fmt(s) { var m = Math.floor(s/60); s = s%60; return m+':'+(s<10?'0':'')+s; }
+
+  function startTimer() {
+    t0 = Date.now();
+    if (tick) clearInterval(tick);
+    tick = setInterval(function() {
+      timerEl.textContent = fmt(Math.floor((Date.now()-t0)/1000));
+    }, 500);
+  }
+  function stopTimer() {
+    if (tick) { clearInterval(tick); tick = null; }
+    return t0 ? Math.round((Date.now()-t0)/1000) : 0;
+  }
+
+  window['__onGCastApiAvailable'] = function(available, err) {
+    if (!available) { log('❌ Cast API no disponible: '+err); return; }
+    var ctx = cast.framework.CastContext.getInstance();
+    // PAGE_SCOPED, no ORIGIN_SCOPED: queremos que si la sesión cae, se QUEDE caída.
+    // Con auto-join amplio el sender podría reengancharse solo y fingir el mismo
+    // flapping del móvil, que es justo lo que este test intenta descartar.
+    ctx.setOptions({
+      receiverApplicationId: APP_ID,
+      autoJoinPolicy: chrome.cast.AutoJoinPolicy.PAGE_SCOPED
+    });
+    log('Cast API lista — App ID '+APP_ID+'. Pulsa el icono de cast.');
+
+    ctx.addEventListener(cast.framework.CastContextEventType.SESSION_STATE_CHANGED, function(e) {
+      log('SESSION_STATE: '+e.sessionState + (e.errorCode ? ' err='+e.errorCode : ''));
+      switch (e.sessionState) {
+        case cast.framework.SessionState.SESSION_STARTED:
+        case cast.framework.SessionState.SESSION_RESUMED:
+          startTimer();
+          stateEl.textContent = 'CONECTADO'; stateEl.className = 'on';
+          log('✅ Sesión arrancada — cronómetro a cero. NO TOQUES NADA.');
+          // Escuchar el log que el receiver transmite por el canal Cast.
+          try {
+            var session = ctx.getCurrentSession();
+            session.addMessageListener(NAMESPACE, function(ns, message) {
+              // El receiver manda objeto (namespace JSON); algunos SDK lo entregan
+              // ya parseado, otros como string. Aceptar ambos.
+              var d = message;
+              if (typeof message === 'string') { try { d = JSON.parse(message); } catch (e) { d = null; } }
+              if (d && d.type === 'LOG') log('RCV ' + d.line);
+              else log('RCV(?) ' + (typeof message === 'string' ? message : JSON.stringify(message)));
+            });
+            log('📡 Escuchando log remoto del receiver…');
+
+            // ═══ TEST: tráfico sender→receiver cada 5s ═══════════════════════
+            // El receiver está SANO al morir (memoria plana, hilo suelto, vídeo
+            // reproduciendo) → el corte a ~189-209s parece un idle timeout de la
+            // conexión por falta de tráfico DESDE el sender. Mandamos un PROBE
+            // cada 5s. Si la sesión pasa de 209s → confirmado, y el fix es
+            // sender-side (el móvil debe pinguear al receiver periódicamente).
+            var probeN = 0;
+            probeTimer = setInterval(function() {
+              probeN++;
+              try {
+                session.sendMessage(NAMESPACE, { type:'PROBE', n:probeN });
+                if (probeN % 6 === 0) log('→ PROBE #'+probeN+' enviado (cada 5s)');
+              } catch (e) { log('⚠ PROBE #'+probeN+' falló: '+e.message); }
+            }, 5000);
+            log('🩺 Test PROBE activo: enviando cada 5s. Objetivo: superar 209s.');
+          } catch (e) { log('⚠ no pude escuchar/enviar en el canal: ' + e.message); }
+          break;
+        case cast.framework.SessionState.SESSION_ENDED:
+          if (probeTimer) { clearInterval(probeTimer); probeTimer = null; }
+          var dur = stopTimer();
+          stateEl.textContent = 'DESCONECTADO tras ' + fmt(dur); stateEl.className = 'off';
+          log('💥 SESIÓN CAÍDA tras ' + dur + 's');
+          log(dur > 240
+              ? '→ CRUZA EL TECHO de 209s. El receiver está limpio: el problema es el sender Android.'
+              : '→ Cae igual que el móvil (~209s). El móvil queda absuelto: el problema está en el receiver/device.');
+          break;
+      }
+    });
+  };
+</script>
+</body>
+</html>

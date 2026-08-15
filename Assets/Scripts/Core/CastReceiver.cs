@@ -41,12 +41,18 @@ public class CastReceiver : MonoBehaviour
         {
             case "INIT":
                 var state = JsonUtility.FromJson<TvAquariumState>(msg.payload);
+                if (TvSceneBootstrap.Instance == null)
+                    JsBridge.Log("ERR: TvSceneBootstrap.Instance is NULL at INIT time!");
                 TvSceneBootstrap.Instance?.InitializeFromState(state);
                 break;
 
             case "UPDATE":
                 var upd = JsonUtility.FromJson<TvUpdateMessage>(msg.payload);
                 TvSceneBootstrap.Instance?.ApplyUpdate(upd);
+                break;
+
+            case "PING":
+            case "KEEPALIVE":
                 break;
 
             default:
@@ -64,4 +70,29 @@ public class CastReceiver : MonoBehaviour
     /// <summary>Called from JS when the Cast sender disconnects.</summary>
     public void OnSenderDisconnected(string senderId)
         => Debug.Log($"[CastReceiver] Sender disconnected: {senderId}");
+
+    // ── Device input (Android TV remote / keyboard devtest) ──────────────────
+
+    /// <summary>
+    /// Called from JavaScript when the user presses a button on the Android TV remote
+    /// or keyboard (devtest mode).
+    ///   "startle" → fish scatter from tank center (analogous to tapping the screen)
+    ///   "feed"    → spawn food visual + fish swim to eat
+    /// </summary>
+    public void OnDeviceInput(string action)
+    {
+        JsBridge.Log($"[Input] {action}");
+        var mgr = AquariumManager.Instance;
+        if (mgr == null) return;
+
+        switch (action)
+        {
+            case "startle":
+                mgr.StartleAll(mgr.tankController.GetTankBounds().center);
+                break;
+            case "feed":
+                mgr.FeedAll();
+                break;
+        }
+    }
 }

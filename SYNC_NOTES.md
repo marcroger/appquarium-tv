@@ -164,6 +164,7 @@ foreach ($f in @("Scripts\Fish\FishBrain.cs","Scripts\Tank\TankController.cs")) 
 | Fecha | Commit mobile | Notas |
 |---|---|---|
 | 2026-05-22 | `481485e` | Snapshot inicial. Copia completa. |
+| 2026-05-26 11:55 | `af61d7a` | Sync auto: 10 modificados, 4 nuevos. |
 | _futuro_ | — | — |
 
 Actualizar esta tabla cada vez que se hace un re-sync significativo.

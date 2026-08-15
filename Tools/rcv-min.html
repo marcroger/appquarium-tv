@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Appquarium RUNG 1 — receiver mínimo (solo vídeo loop) + diag</title>
+  <style>
+    html, body { margin:0; height:100%; background:#000; overflow:hidden; }
+    cast-media-player { position:absolute; inset:0; width:100%; height:100%; }
+    #tag { position:fixed; left:8px; bottom:6px; z-index:10; margin:0;
+           font:12px monospace; color:#0f8; opacity:.7; }
+    #err { position:fixed; left:8px; top:8px; right:8px; z-index:10; margin:0;
+           font:12px/1.35 monospace; color:#ff8; white-space:pre-wrap; }
+  </style>
+</head>
+<body>
+  <cast-media-player></cast-media-player>
+  <p id="tag">rcv-min RUNG1 v3 (diag)</p>
+  <p id="err"></p>
+
+<script src="//www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script>
+<script>
+  // ── RUNG 1 + instrumentación ──────────────────────────────────────────────
+  // Igual que v1 (CAF v3 + vídeo negro REPEAT_SINGLE, sin Unity, sin mensajes de
+  // negocio) PERO con diagnóstico: cada paso del arranque y CUALQUIER error se
+  // transmite al sender del PC por el canal Cast + se pinta arriba en la TV.
+  // Objetivo: ver POR QUÉ el receiver no llega a READY (el sender corta a los
+  // pocos segundos = el receiver no señaló "listo" o petó antes de ctx.start).
+  // ──────────────────────────────────────────────────────────────────────────
+  var VIDEO = 'https://pub-2b11cc17bdef4f75bd4d34eeabbd6042.r2.dev/keepalive_black.mp4';
+  var NS = 'urn:x-cast:dev.unknownaerials.appquarium';
+  var errEl = document.getElementById('err');
+  var queue = [];          // logs antes de que haya sender al que mandarlos
+  var ctx = null;
+
+  function dbg(m) {
+    // pinta en TV (arriba) + consola + cola para el sender
+    var line = m;
+    try { errEl.textContent = (line + '\n' + errEl.textContent).slice(0, 1200); } catch(e){}
+    try { console.log('[rcv]', line); } catch(e){}
+    queue.push(line);
+    flush();
+  }
+  function flush() {
+    if (!ctx) return;
+    try {
+      while (queue.length) {
+        var l = queue.shift();
+        ctx.sendCustomMessage(NS, undefined, { type:'LOG', line: l }); // broadcast a todos los senders
+      }
+    } catch (e) { /* aún no hay canal; se reintenta en el próximo dbg */ }
+  }
+
+  // Cazar CUALQUIER error del arranque (esto es lo que probablemente mata el READY).
+  window.onerror = function(msg, src, line, col, e) {
+    dbg('❌ JS ERROR: ' + msg + ' @' + line + ':' + col);
+    return false;
+  };
+  window.addEventListener('unhandledrejection', function(ev) {
+    dbg('❌ PROMISE REJECT: ' + (ev.reason && ev.reason.message ? ev.reason.message : ev.reason));
+  });
+
+  dbg('· script arrancado, cargando CAF…');
+
+  try {
+    ctx = cast.framework.CastReceiverContext.getInstance();
+    var pm = ctx.getPlayerManager();
+    dbg('· ctx + playerManager OK');
+
+    var loaded = false, inFlight = false, reqId = 0;
+    function loadLoop() {
+      if (inFlight) { return; } inFlight = true;
+      dbg('· pm.load() intentando…');
+      try {
+        var media = new cast.framework.messages.MediaInformation();
+        media.contentId = VIDEO; media.contentUrl = VIDEO; media.contentType = 'video/mp4';
+        media.streamType = cast.framework.messages.StreamType.BUFFERED;
+        var item = new cast.framework.messages.QueueItem();
+        item.media = media; item.autoplay = true;
+        var q = new cast.framework.messages.QueueData();
+        q.items = [item]; q.repeatMode = cast.framework.messages.RepeatMode.REPEAT_SINGLE; q.startIndex = 0;
+        var req = new cast.framework.messages.LoadRequestData();
+        req.requestId = ++reqId;   // ⭐ el receiver de prod lo hace: con 0 algunos SDK descartan el load
+        req.media = media; req.autoplay = true; req.queueData = q;
+        pm.load(req)
+          .then(function(){ loaded = true; inFlight = false; dbg('✅ pm.load OK → vídeo debería reproducir'); })
+          .catch(function(e){ inFlight = false; dbg('⚠ pm.load rechazado: ' + (e && e.message ? e.message : e) + ' → reintento en 2s'); setTimeout(loadLoop, 2000); });
+      } catch (e) { inFlight = false; dbg('❌ excepción montando load: ' + e.message); }
+    }
+
+    ctx.addEventListener(cast.framework.system.EventType.READY, function() {
+      dbg('🟢 RECEIVER READY (ctx.start resolvió)');
+    });
+    ctx.addEventListener(cast.framework.system.EventType.SENDER_CONNECTED, function(e) {
+      dbg('🔌 SENDER_CONNECTED ' + (e && e.senderId ? e.senderId : ''));
+      flush();
+      if (!loaded) loadLoop();
+    });
+    ctx.addEventListener(cast.framework.system.EventType.SENDER_DISCONNECTED, function(e) {
+      dbg('🔴 SENDER_DISCONNECTED reason=' + (e && e.reason ? e.reason : '?'));
+    });
+
+    pm.addEventListener(cast.framework.events.EventType.MEDIA_FINISHED, function(){ loaded = false; loadLoop(); });
+    pm.addEventListener(cast.framework.events.EventType.PLAYER_STATE_CHANGED, function(e){
+      if (e && e.playerState === cast.framework.messages.PlayerState.IDLE) { loaded = false; loadLoop(); }
+    });
+    pm.addEventListener(cast.framework.events.EventType.ERROR, function(e){
+      dbg('⚠ PlayerManager ERROR: ' + (e && e.detailedErrorCode ? e.detailedErrorCode : JSON.stringify(e)));
+    });
+
+    // Opciones de arranque + declarar el namespace para poder emitir LOG.
+    var opts = new cast.framework.CastReceiverOptions();
+    opts.disableIdleTimeout = true;
+    opts.maxInactivity = 3600;                 // el SDK rechaza <=5; 3600 = "nunca"
+    opts.customNamespaces = {};
+    opts.customNamespaces[NS] = cast.framework.system.MessageType.JSON;
+    dbg('· llamando ctx.start(...)');
+    ctx.start(opts);
+    dbg('· ctx.start(...) devolvió (sin excepción)');
+  } catch (e) {
+    dbg('❌❌ EXCEPCIÓN FATAL en arranque: ' + e.message);
+  }
+</script>
+</body>
+</html>

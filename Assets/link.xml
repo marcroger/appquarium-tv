@@ -1,0 +1,28 @@
+<linker>
+    <!-- Preserve URP Volume components used via generic profile.Add<T>() at runtime.
+         Without this, IL2CPP High Stripping removes types not visible through static analysis. -->
+    <assembly fullname="Unity.RenderPipelines.Universal.Runtime">
+        <type fullname="UnityEngine.Rendering.Universal.Bloom" preserve="all"/>
+        <type fullname="UnityEngine.Rendering.Universal.ColorAdjustments" preserve="all"/>
+        <type fullname="UnityEngine.Rendering.Universal.Vignette" preserve="all"/>
+        <type fullname="UnityEngine.Rendering.Universal.MotionBlur" preserve="all"/>
+        <type fullname="UnityEngine.Rendering.Universal.ChromaticAberration" preserve="all"/>
+        <type fullname="UnityEngine.Rendering.Universal.DepthOfField" preserve="all"/>
+        <type fullname="UnityEngine.Rendering.Universal.PaniniProjection" preserve="all"/>
+        <type fullname="UnityEngine.Rendering.Universal.Tonemapping" preserve="all"/>
+        <type fullname="UnityEngine.Rendering.Universal.LensDistortion" preserve="all"/>
+        <type fullname="UnityEngine.Rendering.Universal.FilmGrain" preserve="all"/>
+        <type fullname="UnityEngine.Rendering.Universal.ShadowsMidtonesHighlights" preserve="all"/>
+        <type fullname="UnityEngine.Rendering.Universal.SplitToning" preserve="all"/>
+        <type fullname="UnityEngine.Rendering.Universal.WhiteBalance" preserve="all"/>
+        <type fullname="UnityEngine.Rendering.Universal.LiftGammaGain" preserve="all"/>
+        <type fullname="UnityEngine.Rendering.Universal.ChannelMixer" preserve="all"/>
+        <type fullname="UnityEngine.Rendering.Universal.ColorCurves" preserve="all"/>
+    </assembly>
+    <assembly fullname="Unity.RenderPipelines.Core.Runtime">
+        <type fullname="UnityEngine.Rendering.VolumeProfile" preserve="all"/>
+        <type fullname="UnityEngine.Rendering.Volume" preserve="all"/>
+        <type fullname="UnityEngine.Rendering.VolumeManager" preserve="all"/>
+        <type fullname="UnityEngine.Rendering.VolumeComponent" preserve="all"/>
+    </assembly>
+</linker>

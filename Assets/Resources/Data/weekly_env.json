@@ -1,0 +1,26 @@
+{
+  "entries": [
+    {"itemId": "bg_kelp"},
+    {"itemId": "sub_gold"},
+    {"itemId": "light_blue"},
+    {"itemId": "bg_deep"},
+    {"itemId": "sub_pebbles"},
+    {"itemId": "light_deep"},
+    {"itemId": "bg_abyss"},
+    {"itemId": "sub_coral_rubble"},
+    {"itemId": "light_purple"},
+    {"itemId": "bg_cave"},
+    {"itemId": "sub_slate"},
+    {"itemId": "light_sunset"},
+    {"itemId": "bg_arctic"},
+    {"itemId": "sub_moss"},
+    {"itemId": "light_cycle"},
+    {"itemId": "bg_volcanic"},
+    {"itemId": "sub_mud"},
+    {"itemId": "bg_jungle"},
+    {"itemId": "sub_volcanic"},
+    {"itemId": "bg_wreck"},
+    {"itemId": "sub_lava"},
+    {"itemId": "sub_ice"}
+  ]
+}

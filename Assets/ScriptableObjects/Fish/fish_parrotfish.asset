@@ -24,6 +24,9 @@ MonoBehaviour:
   turnSpeed: 2.5
   perceptionRadius: 3
   baseSize: 1.35
+  wanderJitter: 0
+  wanderRadius: 0
+  wanderDistance: 0
   bodySwingOverride: -1
   bankingAmountOverride: 5
   turnSmoothingOverride: -1
@@ -40,7 +43,7 @@ MonoBehaviour:
   price: 1.99
   rarity: 2
   displayOrder: 0
-  prefab: {fileID: 0}
+  prefab: {fileID: 2364809624492932499, guid: 646be544d0d64554a8ae8fb534ac4dd7, type: 3}
   assetBundleName: pack_fish_rare
   assetBundleAssetName: fish16_QueenParrotfish
   maturationDays: 12

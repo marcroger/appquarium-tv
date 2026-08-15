@@ -128,5 +128,6 @@ public enum FishState
     Explore,
     Flee,
     Feed,
-    Sleep
+    Sleep,
+    Courtship
 }

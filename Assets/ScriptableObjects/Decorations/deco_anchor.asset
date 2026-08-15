@@ -32,7 +32,7 @@ MonoBehaviour:
   isStarterGift: 0
   price: 0.99
   pearlPrice: 20
-  displayOrder: 1
+  displayOrder: 2
   assetBundleName: pack_decos_toys
   assetBundleAssetName: hall_anchor_prefab
   hasGlow: 0

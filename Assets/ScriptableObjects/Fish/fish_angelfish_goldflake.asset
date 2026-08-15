@@ -24,6 +24,9 @@ MonoBehaviour:
   turnSpeed: 2.3
   perceptionRadius: 3
   baseSize: 1.35
+  wanderJitter: 0
+  wanderRadius: 0
+  wanderDistance: 0
   bodySwingOverride: -1
   bankingAmountOverride: 9
   turnSmoothingOverride: -1
@@ -40,7 +43,7 @@ MonoBehaviour:
   price: 2.99
   rarity: 3
   displayOrder: 0
-  prefab: {fileID: 0}
+  prefab: {fileID: 6073839068271171006, guid: 353572f3c2b75d34abe7495306c85ba1, type: 3}
   assetBundleName: pack_fish_epic
   assetBundleAssetName: fish04_angelfishGoldflake__22animations
   maturationDays: 13

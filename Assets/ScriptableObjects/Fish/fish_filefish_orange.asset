@@ -24,6 +24,9 @@ MonoBehaviour:
   turnSpeed: 2
   perceptionRadius: 2.5
   baseSize: 1
+  wanderJitter: 0
+  wanderRadius: 0
+  wanderDistance: 0
   bodySwingOverride: 0
   bankingAmountOverride: 7
   turnSmoothingOverride: -1
@@ -40,10 +43,11 @@ MonoBehaviour:
   price: 1.49
   rarity: 1
   displayOrder: 0
-  prefab: {fileID: 0}
+  prefab: {fileID: 800859150827058674, guid: 40e3dda63e851fc4da0dbf9b8fe46d53, type: 3}
   assetBundleName: pack_fish_uncommon
   assetBundleAssetName: fish13_OrangespottedFilefish
   maturationDays: 7
   seniorDays: 10
+  seniorGoodbyeDays: 7
   pearlPrice: 25
   pearlSellValue: 5

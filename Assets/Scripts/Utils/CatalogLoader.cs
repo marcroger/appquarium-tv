@@ -110,10 +110,12 @@ public static class CatalogLoader
                 so.generatesBubbles = entry.generatesBubbles;
                 so.preventsAlgae    = entry.preventsAlgae;
                 so.isHideout        = entry.isHideout;
-                so.hasGlow          = entry.hasGlow;
-                so.glowColor        = entry.glowColor;
-                so.glowIntensity    = entry.glowIntensity;
-                so.pearlPrice       = entry.pearlPrice;
+                so.hasGlow            = entry.hasGlow;
+                so.glowColor          = entry.glowColor;
+                so.glowIntensity      = entry.glowIntensity;
+                so.hasBioLuminescence = entry.hasBioLuminescence;
+                if (entry.bioGlowIntensity > 0f) so.bioGlowIntensity = entry.bioGlowIntensity;
+                so.pearlPrice         = entry.pearlPrice;
                 list.Add(so);
             }
             Debug.Log($"[CatalogLoader] {list.Count} decoraciones cargadas desde JSON.");
@@ -197,6 +199,8 @@ public static class CatalogLoader
         public bool   hasGlow;
         public Color  glowColor = Color.white;
         public float  glowIntensity = 0.8f;
+        public bool   hasBioLuminescence;
+        public float  bioGlowIntensity = 1.5f;
         public int    pearlPrice;
     }
 }

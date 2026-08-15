@@ -15,7 +15,7 @@ MonoBehaviour:
   m_DefaultGroup: a3ebaa899329747439135a3a4a74f6ec
   m_currentHash:
     serializedVersion: 2
-    Hash: 00000000000000000000000000000000
+    Hash: b0a56ebff5ed22eef463c3bae3833e20
   m_DisableWriteTypeTree: 0
   m_OptimizeCatalogSize: 0
   m_BuildRemoteCatalog: 1
@@ -54,9 +54,9 @@ MonoBehaviour:
   m_CheckForContentUpdateRestrictionsOption: 0
   m_MonoScriptBundleCustomNaming: 
   m_RemoteCatalogBuildPath:
-    m_Id: 
+    m_Id: 0b826fd02a33b4a4c98f45f84398d210
   m_RemoteCatalogLoadPath:
-    m_Id: 
+    m_Id: e5548e2a6982a1c4aafbbb06acb7c6b8
   m_ContentStateBuildPathProfileVariableName: 
   m_CustomContentStateBuildPath: 
   m_ContentStateBuildPath: 
@@ -68,6 +68,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 1212d413f77c49445b74312573976424, type: 2}
   - {fileID: 11400000, guid: 4e905a5bab1b2b34bbcb045f7e2c4a08, type: 2}
   - {fileID: 11400000, guid: 9818132f518630c4e8197ee577979f34, type: 2}
+  - {fileID: 11400000, guid: 752e8dca9e844dab81fe0a2c1ae01a29, type: 2}
   m_BuildSettings:
     m_LogResourceManagerExceptions: 1
     m_ContentDirectoryBuildPath: Temp/com.unity.addressables/ContentDirectories
@@ -85,7 +86,7 @@ MonoBehaviour:
       - m_Id: 2f3f4ccd10ef23c43aed427a4dd5727c
         m_Value: '{UnityEngine.AddressableAssets.Addressables.RuntimePath}/[BuildTarget]'
       - m_Id: e5548e2a6982a1c4aafbbb06acb7c6b8
-        m_Value: https://pub-2b11cc17bdef4f75bd4d34eeabbd6042.r2.dev/bundles/
+        m_Value: https://pub-2b11cc17bdef4f75bd4d34eeabbd6042.r2.dev/bundles
       - m_Id: ed1a74cfa5d9cca48b0b5d8e38559f6b
         m_Value: '[UnityEngine.AddressableAssets.Addressables.BuildPath]/[BuildTarget]'
     m_ProfileEntryNames:

@@ -53,8 +53,12 @@ public class DecorationPlacer : MonoBehaviour
     public List<DecorationData> allDecorationCatalog = new();
 
     [Header("Posición Y: snapping automático")]
-    [Tooltip("Separación en Y desde el suelo del tanque para decos Floor")]
-    public float floorSnapYOffset = 0.03f;
+    [Tooltip("Epsilon anti z-fighting global. El contacto visual real lo controla DecorationData.embedDepth per-deco (default -0.03f = base pegada a la superficie).")]
+    public float floorSnapYOffset = 0f;
+
+    // Aspect-ratio remapping: set by TvSceneBootstrap after receiving INIT from mobile.
+    // 0 = no remapping (old mobile client or same aspect ratio). See PlaceAt().
+    public float MobileTankHalfWidth = 0f;
 
     // Estado
     private Bounds _tankBounds;
@@ -78,6 +82,77 @@ public class DecorationPlacer : MonoBehaviour
     // Animación de elementos vivos
     private readonly List<StemAnim> _stemAnims = new();
     private readonly List<TipAnim>  _tipAnims  = new();
+
+    // Bioluminiscencia nocturna
+    private readonly Dictionary<string, List<Material>> _bioLumMats   = new();
+    private readonly Dictionary<string, Light>          _bioLumLights = new();
+    private Coroutine _bioLumFade;
+    private float     _bioLumCurrentStrength = 0f; // [0,1] — fuente de verdad para el fade
+
+    // Escala de emisión HDR. Valores >1 por canal activan bloom en URP (umbral ≈1.0).
+    // Mobile (bloom ON):  0.75 → heliopora=1.5, distichopora=1.35 (bloom), pocillopora=1.125, corallium=0.75
+    // TV (bloom OFF): 0.25 → valores máx ~0.5 — evita el color saturado plano sin glow que produce HDR sin bloom.
+    // TV: si en sync desde mobile este valor vuelve a 0.75, restaurar a 0.25 (TV no tiene bloom).
+    private const float BioLumEmissionScale = 0.25f;
+
+    void OnEnable()  => AmbientModeController.OnModeChanged += OnAmbientChanged;
+    void OnDisable() => AmbientModeController.OnModeChanged -= OnAmbientChanged;
+
+    private void OnAmbientChanged(AmbientModeController.AmbientMode mode)
+    {
+        if (_bioLumFade != null) StopCoroutine(_bioLumFade);
+        _bioLumFade = StartCoroutine(FadeBioLum(
+            mode == AmbientModeController.AmbientMode.Night ? 1f : 0f, 2f));
+    }
+
+    private IEnumerator FadeBioLum(float target, float duration)
+    {
+        float start   = _bioLumCurrentStrength;
+        float elapsed = 0f;
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            SetBioLumStrength(Mathf.Lerp(start, target, Mathf.SmoothStep(0f, 1f, elapsed / duration)));
+            yield return null;
+        }
+        SetBioLumStrength(target);
+    }
+
+    private void SetBioLumStrength(float strength)
+    {
+        _bioLumCurrentStrength = strength;
+        foreach (var kv in _bioLumMats)
+        {
+            if (!_placed.TryGetValue(kv.Key, out var pd)) continue;
+            // Emission = tintColor del coral * intensidad calibrada. BioLumEmissionScale mantiene
+            // el brillo sutil (la mayoría quedan < 0.8 HDR por canal, bloom muy tenue o nulo).
+            Color emit = pd.data.tintColor * (pd.data.bioGlowIntensity * BioLumEmissionScale * strength);
+            foreach (var mat in kv.Value)
+            {
+                if (mat == null) continue;
+                if (strength > 0.001f)
+                {
+                    mat.EnableKeyword("_EMISSION");
+                    mat.SetColor("_EmissionColor", emit);
+                }
+                else
+                {
+                    mat.SetColor("_EmissionColor", Color.black);
+                    mat.DisableKeyword("_EMISSION");
+                }
+            }
+        }
+
+        // Luz puntual: ilumina el suelo y peces cercanos para que el efecto se lea como brillo,
+        // no solo como "coral de color". Sin luz visible los peces y el suelo no se tiñen.
+        foreach (var kv in _bioLumLights)
+        {
+            if (kv.Value == null) continue;
+            if (!_placed.TryGetValue(kv.Key, out var pd)) continue;
+            kv.Value.intensity = pd.data.bioGlowIntensity * strength * 0.80f;
+            kv.Value.enabled   = strength > 0.001f;
+        }
+    }
 
     // Elevación de la sombra planar sobre la superficie del suelo (evita z-fighting)
     private const float PlanarShadowLift = 0.02f;
@@ -130,6 +205,20 @@ public class DecorationPlacer : MonoBehaviour
         Debug.Log("[Deco] ✅ DecorationPlacer listo (free positioning)");
     }
 
+    /// <summary>
+    /// Destroy all placed decos and reset tracking state.
+    /// Called before re-initializing from a new INIT message (Cast reconnect).
+    /// </summary>
+    public void RemoveAllDecos()
+    {
+        foreach (var key in new System.Collections.Generic.List<string>(_placed.Keys))
+            RemoveGameObject(key);
+        _placed.Clear();
+        _bioLumMats.Clear();
+        _bioLumLights.Clear();
+        SaveLoaded = false;
+    }
+
     // Rango seguro de Z: el background está en Z=+1.8, margen al frente y al fondo
     public const float ZFront    = -1.0f;   // más cercano visible (sin salirse del suelo)
     public const float ZBack     = +4.2f;   // límite del mesh del suelo
@@ -168,6 +257,13 @@ public class DecorationPlacer : MonoBehaviour
     /// Usa la geometría real del mesh (no la aproximación lineal antigua).
     /// </summary>
     private float FloorY(float z) => FloorSurfaceY(z) + floorSnapYOffset;
+
+    /// <summary>
+    /// Superficie del suelo en world-space a una Z dada. Público para TvFishShadows,
+    /// que necesita saber dónde cae la sombra de los peces sin duplicar la geometría
+    /// del suelo (que se calcula en BuildFloorVisual a partir de _tankBounds).
+    /// </summary>
+    public float GetFloorSurfaceY(float z) => FloorSurfaceY(z);
 
     /// <summary>Posición Y correcta del pivot de una deco en su Z actual.</summary>
     private float GetDecoFloorY(PlacedDeco pd, float z)
@@ -228,6 +324,12 @@ public class DecorationPlacer : MonoBehaviour
             snappedY = ApplyYSnap(worldPos.y, data.placement);
         worldPos = new Vector3(worldPos.x, snappedY, worldPos.z);
 
+        // Remap X from mobile coordinate space to TV coordinate space.
+        // Mobile sends absolute world-X based on its own aspect ratio (portrait tank narrower than TV).
+        // Without this, all decos cluster near the center of the TV's wider view.
+        if (MobileTankHalfWidth > 0.1f && _tankBounds.extents.x > 0.1f)
+            worldPos.x = worldPos.x * (_tankBounds.extents.x / MobileTankHalfWidth);
+
         // Clamp dentro de los bounds del tanque
         worldPos.x = Mathf.Clamp(worldPos.x, _tankBounds.min.x + 0.3f, _tankBounds.max.x - 0.3f);
         worldPos.y = Mathf.Clamp(worldPos.y, _tankBounds.min.y, _tankBounds.max.y - 0.3f);
@@ -247,28 +349,34 @@ public class DecorationPlacer : MonoBehaviour
             ? Instantiate(prefabToSpawn, worldPos, Quaternion.identity, transform)
             : BuildProceduralMesh(data, worldPos);
 
-        // Fix materials: GLBs importados pueden tener shaders Standard (no URP) embebidos.
-        // Convertir en runtime para que sean visibles sin pasos en el Editor.
-        if (data.overrideMaterial == null)
-            FixNonURPMaterials(go);
-
-        // Material override: permite variantes visuales del mismo prefab (ej: ancla nueva/oxidada)
+        // Material override: variantes visuales del mismo prefab (ej: ancla oxidada).
+        // Se aplica ANTES de FixNonURPMaterials a propósito: HallAnchor_rust_mat y
+        // _oldrust usan URP/Lit, que renderiza MAGENTA en WebGL/Cast. Aplicándolo antes,
+        // FixNonURPMaterials lo convierte a FishUnlit (always-included) igual que al
+        // material base. Antes el override se aplicaba sin arreglar → salía magenta.
         if (data.overrideMaterial != null)
             foreach (var mr in go.GetComponentsInChildren<MeshRenderer>())
                 mr.material = data.overrideMaterial;
 
-        // Tint color: multiplica _BaseColor sobre la textura (real) o establece el color base (placeholder).
-        // Para placeholders: siempre aplicar — SetColor ya asignó el color pero el tint lo confirma
-        // con la referencia correcta del material instanciado. Sin la guardia != white porque el
-        // placeholder puede necesitar colores aunque el SO tenga tintColor próximo a blanco.
+        // Fix materials: shaders URP/Lit, Standard o glTF (de GLBs importados o de
+        // overrideMaterial) renderizan magenta en el Cast device. Convertir a FishUnlit
+        // en runtime. Se ejecuta SIEMPRE — con o sin override — para cubrir ambos caminos.
+        FixNonURPMaterials(go);
+
+        // Tint color: multiplica sobre la textura del prefab real, o establece el color base del placeholder.
+        // IMPORTANTE: después de FixNonURPMaterials, los materiales usan FishUnlit (_Color, no _BaseColor).
+        // Aplicar en ambas propiedades para cubrir: FishUnlit (_Color) y glTF/URP que puedan sobrevivir (_BaseColor).
         bool applyTint = usingPlaceholder
             ? (data.tintColor.a > 0f && data.tintColor != Color.white)
             : (data.tintColor != Color.white);
         if (applyTint)
             foreach (var mr in go.GetComponentsInChildren<Renderer>())
                 foreach (var mat in mr.materials)
-                    if (mat != null && mat.HasProperty("_BaseColor"))
-                        mat.SetColor("_BaseColor", data.tintColor);
+                {
+                    if (mat == null) continue;
+                    if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", data.tintColor);
+                    if (mat.HasProperty("_Color"))     mat.SetColor("_Color",     data.tintColor);
+                }
 
         // Desactivar física si el prefab tiene Rigidbody (evita que la gravedad tire la deco al suelo).
         // No se destruye porque puede haber HingeJoint u otros joints que dependen de él.
@@ -295,6 +403,37 @@ public class DecorationPlacer : MonoBehaviour
         // Glow light
         if (data.hasGlow)
             AddGlowLight(go, data.glowColor, data.glowIntensity);
+
+        // Bioluminiscencia: recoger materiales instanciados y añadir luz puntual de reflejo
+        if (data.hasBioLuminescence)
+        {
+            var mats = new List<Material>();
+            foreach (var mr in go.GetComponentsInChildren<Renderer>())
+                foreach (var mat in mr.materials)
+                    if (mat != null && mat.HasProperty("_EmissionColor"))
+                        mats.Add(mat);
+            if (mats.Count > 0)
+            {
+                _bioLumMats[instanceId] = mats;
+
+                // Luz puntual: color del coral, apagada de día, se enciende en SetBioLumStrength
+                var bioLightGO = new GameObject("BioLum");
+                bioLightGO.transform.SetParent(go.transform);
+                bioLightGO.transform.localPosition = Vector3.up * 0.3f;
+                var bioLight = bioLightGO.AddComponent<Light>();
+                bioLight.type      = LightType.Point;
+                bioLight.color     = data.tintColor == Color.white ? Color.cyan : data.tintColor;
+                bioLight.intensity = 0f;
+                bioLight.range     = 4.0f;
+                bioLight.shadows   = LightShadows.None;
+                bioLight.enabled   = false;
+                _bioLumLights[instanceId] = bioLight;
+
+                // Si ya es de noche al colocar, aplicar el strength actual (puede estar en fade)
+                if (_bioLumCurrentStrength > 0.001f)
+                    SetBioLumStrength(_bioLumCurrentStrength);
+            }
+        }
 
         // Rotación base: valores explícitos del SO (defaultRotationY / defaultRotationX).
         // NO se usa data.prefab.transform.eulerAngles porque los GLBs importados por GLTFast
@@ -360,59 +499,32 @@ public class DecorationPlacer : MonoBehaviour
                        * Quaternion.AngleAxis(userRotY, Vector3.up);
         // else: new placement, userRot stays Quaternion.identity
 
-        // Ajustar Y para que la BASE del mesh quede a ras del suelo, no el pivote.
+        // Ajustar Y para que el PUNTO DE APOYO del mesh quede a ras del suelo + embedDepth.
         //
-        // Estrategia de bounds:
-        //   1. Pre-escalar a defaultScale ANTES de medir (los bounds world reflejan
-        //      así el tamaño visual real, no el nativo del prefab).
-        //   2. Usar SOLO MeshRenderer (estáticos, bounds siempre fiables).
-        //      SkinnedMeshRenderer puede reportar bounds erróneos antes de que el
-        //      Animator evalúe su primer frame (huesos en bind-pose o pose corrupta).
-        //      ParticleSystemRenderer: sus bounds antes de emitir son arbitrarios.
-        //   3. Si no hay MeshRenderer (prefab todo SkinnedMesh), no ajustamos Y —
-        //      el snap estándar (floorSnapYOffset) deja el pivote a ras del suelo.
+        // Pipeline:
+        //   1. Pre-escalar a defaultScale y aplicar rotación final ANTES de medir
+        //      (bounds y supportPointLocal escalan correctamente con depthScale).
+        //   2. Resolver punto de apoyo via TryGetSupportWorldY:
+        //        a) supportPointLocal del SO (corales con anchor central)
+        //        b) MeshRenderer.bounds.min.y (la mayoría de decos)
+        //        c) SkinnedMeshRenderer fallback con validación (cofre/estatuas)
+        //   3. Aplicar lift × depthScale para que el offset escale con perspectiva 2.5D.
         if (!fromSave && data.placement == PlacementType.Floor)
         {
             Vector3 preScale = data.defaultScale != Vector3.zero ? data.defaultScale : Vector3.one;
             go.transform.localScale    = preScale; // escala real sin flip — solo para medir
             go.transform.localRotation = Quaternion.Euler(pd.baseTiltX, pd.baseRotY, pd.baseRotZ); // rotación final para bounds correctos
 
-            Bounds? b = null;
-            foreach (var r in go.GetComponentsInChildren<MeshRenderer>()) // estáticos primero
+            if (TryGetSupportWorldY(pd, out float supportY))
             {
-                if (b == null) b = r.bounds;
-                else { var tmp = b.Value; tmp.Encapsulate(r.bounds); b = tmp; }
-            }
-            if (!b.HasValue)
-            {
-                // Fallback: SkinnedMeshRenderer (GLBs como las estatuas no tienen MeshRenderer estático).
-                // IMPORTANTE: con "Optimize Game Objects" activo, el SMR puede reportar bounds
-                // centrados en (0,0,0) antes del primer frame en lugar de en worldPos → el lift
-                // calculado sería incorrecto y hundiría el objeto bajo el suelo.
-                // Validación: solo usar el SMR si su centro está a <1 unidad de worldPos en XY.
-                float maxDist = _tankBounds.size.magnitude; // radio máximo de plausibilidad
-                foreach (var smr in go.GetComponentsInChildren<SkinnedMeshRenderer>())
-                {
-                    var sb = smr.bounds;
-                    // Descartar bounds vacíos o desplazados al origen mundial (Optimize Game Objects stale)
-                    if (sb.size.magnitude < 0.01f) continue;
-                    if (Vector3.Distance(new Vector3(sb.center.x, sb.center.y, 0f),
-                                         new Vector3(worldPos.x,  worldPos.y,  0f)) > maxDist) continue;
-                    if (b == null) b = sb;
-                    else { var tmp = b.Value; tmp.Encapsulate(sb); b = tmp; }
-                }
-            }
-            if (b.HasValue)
-            {
-                float lift    = go.transform.position.y - b.Value.min.y;
+                float targetY = FloorSurfaceY(go.transform.position.z) + data.embedDepth;
+                float lift    = targetY - supportY;
                 float absLift = Mathf.Abs(lift);
                 // Sanity: skip near-zero noise y bounds corruptos (nodo Collada 100×).
-                if (absLift > 0.05f && absLift < _tankBounds.size.y * 0.9f)
+                if (absLift > 0.01f && absLift < _tankBounds.size.y * 0.9f)
                 {
                     // ApplyTransforms va a escalar el mesh por depthScale (perspectiva 2.5D).
                     // El offset del mesh respecto al pivot escala proporcionalmente.
-                    // Sin corregir: lift positivo deja el mesh flotando; lift negativo lo hunde.
-                    // Corrección: multiplicar el lift por depthScale antes de aplicarlo.
                     float depthScale = Mathf.Clamp(1f - go.transform.position.z * ZPerspectiveScale, 0.6f, 1.4f);
                     var   pos        = go.transform.position;
                     pos.y = Mathf.Clamp(pos.y + lift * depthScale,
@@ -538,6 +650,40 @@ public class DecorationPlacer : MonoBehaviour
     }
 
     /// <summary>
+    /// Resetea rotación, tilt y escala de la deco a los valores por defecto del SO.
+    /// Mantiene la posición XZ y el target de montaje. Re-snapea Y al suelo o a la superficie.
+    /// </summary>
+    public bool ResetTransform(string itemId)
+    {
+        if (!_placed.TryGetValue(itemId, out var pd) || pd.go == null) return false;
+
+        // Si había rotación/escala custom, hay que reproporcionar pivotBaseHeight a la escala 1
+        // antes de resetar (igual que UpdatePlacedScale).
+        if (pd.scaleFactor > 0.001f && !Mathf.Approximately(pd.scaleFactor, 1f))
+            pd.pivotBaseHeight = pd.pivotBaseHeight / pd.scaleFactor;
+
+        pd.userRot     = Quaternion.identity;
+        pd.rotationY   = 0f;
+        pd.tiltX       = 0f;
+        pd.scaleFactor = 1f;
+        ApplyTransforms(pd);
+
+        // Re-snap Y: al suelo si está en el suelo, a la superficie del target si está montada
+        if (pd.mountedOnId != null)
+        {
+            var cur = pd.go.transform.position;
+            DragDecoToSurface(pd.instanceId, cur.x, cur.z, pd.mountedOnId);
+            // DragDecoToSurface llama ApplyTransforms y oculta la sombra internamente
+        }
+        else
+        {
+            SnapBoundsToFloor(pd);
+            UpdateShadow(pd);
+        }
+        return true;
+    }
+
+    /// <summary>
     /// Devuelve el scaleFactor actual de la deco indicada.
     /// </summary>
     public float GetPlacedScale(string id) =>
@@ -638,29 +784,83 @@ public class DecorationPlacer : MonoBehaviour
         if (pd.go == null || pd.data.placement != PlacementType.Floor) return;
         if (pd.mountedOnId != null) return; // montada sobre otra deco — no snapear al suelo
 
-        // SOLO usar MeshRenderer estáticos — igual que PlaceAt frame 0.
-        // SkinnedMeshRenderer se excluye aquí: sus bounds en runtime reflejan la POSE de animación,
-        // no el bind pose. Un Animator activo puede mover el mesh hasta 2u hacia arriba (ej: cofre),
-        // haciendo que SnapBoundsToFloor calcule un lift enorme negativo y hunda la deco.
-        // Para decos SMR-only (cofre), pivotBaseHeight ya fue medido en frame 0 (bind pose) y es
-        // fiable → GetDecoFloorY devuelve la Y correcta sin necesidad de re-snap por bounds.
+        var   pos            = pd.go.transform.position;
+        float effectiveFloor = FloorSurfaceY(pos.z) + pd.data.embedDepth;
+
+        // Punto de apoyo actual del mesh en mundo (Y). Soporta tres fuentes:
+        // 1. supportPointLocal del SO (override manual — útil en corales con anchor central)
+        // 2. MeshRenderer estático → bounds.min.y (preciso para la mayoría de decos)
+        // 3. SkinnedMeshRenderer si no hay MR estático (cofre/estatuas — solo si bounds son plausibles)
+        if (!TryGetSupportWorldY(pd, out float supportY)) return;
+
+        float lift = effectiveFloor - supportY;
+        pos.y += lift;
+        pd.go.transform.position = pos;
+        // pivotBaseHeight = distancia de FloorY (surface + snapOffset) al pivot.
+        // Mantiene la semántica original para drag/move (clearance sigue siendo correcto).
+        pd.pivotBaseHeight = Mathf.Max(0f, pos.y - FloorY(pos.z));
+    }
+
+    /// <summary>
+    /// Calcula la Y world-space del "punto de apoyo" actual del mesh — el punto que debe
+    /// tocar la superficie de contacto (suelo o mount target).
+    ///
+    /// Orden de resolución:
+    ///   1. <see cref="DecorationData.supportPointLocal"/> ≠ zero: usar ese punto local del
+    ///      prefab, transformado al mundo (incluye rotación y escala actuales).
+    ///   2. MeshRenderer estático: usar <c>bounds.min.y</c> del AABB combinado.
+    ///   3. SkinnedMeshRenderer (fallback): solo si los bounds son plausibles
+    ///      (size razonable y centro cerca de la posición actual). Evita el bug de
+    ///      Animator activo que reporta bounds basura.
+    /// </summary>
+    private bool TryGetSupportWorldY(PlacedDeco pd, out float supportY)
+    {
+        supportY = 0f;
+        if (pd.go == null) return false;
+
+        // 1. Override manual del SO (útil para corales con anchor central)
+        if (pd.data.supportPointLocal != Vector3.zero)
+        {
+            // TransformPoint usa la rotación y escala actuales del GO → válido para
+            // calcular dónde caería el punto de apoyo tras user rotation/scale.
+            supportY = pd.go.transform.TransformPoint(pd.data.supportPointLocal).y;
+            return true;
+        }
+
+        // 2. MeshRenderer estático
         Bounds? mb = null;
         foreach (var r in pd.go.GetComponentsInChildren<MeshRenderer>())
         {
             if (mb == null) mb = r.bounds;
             else { var tmp = mb.Value; tmp.Encapsulate(r.bounds); mb = tmp; }
         }
-        // Sin MeshRenderers estáticos (prefab todo SMR como el cofre): no snapear — confiar en pivotBaseHeight.
-        if (!mb.HasValue || mb.Value.size.magnitude > 30f) return;
+        if (mb.HasValue && mb.Value.size.magnitude < 30f)
+        {
+            supportY = mb.Value.min.y;
+            return true;
+        }
 
-        var   pos          = pd.go.transform.position;
-        // Alinear la base visual del mesh a la superficie real del suelo (sin snapOffset).
-        float effectiveFloor = FloorSurfaceY(pos.z);
-        float lift           = effectiveFloor - mb.Value.min.y;
-        pos.y += lift;
-        pd.go.transform.position = pos;
-        // pivotBaseHeight = distancia de FloorY (surface + snapOffset) al pivot.
-        pd.pivotBaseHeight = Mathf.Max(0f, pos.y - FloorY(pos.z));
+        // 3. SkinnedMeshRenderer fallback (cofre, estatuas con SMR-only)
+        // Validar bounds antes de fiarse — Animator puede reportar basura.
+        Vector3 posXY = new Vector3(pd.go.transform.position.x, 0f, pd.go.transform.position.z);
+        float   maxR  = _tankBounds.size.magnitude;
+        Bounds? sb    = null;
+        foreach (var smr in pd.go.GetComponentsInChildren<SkinnedMeshRenderer>())
+        {
+            var b = smr.bounds;
+            if (b.size.magnitude < 0.01f || b.size.magnitude > 30f) continue;
+            if (Vector3.Distance(new Vector3(b.center.x, 0f, b.center.z), posXY) > maxR) continue;
+            if (sb == null) sb = b;
+            else { var tmp = sb.Value; tmp.Encapsulate(b); sb = tmp; }
+        }
+        if (sb.HasValue)
+        {
+            supportY = sb.Value.min.y;
+            return true;
+        }
+
+        // Sin bounds plausibles: no re-snapear (confiar en pivotBaseHeight original).
+        return false;
     }
 
     /// <summary>Desplaza la deco en X, respetando los bordes del tanque.</summary>
@@ -899,6 +1099,40 @@ public class DecorationPlacer : MonoBehaviour
         var   pos  = pd.go.transform.position;
         float newZ = Mathf.Clamp(pos.z + deltaZ, ZFront, ZDecoBack);
         return Mathf.Abs(newZ - pos.z) > 0.001f;   // solo límite de Z
+    }
+
+    /// <summary>Carga decoraciones de forma asíncrona (yield cada 2 decos) para no bloquear el browser loop.</summary>
+    public System.Collections.IEnumerator LoadFromSaveAsync(List<DecoPlacement> placements)
+    {
+        SaveLoaded = true;
+        if (placements == null) yield break;
+        int n = 0;
+        foreach (var p in placements)
+        {
+            if (string.IsNullOrEmpty(p.instanceId))
+                p.instanceId = p.itemId + "_0";
+
+            var data = allDecorationCatalog.Find(d => d.itemId == p.itemId);
+            if (data == null)
+            {
+                Debug.LogWarning($"[Deco] LoadFromSaveAsync: itemId '{p.itemId}' not found ({allDecorationCatalog.Count} entries). Skipped.");
+                JsBridge.Log($"ERR deco not found: {p.itemId}");
+                continue;
+            }
+            JsBridge.Log($"Placing deco {++n}: {p.itemId} prefab={(data.prefab != null ? "OK" : "NULL")}");
+            var pos = p.position;
+            if (data.placement == PlacementType.Floor && Mathf.Approximately(pos.z, 0f))
+                pos.z = ZDecoBack;
+            Quaternion? savedQ = p.hasUserRot
+                ? (Quaternion?)new Quaternion(p.quatX, p.quatY, p.quatZ, p.quatW)
+                : null;
+            PlaceAt(data, pos, p.flipped, p.rotationY, p.tiltX, p.scaleFactor, fromSave: true, instanceId: p.instanceId, savedUserRot: savedQ);
+            if (n % 2 == 0) yield return null; // yield every 2 decos — keeps browser loop alive
+        }
+        foreach (var p in placements)
+            if (!string.IsNullOrEmpty(p.mountedOnInstanceId))
+                MountDecoOnTarget(p.instanceId, p.mountedOnInstanceId);
+        JsBridge.Log($"Decos placed: {_placed.Count}/{placements.Count}");
     }
 
     /// <summary>Carga decoraciones desde la lista de posiciones guardada.</summary>
@@ -1148,10 +1382,15 @@ public class DecorationPlacer : MonoBehaviour
 
     /// <summary>
     /// Mueve una deco en modo surface climbing: la deco se pega a la superficie del target.
-    /// Trata el target como un elipsoide 3D:
-    ///   - Gesto horizontal → X en la superficie
-    ///   - Gesto vertical   → Z (profundidad), igual que en el suelo (acercar/alejar)
-    ///   - Y se calcula automáticamente como la cima del elipsoide en ese (X, Z)
+    ///
+    /// Pipeline:
+    ///   1. Raycast vertical desde (newX, target.max.y+1, requestedZ) hacia abajo.
+    ///      Filtrado por subtree del target (el dragging deco puede tener sus propios colliders).
+    ///   2. Si impacta: alinear el punto de apoyo del mesh con hit.point + hit.normal × embedDepth.
+    ///      Esto sigue la SUPERFICIE REAL del mesh triangulado, no una aproximación elipsoidal.
+    ///   3. Si no impacta (off-mesh): fallback al modelo elipsoidal antiguo.
+    ///
+    /// Gesto horizontal → X. Gesto vertical → Z (profundidad). Y automática.
     /// </summary>
     public void DragDecoToSurface(string itemId, float newX, float requestedZ, string targetId)
     {
@@ -1161,50 +1400,54 @@ public class DecorationPlacer : MonoBehaviour
         var tb = GetPlacedBounds(targetId);
         if (!tb.HasValue) return;
 
-        float cx = tb.Value.center.x;
-        float cy = tb.Value.center.y;
-        float cz = tb.Value.center.z;  // centro Z del AABB (más preciso que el pivot para GLBs con offset)
-        float a  = Mathf.Max(tb.Value.extents.x, 0.01f);   // semi-eje X
-        float b  = Mathf.Max(tb.Value.extents.y, 0.01f);   // semi-eje Y
-        // Semi-eje Z: extent real del AABB en Z, acotado a 2×a para evitar rangos irracionales
-        // en objetos rotados (e.g. columnas con rotX=-90 donde Z world = altura del cilindro).
-        float c  = Mathf.Max(Mathf.Min(tb.Value.extents.z, a * 2f), 0.01f);
+        // Clamp X/Z al footprint del target (con margen anti-overhang)
+        float clampedX = Mathf.Clamp(newX,      tb.Value.min.x, tb.Value.max.x);
+        float clampedZ = Mathf.Clamp(requestedZ, tb.Value.min.z, tb.Value.max.z);
 
-        // Deltas respecto al centro del target
-        float dx = Mathf.Clamp(newX      - cx, -a, a);
-        float dz = Mathf.Clamp(requestedZ - cz, -c, c);
+        // Intentar raycast vertical contra el mesh real del target
+        bool hitOk = TryRaycastSurface(tpd, clampedX, clampedZ,
+                                       out Vector3 hitPoint, out Vector3 hitNormal);
 
-        // Clamp al footprint XZ del elipsoide (no salir por los laterales en profundidad)
-        float txz2 = (dx / a) * (dx / a) + (dz / c) * (dz / c);
-        if (txz2 > 1f)
+        Vector3 newPos;
+        if (hitOk)
         {
-            float inv = 1f / Mathf.Sqrt(txz2);
-            dx *= inv; dz *= inv;
+            // Punto de contacto deseado: superficie real + offset en la dirección normal
+            Vector3 contactWorld = hitPoint + hitNormal * pd.data.embedDepth;
+
+            // Calcular dónde está el punto de apoyo del mesh actualmente y trasladar
+            if (!TryGetSupportWorldY(pd, out float supportY))
+                supportY = pd.go.transform.position.y - pd.pivotBaseHeight; // fallback al modelo de pivot
+
+            float deltaY = contactWorld.y - supportY;
+            newPos = new Vector3(clampedX, pd.go.transform.position.y + deltaY, clampedZ);
+        }
+        else
+        {
+            // Fallback elipsoidal (raycast no impactó — target sin MeshCollider o XZ off-mesh)
+            float cx = tb.Value.center.x, cy = tb.Value.center.y, cz = tb.Value.center.z;
+            float a  = Mathf.Max(tb.Value.extents.x, 0.01f);
+            float b  = Mathf.Max(tb.Value.extents.y, 0.01f);
+            float c  = Mathf.Max(Mathf.Min(tb.Value.extents.z, a * 2f), 0.01f);
+            float dx = Mathf.Clamp(clampedX - cx, -a, a);
+            float dz = Mathf.Clamp(clampedZ - cz, -c, c);
+            float txz2 = (dx / a) * (dx / a) + (dz / c) * (dz / c);
+            if (txz2 > 1f) { float inv = 1f / Mathf.Sqrt(txz2); dx *= inv; dz *= inv; }
+            float inner = Mathf.Max(0f, 1f - (dx / a) * (dx / a) - (dz / c) * (dz / c));
+            float dy = b * Mathf.Sqrt(inner);
+            float nrx = dx / (a * a), nry = dy / (b * b), nrz = dz / (c * c);
+            float nrLen = Mathf.Sqrt(nrx * nrx + nry * nry + nrz * nrz);
+            if (nrLen > 0.001f) { nrx /= nrLen; nry /= nrLen; nrz /= nrLen; }
+            else                 { nrx  = 0f;    nry  = 1f;    nrz  = 0f; }
+            float clearance = pd.pivotBaseHeight + pd.data.embedDepth + floorSnapYOffset;
+            newPos = new Vector3(cx + dx + nrx * clearance,
+                                 cy + dy + nry * clearance,
+                                 cz + dz + nrz * clearance);
         }
 
-        // Y en el hemisferio superior del elipsoide para este (dx, dz):
-        // (dx/a)² + (dy/b)² + (dz/c)² = 1  →  dy = b·√(1-(dx/a)²-(dz/c)²)
-        float inner = Mathf.Max(0f, 1f - (dx / a) * (dx / a) - (dz / c) * (dz / c));
-        float dy    = b * Mathf.Sqrt(inner);
-
-        // Normal outward en (dx, dy, dz) del elipsoide: (dx/a², dy/b², dz/c²) normalizado
-        float nrx = dx / (a * a);
-        float nry = dy / (b * b);
-        float nrz = dz / (c * c);
-        float nrLen = Mathf.Sqrt(nrx * nrx + nry * nry + nrz * nrz);
-        if (nrLen > 0.001f) { nrx /= nrLen; nry /= nrLen; nrz /= nrLen; }
-        else                 { nrx  = 0f;    nry  = 1f;    nrz  = 0f; }
-
-        // Pivot a clearance en la dirección normal para que la base del mesh toque la superficie
-        float clearance = pd.pivotBaseHeight + floorSnapYOffset;
-        float mountX    = cx + dx + nrx * clearance;
-        float mountY    = cy + dy + nry * clearance;
-        float mountZ    = cz + dz + nrz * clearance;
-
-        var pos = pd.go.transform.position;
-        pos.x = Mathf.Clamp(mountX, _tankBounds.min.x + 0.3f, _tankBounds.max.x - 0.3f);
-        pos.y = Mathf.Clamp(mountY, _tankBounds.min.y,         _tankBounds.max.y - 0.1f);
-        pos.z = Mathf.Clamp(mountZ, ZFront, ZDecoBack);
+        var pos = newPos;
+        pos.x = Mathf.Clamp(pos.x, _tankBounds.min.x + 0.3f, _tankBounds.max.x - 0.3f);
+        pos.y = Mathf.Clamp(pos.y, _tankBounds.min.y,         _tankBounds.max.y - 0.1f);
+        pos.z = Mathf.Clamp(pos.z, ZFront, ZDecoBack);
         pd.go.transform.position = pos;
         ApplyTransforms(pd);
         // Mientras la deco asciende por la superficie de otra, la sombra de contacto
@@ -1212,6 +1455,57 @@ public class DecorationPlacer : MonoBehaviour
         // flotando en el agua. Se restaura en DragDecoTo (vuelta al suelo) o en
         // UnparentDeco → SnapDecoToFloor (soltar en suelo).
         if (pd.shadowGO != null) pd.shadowGO.SetActive(false);
+    }
+
+    // Buffer compartido para Physics.RaycastNonAlloc — evita alocar arrays en cada drag
+    private static readonly RaycastHit[] _surfaceHitBuffer = new RaycastHit[16];
+
+    /// <summary>
+    /// Raycast vertical contra los colliders del target. Filtra solo hits que pertenecen
+    /// al subtree del target GO (ignora colliders del dragging deco u otras decos).
+    /// Devuelve el hit más alto (el primero encontrado bajando).
+    /// </summary>
+    private bool TryRaycastSurface(PlacedDeco target, float x, float z,
+                                   out Vector3 hitPoint, out Vector3 hitNormal)
+    {
+        hitPoint = default; hitNormal = default;
+        var tb = GetPlacedBounds(target.instanceId);
+        if (!tb.HasValue) return false;
+
+        // Origen 1u por encima del top del AABB del target, distancia = altura del AABB + margen
+        Vector3 origin   = new Vector3(x, tb.Value.max.y + 1f, z);
+        float   distance = tb.Value.size.y + 2f;
+
+        int count = Physics.RaycastNonAlloc(origin, Vector3.down, _surfaceHitBuffer, distance,
+            ~0, QueryTriggerInteraction.Ignore);
+
+        // Filtrar hits que estén bajo el subtree del target GO
+        float bestY = float.NegativeInfinity;
+        bool  found = false;
+        for (int i = 0; i < count; i++)
+        {
+            var h = _surfaceHitBuffer[i];
+            if (h.collider == null) continue;
+            if (!IsDescendantOf(h.collider.transform, target.go.transform)) continue;
+            if (h.point.y > bestY)
+            {
+                bestY     = h.point.y;
+                hitPoint  = h.point;
+                hitNormal = h.normal.sqrMagnitude > 0.001f ? h.normal.normalized : Vector3.up;
+                found     = true;
+            }
+        }
+        return found;
+    }
+
+    private static bool IsDescendantOf(Transform t, Transform root)
+    {
+        while (t != null)
+        {
+            if (t == root) return true;
+            t = t.parent;
+        }
+        return false;
     }
 
     /// <summary>
@@ -1254,6 +1548,24 @@ public class DecorationPlacer : MonoBehaviour
             if (!pd.cachedAabb.HasValue) RefreshAabb(pd); // lazy init primer frame
             yield return (pd.go.transform.position, pd.cachedAabb.Value);
         }
+    }
+
+    /// <summary>
+    /// Devuelve la posición del escondite (isHideout) colocado más cercano dentro de maxDist.
+    /// Null si no hay ninguno en rango. Usado por SteeringController para peces tímidos en Flee.
+    /// </summary>
+    public Vector3? GetNearestHideoutPosition(Vector3 from, float maxDist)
+    {
+        Vector3? best    = null;
+        float   bestSqr  = maxDist * maxDist;
+        foreach (var kv in _placed)
+        {
+            if (kv.Value.data?.isHideout != true || kv.Value.go == null) continue;
+            Vector3 pos     = kv.Value.go.transform.position;
+            float   sqrDist = (pos - from).sqrMagnitude;
+            if (sqrDist < bestSqr) { bestSqr = sqrDist; best = pos; }
+        }
+        return best;
     }
 
     /// <summary>
@@ -1341,6 +1653,8 @@ public class DecorationPlacer : MonoBehaviour
             if (inst.go        != null) Destroy(inst.go);
             if (inst.shadowGO  != null) Destroy(inst.shadowGO);
             _placed.Remove(itemId);
+            _bioLumMats.Remove(itemId);
+            _bioLumLights.Remove(itemId);
         }
     }
 
@@ -1370,8 +1684,14 @@ public class DecorationPlacer : MonoBehaviour
     /// </summary>
     public static void FixNonURPMaterials(GameObject go)
     {
-        var urpLit = Shader.Find("Universal Render Pipeline/Lit");
-        if (urpLit == null) return;
+        // Device-safe targets (CG legacy, sin LightMode → ejecutan en el Cast renderer):
+        //   DecoLit  = con iluminación (relieve) — preferido para decos.
+        //   FishUnlit/Sprites = plano — fallback si DecoLit no estuviera disponible.
+        // URP/Lit, Standard y glTF NO ejecutan en el Cast (magenta), aunque estén always-included.
+        var decoLit   = Shader.Find("Appquarium/DecoLit");
+        var fishUnlit = Shader.Find("Appquarium/FishUnlit") ?? Shader.Find("Sprites/Default");
+        var litTarget = decoLit != null ? decoLit : fishUnlit;
+        if (litTarget == null) return;
 
         foreach (var mr in go.GetComponentsInChildren<Renderer>())
         {
@@ -1384,71 +1704,53 @@ public class DecorationPlacer : MonoBehaviour
                 var mat = mats[i];
                 if (mat == null) { newMats[i] = mat; continue; }
                 string sname = mat.shader != null ? mat.shader.name : "";
+                JsBridge.Log($"FixMat {go.name}: mat={mat.name} shader={sname}");
 
-                // Dejar Sprites/Default y UI intactos
-                if (sname.Contains("Sprites") || sname.Contains("UI/Default"))
+                // ⚠ 2026-08-11 — FishUnlit en una DECO la deja SIN ILUMINACIÓN.
+                // El ancla venía de fábrica con Appquarium/FishUnlit y esta guarda la
+                // dejaba pasar por "ya es device-safe": salía como una silueta negra en la
+                // tele mientras la roca y el coral (que sí caían en DecoLit) tenían volumen.
+                // FishUnlit es plano a propósito —vale para peces— pero una deco necesita
+                // el lambert de DecoLit para que se le note el relieve del mesh.
+                bool unlitEnDeco = decoLit != null
+                                   && sname.Contains("Appquarium/FishUnlit")
+                                   && !mat.name.EndsWith("_DECOLIT");
+
+                // Ya device-safe → dejar intacto: Sprites/UI, DecoLit, o ya procesado.
+                if (!unlitEnDeco
+                    && (sname.Contains("Sprites") || sname.Contains("UI/Default")
+                        || sname.Contains("Appquarium/")
+                        || mat.name.EndsWith("_DECOLIT")))
                 { newMats[i] = mat; continue; }
 
-                // Materiales ya procesados por nosotros → saltar
-                if (mat.name.EndsWith("_URP"))
-                { newMats[i] = mat; continue; }
+                // Todo lo demás que NO ejecuta en el Cast (URP/Lit, Standard, glTF/PbrMetallic,
+                // Hidden/InternalError) → convertir a DecoLit (o FishUnlit fallback). Soporta los
+                // tres convenios de propiedades: URP (_BaseMap), Standard (_MainTex), glTFast
+                // (baseColorTexture). Antes el glTF se escapaba ("glTF/PbrMetallicRoughness" no
+                // contiene "glTFPbr") → corales/estatuas salían magenta en el device.
+                bool needsFix = unlitEnDeco
+                             || sname.Contains("Universal Render Pipeline/Lit")
+                             || sname.Contains("Hidden/InternalError")
+                             || sname.Contains("Standard")
+                             || sname.Contains("glTF")
+                             || sname.Contains("PbrMetallic");
+                if (!needsFix) { newMats[i] = mat; continue; }
 
-                // Materiales URP/Lit nativos (HQ Rocks, Stylized Rocks, etc.)
-                // Re-resolver el shader por nombre: el bytecode del bundle puede no coincidir
-                // con el shader compilado del proyecto → material lila/morado.
-                if (sname.Contains("Universal Render Pipeline/Lit"))
-                {
-                    var found = Shader.Find(sname);
-                    if (found != null && found != mat.shader)
-                    {
-                        var fixedMat = new Material(mat);
-                        // Preservar textura antes de cambiar shader (puede perderse el binding)
-                        Texture litTex = null;
-                        if (mat.HasProperty("_BaseMap")) litTex = mat.GetTexture("_BaseMap");
-                        if (litTex == null && mat.HasProperty("_MainTex")) litTex = mat.GetTexture("_MainTex");
-                        fixedMat.shader = found;
-                        if (litTex != null && fixedMat.HasProperty("_BaseMap"))
-                            fixedMat.SetTexture("_BaseMap", litTex);
-                        newMats[i] = fixedMat;
-                        anyFixed = true;
-                    }
-                    else { newMats[i] = mat; }
-                    continue;
-                }
-
-                // Leer textura base ANTES de cambiar shader.
-                // GLTFast (glTFPbrMetallicRoughness) usa propiedades sin underscore: baseColorTexture.
-                // URP/Lit usa _BaseMap. Standard usa _MainTex.
-                Texture mainTex = null;
-                if (mat.HasProperty("_BaseMap"))          mainTex = mat.GetTexture("_BaseMap");
-                if (mainTex == null && mat.HasProperty("baseColorTexture")) mainTex = mat.GetTexture("baseColorTexture");
-                if (mainTex == null && mat.HasProperty("_MainTex"))         mainTex = mat.GetTexture("_MainTex");
-
-                // Leer normal map: URP=_BumpMap, GLTFast=normalTexture
-                Texture bumpMap = null;
-                if (mat.HasProperty("_BumpMap"))     bumpMap = mat.GetTexture("_BumpMap");
-                if (bumpMap == null && mat.HasProperty("normalTexture")) bumpMap = mat.GetTexture("normalTexture");
+                Texture baseTex = null;
+                if (mat.HasProperty("_BaseMap"))                            baseTex = mat.GetTexture("_BaseMap");
+                if (baseTex == null && mat.HasProperty("baseColorTexture")) baseTex = mat.GetTexture("baseColorTexture");
+                if (baseTex == null && mat.HasProperty("_MainTex"))         baseTex = mat.GetTexture("_MainTex");
 
                 Color baseColor = Color.white;
-                if (mat.HasProperty("_BaseColor"))        baseColor = mat.GetColor("_BaseColor");
-                else if (mat.HasProperty("baseColorFactor")) baseColor = mat.GetColor("baseColorFactor");
-                else if (mat.HasProperty("_Color"))       baseColor = mat.GetColor("_Color");
+                if (mat.HasProperty("_BaseColor"))           baseColor = mat.GetColor("_BaseColor");
+                else if (mat.HasProperty("baseColorFactor"))  baseColor = mat.GetColor("baseColorFactor");
+                else if (mat.HasProperty("_Color"))           baseColor = mat.GetColor("_Color");
 
-                // Crear material standalone con URP/Lit.
-                // NOTA: NO copiamos _MetallicGlossMap — los GLBs de Smithsonian tienen metallic≈1.0
-                // bakeado en el canal B del mapa PBR, lo que causa aspecto cromado/blanco.
-                // Forzamos metallic=0 y smoothness baja para superficies orgánicas.
-                var newMat = new Material(urpLit) { name = mat.name + "_URP" };
-                newMat.SetColor("_BaseColor", baseColor);
-                newMat.SetFloat("_Metallic", 0f);
-                newMat.SetFloat("_Smoothness", mainTex != null ? 0.35f : 0.1f);
-                if (mainTex != null) newMat.SetTexture("_BaseMap", mainTex);
-                if (bumpMap != null)
-                {
-                    newMat.SetTexture("_BumpMap", bumpMap);
-                    newMat.EnableKeyword("_NORMALMAP");
-                }
-                newMats[i] = newMat;
+                var fixedMat = new Material(litTarget) { name = mat.name + "_DECOLIT" };
+                if (baseTex != null) fixedMat.SetTexture("_MainTex", baseTex);
+                if (fixedMat.HasProperty("_Color"))      fixedMat.SetColor("_Color", baseColor);
+                if (fixedMat.HasProperty("_Brightness")) fixedMat.SetFloat("_Brightness", 1f);
+                newMats[i] = fixedMat;
                 anyFixed = true;
             }
             if (anyFixed) mr.materials = newMats;
@@ -2210,6 +2512,15 @@ public class DecorationPlacer : MonoBehaviour
         Vector3 decoPos     = pd.go.transform.position;
         float   floorSurface = Mathf.Max(FloorSurfaceY(decoPos.z), FloorSurfaceY(0f));
         float   floorY       = floorSurface + PlanarShadowLift;
+
+        // ⚠ 2026-08-11 — NO derivar esta Y de los bounds de la deco. Probado y descartado
+        // dos veces:
+        //   · pegarla a bounds.min.y  ⇒ la propia deco tapa la sombra entera, invisible.
+        //   · bounds.min.y - margen   ⇒ la roca tiene la base ENTERRADA (bounds hasta
+        //     -3,80, por debajo del suelo en -3,13; el occluder tapa lo de abajo), así que
+        //     su sombra se iba al sótano, muy separada del objeto.
+        // La superficie del suelo es la referencia correcta para las dos. El grosor visible
+        // lo da _Flatten en el shader, no la posición.
 
         if (pd.planarShadowPairs != null)
         {

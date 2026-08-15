@@ -219,11 +219,12 @@ public class WaterSurface : MonoBehaviour
 
     private Material BuildTransparentMaterial(Texture2D tex)
     {
-        Shader shader = Shader.Find("Universal Render Pipeline/Unlit")
-                     ?? Shader.Find("Unlit/Transparent")
-                     ?? Shader.Find("Legacy Shaders/Transparent/Diffuse")
-                     ?? Shader.Find("Sprites/Default")
-                     ?? Shader.Find("UI/Default");
+        // Sprites/Default está garantizado en Always Included Shaders.
+        // URP/Unlit tiene bug de color space en WebGL — usarlo como fallback, no primario.
+        Shader shader = Shader.Find("Sprites/Default")
+                     ?? Shader.Find("UI/Default")
+                     ?? Shader.Find("Universal Render Pipeline/Unlit")
+                     ?? Shader.Find("Unlit/Transparent");
 
         if (shader == null)
         {

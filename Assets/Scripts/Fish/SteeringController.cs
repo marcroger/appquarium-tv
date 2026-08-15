@@ -61,7 +61,9 @@ public class SteeringController : MonoBehaviour
     private Vector3      _wanderTarget  = Vector3.forward;
     private Vector3      _schoolOffset  = Vector3.zero;  // posición preferida dentro del cardumen
     private Bounds       _tankBounds;
-    private System.Random _rng          = new System.Random(); // seed por instancia (ver SetSeed)
+    private System.Random _rng                 = new System.Random(); // seed por instancia (ver SetSeed)
+    private float        _breathPhase         = 0f;   // fase Y-bob durante Sleep (per-instance)
+    private float        _courtshipOrbitSign  = 1f;   // +1 CW / -1 CCW — fijado en SetSeed
 
     // Referencia lazy a DecorationPlacer para evitar obstáculos colocados
     private DecorationPlacer _decoPlacer;
@@ -89,6 +91,10 @@ public class SteeringController : MonoBehaviour
         float ox = (float)(_rng.NextDouble() * 2.0 - 1.0) * 0.8f;
         float oy = (float)(_rng.NextDouble() * 2.0 - 1.0) * 0.35f;
         _schoolOffset = new Vector3(ox, oy, 0f);
+        // Fase del breathing Y-bob durante Sleep — distinta por pez para que no respiren en sync
+        _breathPhase = (float)(_rng.NextDouble() * Mathf.PI * 2f);
+        // Dirección orbital de cortejo: alterna por seed (una CW, otra CCW en la misma pareja)
+        _courtshipOrbitSign = (seed % 2 == 0) ? 1f : -1f;
     }
 
     /// <summary>
@@ -124,9 +130,9 @@ public class SteeringController : MonoBehaviour
                 break;
 
             case FishState.Flee:
-                force += Flee(fleeTarget)  * 3f;
-                force += AvoidWalls()      * wallAvoidanceWeight;
-                force += AvoidObstacles()  * 4f;
+                force += FleeOrHide(fleeTarget, data) * 3f;
+                force += AvoidWalls()                 * wallAvoidanceWeight;
+                force += AvoidObstacles()             * 4f;
                 break;
 
             case FishState.Feed:
@@ -137,8 +143,19 @@ public class SteeringController : MonoBehaviour
                 break;
 
             case FishState.Sleep:
-                _velocity = Vector3.Lerp(_velocity, Vector3.zero, Time.deltaTime * 2f);
-                return Vector3.zero;
+                // Reposo realista: drift suave + breathing Y-bob (ventilación branquial) + wall avoid mínimo.
+                force += Wander()     * 0.04f;
+                force += AvoidWalls() * (wallAvoidanceWeight * 0.5f);
+                float breath = Mathf.Sin(Time.time * 1.5f + _breathPhase) * 0.12f;
+                force.y += breath;
+                break;
+
+            case FishState.Courtship:
+                force += CourtsPartner()  * 2.5f;
+                force += AvoidWalls()     * wallAvoidanceWeight;
+                force += Separate(data)   * (separationWeight * 0.25f); // reducida para que se acerquen
+                force += AvoidObstacles() * 3f;
+                break;
         }
 
         return force;
@@ -157,6 +174,8 @@ public class SteeringController : MonoBehaviour
         _wanderTarget = (transform.forward.sqrMagnitude > 0.01f
             ? transform.forward.normalized
             : Vector3.right) * wanderRadius;
+        // Courtship no usa wander, pero resetear evita que el target acumulado
+        // cause un burst lateral al salir de Courtship → Idle → Explore
     }
 
     /// <summary>
@@ -257,6 +276,23 @@ public class SteeringController : MonoBehaviour
     }
 
     /// <summary>
+    /// Peces tímidos (shyness ≥ 0.5) buscan el escondite más cercano al huir.
+    /// Si no hay escondite en rango, o si ya están dentro, huyen del punto de amenaza.
+    /// </summary>
+    private Vector3 FleeOrHide(Vector3 threat, FishData data)
+    {
+        if (data == null || data.shyness < 0.5f) return Flee(threat);
+        EnsureDecoPlacer();
+        if (_decoPlacer == null) return Flee(threat);
+        float searchRadius = (data.perceptionRadius > 0f ? data.perceptionRadius : 3f) * 1.8f;
+        Vector3? hideoutPos = _decoPlacer.GetNearestHideoutPosition(transform.position, searchRadius);
+        if (!hideoutPos.HasValue) return Flee(threat);
+        // Ya dentro del escondite: huir desde aquí normalmente
+        if (Vector3.Distance(transform.position, hideoutPos.Value) < 0.6f) return Flee(threat);
+        return Seek(hideoutPos.Value);
+    }
+
+    /// <summary>
     /// Fuerza vertical que atrae al pez hacia su zona favorita del tanque.
     /// Surface = 20% superior | MidWater = 60% central | Bottom = 20% inferior.
     /// </summary>
@@ -279,14 +315,17 @@ public class SteeringController : MonoBehaviour
             _                => minY + tankH * 0.50f,
         };
 
-        float diff = targetY - currentY;
-
-        // Peces bentónicos: aplicar siempre la fuerza (deadzone muy pequeña)
-        // Resto: solo si está lejos de la zona (>15% del alto)
-        float deadZone = HugsFloor ? FloorHugMargin * 2f : tankH * 0.15f;
+        float diff     = targetY - currentY;
+        float deadZone = HugsFloor ? FloorHugMargin * 2f : tankH * 0.12f;
         if (Mathf.Abs(diff) < deadZone) return Vector3.zero;
 
-        return Vector3.up * Mathf.Sign(diff);
+        // Peces bentónicos: fuerza constante (deben pegarse al sustrato)
+        // Surface/MidWater: fuerza proporcional a la distancia → evita ping-pong
+        if (HugsFloor)
+            return Vector3.up * Mathf.Sign(diff);
+
+        float strength = Mathf.Clamp01(Mathf.Abs(diff) / (tankH * 0.30f));
+        return Vector3.up * Mathf.Sign(diff) * strength;
     }
 
     /// <summary>
@@ -395,6 +434,40 @@ public class SteeringController : MonoBehaviour
         if (dist > desiredDist)
             return (partner.transform.position - transform.position).normalized;
         return Vector3.zero;
+    }
+
+    /// <summary>
+    /// Cortejo orbital: el pez circlea alrededor de su pareja a ~1.5u de distancia.
+    /// _courtshipOrbitSign determina si va CW o CCW (fijado por seed).
+    /// Ambos se atraen mutuamente mientras trazan la órbita → circling natural.
+    /// </summary>
+    private Vector3 CourtsPartner()
+    {
+        var agent   = GetComponent<FishAgent>();
+        var partner = agent?.GetPartner();
+        if (partner == null) return Wander() * 0.5f;
+
+        Vector3 toPartner = partner.transform.position - transform.position;
+        float   dist      = toPartner.magnitude;
+        if (dist < 0.01f) return Vector3.right * _courtshipOrbitSign;
+
+        // Tangente perpendicular en XZ — define la dirección de rotación orbital
+        Vector3 toPartnerXZ = new Vector3(toPartner.x, 0f, toPartner.z).normalized;
+        Vector3 tangent     = Vector3.Cross(toPartnerXZ, Vector3.up) * _courtshipOrbitSign;
+
+        const float orbitRadius = 1.5f;
+        float radialError = dist - orbitRadius;
+
+        if (dist > orbitRadius + 0.5f)
+        {
+            // Demasiado lejos: acercarse principalmente + empezar la órbita
+            return (toPartnerXZ * 0.75f + tangent * 0.5f).normalized;
+        }
+        else
+        {
+            // En rango orbital: principalmente tangente + corrección radial suave
+            return (tangent + toPartnerXZ * (radialError * 0.3f)).normalized;
+        }
     }
 
     // ── Perspectiva 2.5D ────────────────────────────────────────────────────

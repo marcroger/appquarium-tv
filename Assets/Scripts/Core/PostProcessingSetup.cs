@@ -17,13 +17,21 @@ using UnityEngine.Rendering.Universal;
 public class PostProcessingSetup : MonoBehaviour
 {
     [Header("Bloom")]
+    [Tooltip("Bloom es un blur multi-pass: el efecto de post-proceso más caro en GPU. " +
+             "OFF en el Cast device (Mali-G31) — se mantienen Color + Vignette, que son baratos. " +
+             "Poner ON solo para builds de escritorio/preview.")]
+    public bool      enableBloom    = false;
     [Range(0f, 3f)]  public float bloomIntensity  = 0.35f;
     [Range(0f, 1f)]  public float bloomThreshold  = 0.92f;
     [Range(0f, 1f)]  public float bloomScatter    = 0.6f;
 
+    [Header("Tonemapping")]
+    public bool enableTonemapping = true;
+
     [Header("Color (tono submarino)")]
     public Color  colorFilter      = new Color(0.95f, 0.98f, 1.00f);  // casi neutro, toque frío mínimo
-    [Range(-50f, 50f)] public float saturation    = 0f;                // sin desaturar
+    [Range(-100f, 100f)] public float contrast    = 10f;
+    [Range(-50f, 50f)] public float saturation    = 18f;
     [Range(-1f, 1f)] public float postExposure    = 0.0f;
 
     [Header("Vignette")]
@@ -81,17 +89,35 @@ public class PostProcessingSetup : MonoBehaviour
         var profile = ScriptableObject.CreateInstance<VolumeProfile>();
 
         // ── Bloom ─────────────────────────────────────────────────────────────
-        var bloom = profile.Add<Bloom>(true);
-        bloom.active = true;
-        bloom.intensity.Override(bloomIntensity);
-        bloom.threshold.Override(bloomThreshold);
-        bloom.scatter.Override(bloomScatter);
-        bloom.highQualityFiltering.Override(true);
+        // Desactivado en el Cast device: el blur multi-pass del bloom es el efecto
+        // más caro en el Mali-G31. Sin él, el pass de post-proceso queda en Color +
+        // Vignette (single-pass, barato). Recortar bloom recupera la mayor parte del
+        // coste GPU del post-proceso manteniendo el tono submarino.
+        if (enableBloom)
+        {
+            var bloom = profile.Add<Bloom>(true);
+            bloom.active = true;
+            bloom.intensity.Override(bloomIntensity);
+            bloom.threshold.Override(bloomThreshold);
+            bloom.scatter.Override(bloomScatter);
+            bloom.highQualityFiltering.Override(false); // Cast device GPU — high quality too expensive
+        }
+
+        // ── Tonemapping ───────────────────────────────────────────────────────
+        // Neutral: preserva colores de autor sin el gris-shift de ACES.
+        // Coste cero — se hornea en el mismo LUT pass que ColorAdjustments.
+        if (enableTonemapping)
+        {
+            var tm = profile.Add<Tonemapping>(true);
+            tm.active = true;
+            tm.mode.Override(TonemappingMode.Neutral);
+        }
 
         // ── Color Adjustments ─────────────────────────────────────────────────
         var color = profile.Add<ColorAdjustments>(true);
         color.active = true;
         color.colorFilter.Override(colorFilter);
+        color.contrast.Override(contrast);
         color.saturation.Override(saturation);
         color.postExposure.Override(postExposure);
 
@@ -105,6 +131,7 @@ public class PostProcessingSetup : MonoBehaviour
 
         _volume.profile = profile;
 
+        TvLayerDebug.Set("PostFX", $"bloom={(enableBloom ? bloomIntensity.ToString("F2") : "OFF")} tm={(enableTonemapping?"Neutral":"OFF")} sat={saturation:F0} con={contrast:F0}");
         Debug.Log($"[PostFX] ✅ Bloom + Color + Vignette activos ({profile.components.Count} efectos). [P]=toggle [O]=estado");
     }
 }

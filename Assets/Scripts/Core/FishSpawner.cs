@@ -203,6 +203,20 @@ public class FishSpawner : MonoBehaviour
             Debug.Log($"[FishSpawner] ✅ {replaced} peces reemplazados de placeholder a modelo real.");
     }
 
+    /// <summary>Despawns the first active fish matching speciesId. Returns count removed.</summary>
+    public int DespawnBySpecies(string speciesId)
+    {
+        var toRemove = new List<FishAgent>();
+        foreach (var f in _activeFish)
+            if (f != null && f.Data?.itemId == speciesId) toRemove.Add(f);
+        foreach (var f in toRemove)
+        {
+            _activeFish.Remove(f);
+            if (f != null) Destroy(f.gameObject);
+        }
+        return toRemove.Count;
+    }
+
     /// <summary>Elimina todos los peces activos.</summary>
     public void DespawnAll()
     {
@@ -309,6 +323,8 @@ public class FishSpawner : MonoBehaviour
     /// </summary>
     private static void FixBundleShaders(GameObject visual)
     {
+        // Sprites/Default está garantizado en el build (TankBackground lo usa)
+        var fallback = Shader.Find("Sprites/Default");
         foreach (var r in visual.GetComponentsInChildren<Renderer>(true))
         {
             var mats = r.materials;
@@ -317,6 +333,7 @@ public class FishSpawner : MonoBehaviour
             {
                 if (mats[i] == null || mats[i].shader == null) continue;
                 var found = Shader.Find(mats[i].shader.name);
+                if (found == null) found = fallback; // shader stripeado → Sprites/Default
                 if (found != null && found != mats[i].shader)
                 {
                     mats[i].shader = found;

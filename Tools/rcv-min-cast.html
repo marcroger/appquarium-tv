@@ -1,0 +1,1841 @@
+<!DOCTYPE html>
+<html lang="en-us">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <title>Appquarium TV</title>
+    <link rel="shortcut icon" href="TemplateData/favicon.ico">
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html, body { width: 100%; height: 100%; background: #000; overflow: hidden; }
+      #unity-container { width: 100%; height: 100%; }
+    </style>
+    <script src="https://www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"
+            onerror="window.__castSdkFailed=true"></script>
+  </head>
+  <body>
+
+    <!-- ════════════════════════════════════════════════════════════════════════
+         SPLASH OVERLAY
+         Aparece instantáneamente al conectar Cast (solo HTML/CSS, sin Unity).
+         Unity carga en background — se hace fade-out cuando está listo.
+         En caso de error, la splash se convierte en pantalla de error.
+    ════════════════════════════════════════════════════════════════════════ -->
+    <div id="splash" style="
+      position:fixed; top:0; left:0; width:100%; height:100%; z-index:500;
+      background:linear-gradient(160deg,#040E1A 0%,#071828 55%,#0A2030 100%);
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      font-family:'Helvetica Neue',Helvetica,Arial,sans-serif; color:#DEEEE8;
+      transition:opacity 0.8s ease; text-align:center; padding:60px; box-sizing:border-box;
+    ">
+      <!-- Logo -->
+      <div id="splash-logo" style="
+        font-size:80px; font-weight:700; letter-spacing:6px; color:#0DE8FF;
+        text-shadow:0 0 40px rgba(13,232,255,0.4); margin-bottom:16px;
+      ">APPQUARIUM</div>
+
+      <div style="width:80px;height:2px;background:#3BB8A0;border-radius:2px;opacity:0.6;margin-bottom:40px;"></div>
+
+      <!-- Estado normal: texto + barra de progreso -->
+      <div id="splash-normal">
+        <div id="splash-status" style="font-size:22px;color:#3BB8A0;letter-spacing:2px;">
+          Iniciando…
+        </div>
+        <div id="splash-bar-wrap" style="
+          width:320px;height:4px;background:rgba(59,184,160,0.15);
+          border-radius:2px;margin:24px auto 0;overflow:hidden;display:none;
+        ">
+          <div id="splash-bar" style="
+            height:100%;width:0%;background:#3BB8A0;
+            border-radius:2px;transition:width 0.3s;
+          "></div>
+        </div>
+      </div>
+
+      <!-- Estado de error: oculto por defecto -->
+      <div id="splash-error" style="display:none;max-width:720px;">
+        <div id="err-icon"  style="font-size:56px;margin-bottom:20px;"></div>
+        <div id="err-title" style="font-size:30px;font-weight:700;margin-bottom:12px;color:#FF6B6B;"></div>
+        <div id="err-desc"  style="font-size:20px;color:#6A9888;line-height:1.7;"></div>
+        <div id="err-device" style="
+          margin-top:36px;padding:20px 40px;
+          border:1px solid rgba(59,184,160,0.25);border-radius:14px;
+          background:rgba(59,184,160,0.06);display:none;
+        ">
+          <div style="font-size:12px;color:#6A9888;text-transform:uppercase;letter-spacing:2px;margin-bottom:8px;">
+            Dispositivo recomendado
+          </div>
+          <div style="font-size:20px;color:#3BB8A0;font-weight:600;">Chromecast con Google TV</div>
+          <div style="font-size:14px;color:#4A7868;margin-top:6px;">o dispositivo con 2 GB RAM y WebGL 2</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Debug panel — diagnóstico. Elevado fuera de la zona de overscan de la TV
+         y con el log más reciente arriba (ver dbg()). -->
+    <div id="dbg-panel" style="
+      position:fixed;bottom:8vh;left:3vw;width:94%;z-index:9999;
+      background:rgba(0,0,0,0.82);color:#0ff;
+      font:bold 15px/1.35 monospace;padding:6px 12px;
+      box-sizing:border-box;pointer-events:none;
+      max-height:62vh;overflow:hidden;display:block;border-radius:8px;
+      transition:opacity 1.5s ease;
+    "></div>
+
+    <!-- Sello de versión del receiver — esquina inf. derecha, discreto.
+         Sirve para confirmar QUÉ index.html está corriendo en el device (el Cast
+         puede mantener cacheado el viejo con disableIdleTimeout). Bump en cada deploy. -->
+    <div id="rcv-tag" style="
+      position:fixed;bottom:1vh;right:1vw;z-index:10001;
+      color:rgba(255,255,255,0.40);font:bold 12px monospace;
+      pointer-events:none;letter-spacing:1px;
+    ">rcv 2026-07-27 MIN-unity</div>
+
+    <!-- FPS meter — esquina sup. derecha, legible desde el sofá.
+         Mide la cadencia de requestAnimationFrame (el mismo loop con el que
+         Unity WebGL pinta el canvas) → proxy directo del framerate real en el
+         device. Verde ≥50 / amarillo ≥30 / rojo <30. ▼ = peor frame del segundo. -->
+    <div id="fps-meter" style="
+      position:fixed;top:0;right:0;z-index:10000;
+      background:rgba(0,0,0,0.80);color:#6f6;
+      font:bold 22px/1.25 monospace;padding:6px 14px;
+      text-align:right;pointer-events:none;border-bottom-left-radius:0;
+    ">FPS —</div>
+
+    <!-- Stats panel — debajo del FPS meter. Solo visible tras Unity READY.
+         Acumula muestras cada segundo, refresca cada 5s.
+         FPS avg/lo/hi de la sesión + WASM heap + JS heap. -->
+    <div id="stats-panel" style="
+      position:fixed;top:42px;right:0;z-index:10000;
+      background:rgba(0,0,0,0.80);color:#8dd;
+      font:bold 13px/1.6 monospace;padding:5px 14px 7px;
+      text-align:right;pointer-events:none;border-bottom-left-radius:10px;
+      border-top:1px solid rgba(255,255,255,0.08);
+      display:none;min-width:190px;
+    "></div>
+
+    <script>
+      // ── Debug logger ──────────────────────────────────────────────────────
+      // ⏱ RELOJ MONÓTONO — no usar Date.now() para MEDIR NADA.
+      // El Xiaomi arranca con el reloj de pared desincronizado y lo cuadra por NTP
+      // a los pocos segundos. Ese salto corrompía TODAS las restas: "duró 8s",
+      // "duró 1:00" y "hace 1286019s" (15 días) salían de ahí, no de la sesión.
+      // performance.now() es monótono: inmune a saltos de reloj.
+      function mono() { return performance.now(); }
+
+      var _dbgLines = [], _dbgT0 = mono();
+      // Sumidero opcional: si está conectado, cada línea del log se transmite al
+      // sender (PC) por el canal Cast → leemos el log ENTERO en el PC sin fotos.
+      // Se conecta más abajo, una vez existe el CastReceiverContext.
+      var _logSink = null;
+      function dbg(msg) {
+        var t = ((mono()-_dbgT0)/1000).toFixed(1);
+        var line = '['+t+'s] '+msg;
+        console.log(line);   // siempre visible via chrome://inspect
+        if (_logSink) { try { _logSink(line); } catch(e) {} }
+        _dbgLines.push(line);
+        if (_dbgLines.length > 40) _dbgLines.shift();
+        var el = document.getElementById('dbg-panel');
+        if (el) {
+          // Más reciente ARRIBA → la última línea (donde está el error) nunca
+          // queda en el borde inferior que el overscan de la TV recorta.
+          el.innerHTML = _dbgLines.slice().reverse().map(function(l){
+            return '<div>'+l.replace(/</g,'&lt;')+'</div>';
+          }).join('');
+
+          // El panel permanece visible toda la sesión: el corte que se investiga
+          // ocurre a los ~200s, mucho después del auto-hide de 8s que había aquí.
+          el.style.opacity = '1';
+        }
+        _sessLogDirty = true;   // → se persiste en el próximo tick (ver abajo)
+      }
+
+      // Red de seguridad INDEPENDIENTE del canal Cast: persistir el buffer del log
+      // en localStorage (throttle 2s). La página muere en el corte pero localStorage
+      // sobrevive → al re-castear reimprimimos las últimas líneas ANTES del corte.
+      // No depende de que el streaming al PC funcione.
+      var _sessLogDirty = false;
+      setInterval(function() {
+        if (!_sessLogDirty) return;
+        try { localStorage.setItem('aq_sessLog', JSON.stringify(_dbgLines)); } catch (e) {}
+        _sessLogDirty = false;
+      }, 2000);
+
+      // ── Splash helpers ────────────────────────────────────────────────────
+      function setSplashStatus(txt, pct) {
+        var s = document.getElementById('splash-status');
+        if (s) s.textContent = txt;
+        if (pct !== undefined) {
+          document.getElementById('splash-bar-wrap').style.display = 'block';
+          document.getElementById('splash-bar').style.width = pct+'%';
+        }
+      }
+
+      // Convierte la splash en pantalla de error — mismo estilo que "dispositivo no compatible"
+      function showSplashError(icon, title, desc, showDeviceHint) {
+        dbg('ERROR: '+title);
+        document.getElementById('splash-normal').style.display = 'none';
+        document.getElementById('splash-error').style.display  = 'block';
+        document.getElementById('err-icon').textContent  = icon;
+        document.getElementById('err-title').textContent = title;
+        document.getElementById('err-desc').innerHTML    = desc;
+        if (showDeviceHint) document.getElementById('err-device').style.display = 'block';
+        // Muestra panel de debug bajo el error para diagnóstico
+        document.getElementById('dbg-panel').style.display = 'block';
+      }
+
+      function hideSplash() {
+        var s = document.getElementById('splash');
+        if (!s) return;
+        s.style.opacity = '0';
+        setTimeout(function(){ s.style.display='none'; }, 850);
+        // debug panel permanece visible siempre durante sesión diagnóstico
+      }
+
+      // Captura errores JS globales no manejados
+      window.onerror = function(msg, src, line) {
+        dbg('JS ERR: '+msg+' ('+(src||'').split('/').pop()+':'+line+')');
+      };
+
+      dbg('page loaded');
+
+      // ── Última desconexión persistente ────────────────────────────────────
+      // SHUTDOWN destruye la página → pintar el reason en pantalla NO es fiable.
+      // Lo guardamos en localStorage (setItem es síncrono, da tiempo antes del
+      // teardown) y lo mostramos en el arranque siguiente al re-castear. Así el
+      // motivo del corte sobrevive aunque el receiver se mate a sí mismo.
+      // ⚠ Guardar SOLO la última caída perdía el dato bueno: tras el corte real el
+      // sender auto-reconecta y vuelve a morir a los pocos segundos, y ese flap
+      // sobrescribía el registro (por eso salía "duró 8s" tras un corte de 209s).
+      // Historial de los últimos 10 → se ve el patrón entero, no la basura final.
+      function saveLastDisco(reason, elapsed) {
+        try {
+          var hist = [];
+          try { hist = JSON.parse(localStorage.getItem('aq_discoLog') || '[]'); } catch (e2) {}
+          hist.push({ reason: reason, elapsed: elapsed || 0, ts: Date.now() });
+          while (hist.length > 10) hist.shift();
+          localStorage.setItem('aq_discoLog', JSON.stringify(hist));
+        } catch (e) {}
+      }
+      (function() {
+        try {
+          var hist = JSON.parse(localStorage.getItem('aq_discoLog') || '[]');
+          if (!hist.length) return;
+          var panel = document.getElementById('dbg-panel');
+          if (panel) panel.style.display = 'block';
+          for (var i = hist.length - 1; i >= 0; i--) {   // más reciente primero
+            var d = hist[i];
+            var m = Math.floor(d.elapsed / 60), s = d.elapsed % 60;
+            // "duró" ya es monótono y fiable. "hace" cruza recargas de página, así
+            // que SÓLO puede salir del reloj de pared → no fiable en este device
+            // (de ahí el "hace 1286019s"). Se marca con ~ y no se usa para concluir.
+            dbg('⚠ CAÍDA -' + (hist.length - i) + ' → reason:' + d.reason +
+                ' | duró ' + m + ':' + (s < 10 ? '0' : '') + s +
+                ' | hace ~' + Math.round((Date.now() - d.ts) / 1000) + 's (reloj pared, poco fiable)');
+          }
+        } catch (e) {}
+      })();
+
+      // Volcado del log de la sesión ANTERIOR (persiste tras el corte). Últimas 18
+      // líneas → así vemos qué pasó justo antes de morir aunque el streaming falle.
+      (function() {
+        try {
+          var prev = JSON.parse(localStorage.getItem('aq_sessLog') || '[]');
+          if (!prev.length) return;
+          var tail = prev.slice(-18);
+          dbg('━━━ FIN sesión anterior (' + prev.length + ' líneas, últimas ' + tail.length + ') ━━━');
+          for (var i = 0; i < tail.length; i++) dbg('PREV ' + tail[i]);
+          dbg('━━━ INICIO sesión actual ━━━');
+        } catch (e) {}
+      })();
+
+      // ── FPS meter ─────────────────────────────────────────────────────────
+      // rAF-based. Ventana de 1s: avg = media, ▼ = peor frame (stutter).
+      // No empieza a acumular hasta que Unity está vivo, para que la fase de
+      // compilación del wasm (main thread bloqueado) no falsee el número.
+      (function() {
+        var el = document.getElementById('fps-meter');
+        var last = performance.now(), winStart = last;
+        var sum = 0, count = 0, worst = 1e9;
+        function tick(now) {
+          var dt = now - last; last = now;
+          if (window.unityInstance && dt > 0) {
+            var inst = 1000 / dt;
+            if (inst <= 240 && inst >= 5) { sum += inst; count++; if (inst < worst) worst = inst; }
+          }
+          if (now - winStart >= 1000) {
+            if (count > 0) {
+              var avg = sum / count;
+              el.textContent = 'FPS ' + avg.toFixed(0) + '  ▼' + worst.toFixed(0);
+              el.style.color = avg >= 50 ? '#6f6' : (avg >= 30 ? '#ff5' : '#f55');
+              if (window._recordFpsSample) window._recordFpsSample(avg);
+            }
+            winStart = now; sum = 0; count = 0; worst = 1e9;
+          }
+          requestAnimationFrame(tick);
+        }
+        requestAnimationFrame(tick);
+      })();
+
+      // ── Performance stats panel ───────────────────────────────────────────
+      // Recibe muestras de FPS cada segundo (desde el fps meter de arriba).
+      // Actualiza el panel cada 5s con: sesión, FPS avg/lo/hi, WASM heap, JS heap.
+      // Solo se muestra cuando unityInstance existe (acuario activo).
+      (function() {
+        var panel  = document.getElementById('stats-panel');
+        var fpsBuf = [];   // muestras de 1s avg — máx 10 min (600)
+        var t0     = 0;    // performance.now() del primer sample (Unity ya listo)
+
+        function getWasmMB() {
+          try {
+            var m = window.unityInstance && window.unityInstance.Module;
+            if (!m) return 0;
+            var buf = (m.wasmMemory && m.wasmMemory.buffer) || (m.HEAPU8 && m.HEAPU8.buffer);
+            return buf ? Math.round(buf.byteLength / 1048576) : 0;
+          } catch(e) { return 0; }
+        }
+
+        function getHeap() {
+          if (!performance.memory) return null;
+          return {
+            used:  Math.round(performance.memory.usedJSHeapSize  / 1048576),
+            limit: Math.round(performance.memory.jsHeapSizeLimit / 1048576)
+          };
+        }
+
+        function fmtTime(ms) {
+          var s = Math.floor(ms / 1000), m = Math.floor(s / 60); s %= 60;
+          return m + ':' + (s < 10 ? '0' : '') + s;
+        }
+
+        function render() {
+          if (!fpsBuf.length) return;
+          var sum = 0, lo = 999, hi = 0;
+          for (var i = 0; i < fpsBuf.length; i++) {
+            sum += fpsBuf[i];
+            if (fpsBuf[i] < lo) lo = fpsBuf[i];
+            if (fpsBuf[i] > hi) hi = fpsBuf[i];
+          }
+          var avg  = sum / fpsBuf.length;
+          var wasm = getWasmMB();
+          var heap = getHeap();
+          var lines = [
+            'SESSION ' + fmtTime(performance.now() - t0),
+            'FPS avg:' + avg.toFixed(0) + ' lo:' + lo.toFixed(0) + ' hi:' + hi.toFixed(0),
+          ];
+          if (wasm)  lines.push('WASM  ' + wasm + ' MB');
+          if (heap)  lines.push('HEAP  ' + heap.used + '/' + heap.limit + ' MB');
+          panel.innerHTML = lines.join('<br>');
+        }
+
+        // Recibe avg de FPS cada segundo desde el fps meter
+        window._recordFpsSample = function(avg) {
+          if (!window.unityInstance) return;
+          if (!t0) { t0 = performance.now(); panel.style.display = 'block'; }
+          fpsBuf.push(avg);
+          if (fpsBuf.length > 600) fpsBuf.shift();
+        };
+
+        setInterval(render, 5000);
+      })();
+
+      // ── Memory ticker ──────────────────────────────────────────────────────
+      // Loguea WASM + JS heap al panel debug cada 10s mientras Unity está vivo.
+      // Las líneas se acumulan (hasta 40) y salen con timestamp → curva de memoria
+      // legible desde la TV y en chrome://inspect aunque la sesión petara.
+      // Si el crash es OOM veremos la última lectura WASM antes de morir (WASM crece
+      // en pasos geométricos; si la última línea es "WASM:92MB" y luego nada = el
+      // siguiente paso a 110MB fue el que no cupo).
+      (function() {
+        var _mt = 0;
+        setInterval(function() {
+          if (!window.unityInstance) return;
+          _mt++;
+          var wasm = 0;
+          try {
+            var m = window.unityInstance.Module;
+            var buf = (m.wasmMemory && m.wasmMemory.buffer) || (m.HEAPU8 && m.HEAPU8.buffer);
+            wasm = buf ? Math.round(buf.byteLength / 1048576) : 0;
+          } catch(e) {}
+          var jsMB = performance.memory
+            ? Math.round(performance.memory.usedJSHeapSize / 1048576) : -1;
+          dbg('MEM#' + _mt + ' WASM:' + wasm + 'MB' + (jsMB >= 0 ? ' JS:' + jsMB + 'MB' : ''));
+        }, 5000);
+      })();
+    </script>
+
+    <!-- ════════════════════════════════════════════════════════════════════════
+         UNITY CANVAS (detrás de la splash hasta que esté listo)
+    ════════════════════════════════════════════════════════════════════════ -->
+    <!-- ════════════════════════════════════════════════════════════════════════
+         KEEPALIVE VIDEO (STEP 1 — bisección disconnect 2055)
+         Vídeo negro en loop reproduciéndose como media real → mantiene la sesión.
+         ⚠ DEBE estar visible ≥1px ENCIMA del canvas (z-index>canvas) con opacity
+         casi 0. NUNCA display:none / z-index negativo → el navegador throttlea el
+         decode y deja de contar como "media activa" (causa probable del corte 205s).
+    ════════════════════════════════════════════════════════════════════════ -->
+    <cast-media-player id="ka-player" style="
+      position:fixed;top:0;left:0;width:8px;height:8px;z-index:450;
+      opacity:0.02;pointer-events:none;background:transparent;overflow:hidden;
+    "></cast-media-player>
+    <video id="ka-fallback" muted loop playsinline autoplay
+      src="https://pub-2b11cc17bdef4f75bd4d34eeabbd6042.r2.dev/keepalive_black.mp4"
+      style="position:fixed;top:0;left:8px;width:8px;height:8px;z-index:451;
+             opacity:0.02;pointer-events:none;object-fit:cover;"></video>
+
+    <div id="unity-container" class="unity-desktop">
+      <canvas id="unity-canvas" width=960 height=600 style="width:100%;height:100%;display:block;" tabindex="-1"></canvas>
+      <div id="unity-loading-bar" style="display:none">
+        <div id="unity-logo"></div>
+        <div id="unity-progress-bar-empty">
+          <div id="unity-progress-bar-full"></div>
+        </div>
+      </div>
+      <div id="unity-warning"></div>
+      <div id="unity-footer">
+        <div id="unity-logo-title-footer"></div>
+        <div id="unity-fullscreen-button"></div>
+        <div id="unity-build-title">Appquarium</div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════════
+         COMPROBACIONES PREVIAS AL ARRANQUE
+    ════════════════════════════════════════════════════════════════════════ -->
+    <script>
+      // ── 1. WebGL 2 ────────────────────────────────────────────────────────
+      var hasWebGL2 = !!(document.createElement('canvas').getContext('webgl2'));
+      var isDevTest = new URLSearchParams(window.location.search).get('devtest') === '1';
+      dbg('WebGL2: '+hasWebGL2+(isDevTest?' [DEV]':''));
+
+      if (!hasWebGL2) {
+        showSplashError(
+          '📺',
+          'Dispositivo no compatible',
+          'Este dispositivo no soporta WebGL 2, necesario para el acuario 3D.<br>' +
+          'Appquarium TV funciona con dispositivos modernos como:',
+          true
+        );
+      }
+
+      // ── 2. Cast SDK ───────────────────────────────────────────────────────
+      if (!isDevTest && (window.__castSdkFailed || typeof cast === 'undefined' || !cast.framework)) {
+        dbg('Cast SDK not available');
+        if (hasWebGL2) {   // solo muestra si no hay ya error de WebGL2
+          showSplashError(
+            '📡',
+            'Error de conexión Cast',
+            'No se pudo cargar el SDK de Google Cast.<br>' +
+            'Verifica la conexión a Internet del dispositivo.',
+            false
+          );
+        }
+      }
+
+      // ── 3. Memoria disponible (heurística) ────────────────────────────────
+      // navigator.deviceMemory: RAM aproximada en GB (puede no existir en Cast)
+      var RAM = navigator.deviceMemory || null;
+      dbg('deviceMemory: ' + (RAM ? RAM+'GB' : 'unknown'));
+      if (RAM && RAM < 1.5) {
+        // Aviso (no bloquea, el rebuildeado wasm es ~30MB y debería funcionar)
+        dbg('⚠ RAM baja detectada: '+RAM+'GB');
+      }
+    </script>
+
+    <!-- ════════════════════════════════════════════════════════════════════════
+         CAST BRIDGE
+         ctx.start() se llama ANTES de que Unity cargue — la sesión Cast
+         queda activa mientras Unity compila en background.
+    ════════════════════════════════════════════════════════════════════════ -->
+    <script>
+    (function() {
+      if (!hasWebGL2) return;  // ya hay error de WebGL2
+      if (window.__castSdkFailed || typeof cast === 'undefined' || !cast.framework) return;
+
+      var NAMESPACE     = 'urn:x-cast:dev.unknownaerials.appquarium';
+      var unityInst        = null;
+      var pendingMsgs      = [];
+      var senderCount      = 0;
+      var sessionStart     = 0;   // mono() when first sender connected
+      var keepAliveOk      = 0;
+      var _lastDiscoMs     = 0;   // mono() when last SENDER_DISCONNECTED fired
+      var _initForwarded   = false; // true once INIT has been forwarded to Unity at least once
+      var _overlayTimer    = null;  // pending showReconnect() call — cancelled on fast reconnect
+      var keepAliveFail = 0;
+
+      var ctx = cast.framework.CastReceiverContext.getInstance();
+
+      // ═══ LOG REMOTO → SENDER (PC) ══════════════════════════════════════════
+      // Transmite cada línea de dbg() al sender por el canal Cast → log completo
+      // en el PC, sin fotos. En el 1er intento (KA7) no llegó NADA al sender, así
+      // que aquí no adivinamos: contamos envíos/fallos y el motor los reporta en
+      // cada tick. Namespace JSON → mandamos OBJETO (no string; un string podía
+      // reventar el envío). Enviamos al senderId concreto, con broadcast de reserva.
+      var _lastSenderId = null, _logSent = 0, _logFail = 0, _logErr = '';
+      _logSink = function(line) {
+        if (senderCount <= 0) return;
+        var payload = { type:'LOG', line:line };
+        try {
+          ctx.sendCustomMessage(NAMESPACE, _lastSenderId || undefined, payload);
+          _logSent++;
+        } catch (e1) {
+          // reintento como string por si este SDK lo exige así
+          try {
+            ctx.sendCustomMessage(NAMESPACE, _lastSenderId || undefined, JSON.stringify(payload));
+            _logSent++;
+          } catch (e2) { _logFail++; _logErr = (e2 && e2.message) || String(e2); }
+        }
+      };
+
+      // ═══ DETECTOR DE BLOQUEO DEL HILO PRINCIPAL ════════════════════════════
+      // Hipótesis actual (2026-07-17, tras absolver al móvil): Unity WebGL congela
+      // el hilo JS lo bastante como para que el receiver no conteste el heartbeat
+      // del sender → corte a ~186-209s. Un setInterval(1000) que llega TARDE mide
+      // ese bloqueo: si el hilo estuvo parado 4s, el tick se retrasa 4s.
+      (function() {
+        var period = 1000, expected = mono() + period, worst = 0, n = 0;
+        setInterval(function() {
+          var now = mono(), lag = now - expected;
+          expected = now + period;
+          n++;
+          if (lag > worst) worst = lag;
+          // Log sólo si el bloqueo es serio (>1.5s) o cada 30 ticks como resumen.
+          if (lag > 1500) dbg('⚠ STALL: hilo bloqueado '+Math.round(lag)+'ms');
+          if (n % 15 === 0) {
+            dbg('⏱ lag peor='+Math.round(worst)+'ms | 📡 stream sent='+_logSent+
+                ' fail='+_logFail+(_logErr ? ' err='+_logErr : ''));
+            worst = 0;
+          }
+        }, period);
+      })();
+
+      // ═══ CICLO DE VIDA DE LA PÁGINA ════════════════════════════════════════
+      // Si el WebView del Xiaomi mata/congela la página, estos disparan ANTES del
+      // corte y nos dicen el mecanismo (a diferencia de SENDER_DISCONNECTED, que
+      // sólo dice "se fue"). freeze/pagehide = el SO está matando la pestaña.
+      ['pagehide','freeze','resume','visibilitychange','blur','focus'].forEach(function(ev) {
+        window.addEventListener(ev, function() {
+          var extra = (ev === 'visibilitychange') ? ' → '+document.visibilityState : '';
+          dbg('📄 page:'+ev+extra);
+        }, true);
+      });
+
+      // ═══ KEEPALIVE VIDEO (STEP 1) ══════════════════════════════════════════
+      // Hipótesis: reproducir vídeo real mantiene viva la sesión (standalone 360s+).
+      // STEP 1 = vídeo ON, SIN setApplicationStatus/KEEPALIVE/PONG. + log currentTime.
+      var KA_URL = 'https://pub-2b11cc17bdef4f75bd4d34eeabbd6042.r2.dev/keepalive_black.mp4';
+      var _kaLoaded = false, _kaLoadTries = 0, _kaTick = 0, _kaReqId = 0, _kaInFlight = false;
+
+      // Un rechazo de load() puede ser Error, ErrorEvent o un enum numérico.
+      function kaErr(e) {
+        if (e === null || e === undefined) return '(vacío)';
+        if (typeof e === 'number' || typeof e === 'string') return String(e);
+        return (e.detailedErrorCode || e.code || e.type || '') + ' ' + (e.message || e.reason || JSON.stringify(e));
+      }
+
+      // El <video> del cast-media-player vive en su shadow root: querySelector no
+      // lo alcanza. El PlayerManager es la única fuente fiable de su estado.
+      function kaPlayerState() {
+        try {
+          var pm = ctx.getPlayerManager();
+          return { state: pm.getPlayerState(), ct: pm.getCurrentTimeSec() };
+        } catch(e) { return { state: 'ERR:'+e.message, ct: null }; }
+      }
+      function kaLoad() {
+        if (!_kaLoaded && !_kaInFlight && _kaLoadTries < 8) {
+          _kaLoadTries++;
+          _kaInFlight = true;
+          try {
+            var pm  = ctx.getPlayerManager();
+            var req = new cast.framework.messages.LoadRequestData();
+            req.requestId = ++_kaReqId;  // por defecto 0; algunos SDK descartan el request
+            req.autoplay = true;
+            req.media = new cast.framework.messages.MediaInformation();
+            req.media.contentId   = KA_URL;
+            req.media.contentUrl  = KA_URL;
+            req.media.contentType = 'video/mp4';
+            req.media.streamType  = cast.framework.messages.StreamType.BUFFERED;
+
+            // ⭐ CAUSA RAÍZ DEL CORTE (medido 2026-07-17): sin cola en bucle el clip
+            // llega a END_OF_STREAM a los ~24s, el player queda IDLE para siempre y
+            // Cast mata la sesión ~150s después. El `loop=true` de más abajo sólo
+            // afectaba al <video> de respaldo del DOM, que a Cast le da igual.
+            // REPEAT_SINGLE hace que el cast-media-player repita el clip sin fin.
+            var item = new cast.framework.messages.QueueItem();
+            item.media = req.media;
+            req.queueData = new cast.framework.messages.QueueData();
+            req.queueData.items      = [item];
+            req.queueData.repeatMode = cast.framework.messages.RepeatMode.REPEAT_SINGLE;
+            req.queueData.startIndex = 0;
+            // load() devuelve una Promise que se RECHAZA si falla (doc oficial).
+            // Hacer `pm.load(req);` a pelo se tragaba el error → "no sale ningún
+            // error" pese a cmp:IDLE 125s. Sin esto el fallo es invisible.
+            var n = _kaLoadTries;
+            var pr = pm.load(req);
+            dbg('KA: pm.load try#'+n+(pr && pr.then ? ' (promise)' : ' (void!)'));
+            if (pr && pr.then) {
+              pr.then(function()  { _kaInFlight = false; dbg('KA: pm.load#'+n+' RESUELTO ✅'); },
+                      function(e) { _kaInFlight = false; dbg('KA: pm.load#'+n+' RECHAZADO ❌ '+kaErr(e)); });
+            } else { _kaInFlight = false; }
+          } catch(e) { _kaInFlight = false; dbg('KA load FAIL#'+_kaLoadTries+': '+e.message); }
+        }
+        // arrancar también el fallback explícito (frames reales garantizados)
+        var fb = document.getElementById('ka-fallback');
+        if (fb) { fb.muted = true; fb.loop = true; var p = fb.play(); if (p && p.catch) p.catch(function(){}); }
+      }
+
+      // ── Reconnect overlay ────────────────────────────────────────────────────
+      // Shown over the Unity canvas when all senders disconnect.
+      // z-index:400 = above canvas (default), below splash (500) and debug panel (9999).
+      var _reconnectEl = (function() {
+        var el = document.createElement('div');
+        el.style.cssText = [
+          'position:fixed;top:0;left:0;width:100%;height:100%;z-index:400',
+          'background:rgba(4,14,26,0.72)',
+          'display:none;flex-direction:column;align-items:center;justify-content:center',
+          "font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#DEEEE8",
+          'text-align:center;pointer-events:none;opacity:0;transition:opacity 0.6s'
+        ].join(';');
+        el.innerHTML =
+          '<div style="font-size:52px;margin-bottom:20px">📱</div>' +
+          '<div style="font-size:26px;font-weight:700;color:#3BB8A0;letter-spacing:2px;margin-bottom:10px">Sender desconectado</div>' +
+          '<div style="font-size:17px;color:#6A9888;line-height:1.7">Abre Appquarium en el móvil<br>y vuelve a castear para reconectar</div>' +
+          '<div id="rc-timer" style="margin-top:22px;font-size:13px;color:#4A7868;letter-spacing:1px"></div>' +
+          '<div id="rc-reason" style="margin-top:8px;font-size:13px;color:#D98A6A;letter-spacing:1px;font-family:monospace"></div>';
+        document.body.appendChild(el);
+        return el;
+      })();
+      var _rcTimer = null, _rcStart = 0;
+
+      function showReconnect(reason) {
+        _rcStart = mono();
+        var rEl = document.getElementById('rc-reason');
+        if (rEl) rEl.textContent = reason ? ('reason: ' + reason) : '';
+        _reconnectEl.style.display = 'flex';
+        setTimeout(function(){ _reconnectEl.style.opacity='1'; }, 16);
+        clearInterval(_rcTimer);
+        _rcTimer = setInterval(function(){
+          var s = Math.floor((mono()-_rcStart)/1000), m = Math.floor(s/60); s %= 60;
+          var el = document.getElementById('rc-timer');
+          if (el) el.textContent = 'Desconectado hace '+m+':'+(s<10?'0':'')+s;
+        }, 1000);
+      }
+      function hideReconnect() {
+        clearInterval(_rcTimer);
+        _reconnectEl.style.opacity = '0';
+        setTimeout(function(){ _reconnectEl.style.display='none'; }, 650);
+      }
+
+      // ── Cast SDK lifecycle events ────────────────────────────────────────────
+
+      ctx.addEventListener(cast.framework.system.EventType.READY, function() {
+        dbg('Cast SDK READY');
+      });
+      ctx.addEventListener(cast.framework.system.EventType.SHUTDOWN, function(e) {
+        dbg('Cast SDK SHUTDOWN — reason:'+(e.reason||'?'));
+        // SHUTDOWN = the RECEIVER itself is ending the session (idle timeout etc.).
+        // Persist it (page is about to die) and surface it if the overlay survives.
+        var _el = sessionStart ? Math.round((mono()-sessionStart)/1000) : 0;
+        saveLastDisco('SHUTDOWN:'+(e.reason||'?'), _el);
+        showReconnect('SHUTDOWN:'+(e.reason||'?'));
+      });
+
+      ctx.addCustomMessageListener(NAMESPACE, function(event) {
+        var raw  = typeof event.data==='string' ? event.data : JSON.stringify(event.data);
+        var type = (function(r){try{return JSON.parse(r).type;}catch(e){return '?';}})(raw);
+        dbg('Cast msg: '+type);
+        if (type === 'INIT') {
+          var msSinceDisco = _lastDiscoMs > 0 ? (mono() - _lastDiscoMs) : Infinity;
+          // Quick reconnect: aquarium already running, Unity loaded, disconnect < 30s ago.
+          // Skip re-INIT so the scene doesn't reload — the sender auto-reconnects in ~3s
+          // and sends a new INIT with the same state, which would destroy and rebuild
+          // the aquarium unnecessarily. Just hide the overlay and carry on.
+          if (_initForwarded && unityInst && msSinceDisco < 30000) {
+            dbg('INIT skip — reconnect after ' + Math.round(msSinceDisco/1000) + 's, aquarium up');
+            return;
+          }
+          _initForwarded = true;
+          setSplashStatus('Cast conectado — cargando acuario…');
+        }
+
+        if (type === 'PING') {
+          // STEP 1: PONG suprimido (bisección). Solo tragamos el PING para no
+          // reenviarlo a Unity — sin responder al sender.
+          return;
+        }
+
+        if (type === 'PROBE') {
+          // Test 2026-07-17: el sender de prueba manda PROBE cada 5s. Si esto
+          // mantiene viva la conexión >209s → el corte era "sin tráfico
+          // sender→receiver" y el fix es sender-side. Sólo lo tragamos (ya se
+          // logueó "Cast msg: PROBE" arriba); no va a Unity.
+          return;
+        }
+
+        if (type === 'RUNG_CONFIG') {
+          // Bisección 2026-07-18: el sender elige el escalón y nos dice si cargar
+          // Unity o no, y si agrandar el vídeo keepalive a fullscreen. Un solo
+          // receiver en R2 sirve TODOS los escalones; la variable la manda el sender.
+          var _cfg = {}; try { _cfg = JSON.parse(raw); } catch(e) {}
+          var _u = !!_cfg.unity;
+          dbg('⚙ RUNG_CONFIG: unity=' + _u + ' kaBig=' + !!_cfg.kaBig + ' killAudio=' + !!_cfg.killAudio + ' verbose=' + !!_cfg.verbose + ' throttleRaf=' + !!_cfg.throttleRaf + ' quitUnity=' + !!_cfg.quitUnity + ' stall=' + !!_cfg.stall + ' delayedUnity=' + !!_cfg.delayedUnity + ' rawWebGL=' + !!_cfg.rawWebGL + ' gpuHeavy=' + !!_cfg.gpuHeavy + ' coreSaturate=' + !!_cfg.coreSaturate + ' wasmCompile=' + !!_cfg.wasmCompile + ' wasmMem=' + !!_cfg.wasmMem + ' spyInit=' + !!_cfg.spyInit + ' unityCtx=' + !!_cfg.unityCtx + ' glSpy=' + !!_cfg.glSpy + ' glFence=' + !!_cfg.glFence + ' glFbo=' + !!_cfg.glFbo + ' glCombo=' + !!_cfg.glCombo);
+          if (_cfg.verbose && window.__verbose) window.__verbose();
+          // spyInit (RUNG 16) DEBE ir ANTES de arrancar Unity: instala los hooks a
+          // las APIs globales para capturar qué toca Unity durante su init.
+          if (_cfg.spyInit && window.__spyInit) window.__spyInit();
+          // glSpy (RUNG 18) DEBE ir ANTES de Unity: hooks contadores a las ops GL.
+          if (_cfg.glSpy && window.__glSpy) window.__glSpy();
+          // throttleRaf DEBE ir antes de arrancar Unity (que captura rAF al cargar).
+          if (_cfg.throttleRaf && window.__throttleRaf) window.__throttleRaf(4);
+          if (_cfg.kaBig && window.__kaBig) window.__kaBig();
+          if (_cfg.killAudio && window.__killUnityAudio) window.__killUnityAudio();
+          // delayedUnity (RUNG 9) / netLoad (RUNG 10) sustituyen al flag unity.
+          if (_cfg.delayedUnity && window.__delayedUnity) window.__delayedUnity(240000);
+          else if (_cfg.netLoad && window.__netLoad) window.__netLoad(240000);
+          else if (_cfg.rawWebGL && window.__rawWebGL) window.__rawWebGL(15000);
+          else if (_cfg.gpuHeavy && window.__gpuHeavy) window.__gpuHeavy(15000);
+          else if (_cfg.coreSaturate && window.__coreSaturate) window.__coreSaturate(15000);
+          else if (_cfg.wasmCompile && window.__wasmCompile) window.__wasmCompile(15000);
+          else if (_cfg.wasmMem && window.__wasmMem) window.__wasmMem(15000);
+          else if (_cfg.unityCtx && window.__unityCtx) window.__unityCtx(15000);
+          else if (_cfg.glFence && window.__glFence) window.__glFence(15000);
+          else if (_cfg.glFbo && window.__glFbo) window.__glFbo(15000);
+          else if (_cfg.glCombo && window.__glCombo) window.__glCombo(15000);
+          else if (window.__applyRungConfig) window.__applyRungConfig(_u);
+          if (_cfg.quitUnity && window.__quitUnity) window.__quitUnity();
+          if (_cfg.stall && window.__artificialStall) window.__artificialStall(7000);
+          return;
+        }
+
+        if (unityInst) {
+          unityInst.SendMessage('CastReceiver','OnMessageReceived',raw);
+        } else {
+          pendingMsgs.push(raw);
+          dbg('  buffered ('+pendingMsgs.length+')');
+        }
+      });
+
+      ctx.addEventListener(cast.framework.system.EventType.SENDER_CONNECTED, function(e) {
+        senderCount++;
+        // ⚠ sessionStart se reinicia en cada reconexión: por eso el "duró" del
+        // registro era el del último flap y no el del corte real. Lo marcamos.
+        if (senderCount === 1) {
+          var wasReconnect = sessionStart > 0;
+          sessionStart = mono();
+          if (wasReconnect) {
+            var gap = _lastDiscoMs ? Math.round((mono()-_lastDiscoMs)/1000) : -1;
+            dbg('🔄 RECONEXIÓN del sender ('+gap+'s tras la caída) — contador a cero');
+          }
+        }
+        _lastSenderId = e.senderId;
+        dbg('Sender CONNECTED #'+senderCount+': '+e.senderId);
+        setSplashStatus('Conectado — cargando…');
+        if (_overlayTimer) { clearTimeout(_overlayTimer); _overlayTimer = null; }
+        hideReconnect();
+        kaLoad();  // STEP 1: arrancar vídeo keepalive (reemplaza setApplicationStatus)
+        if (unityInst) unityInst.SendMessage('CastReceiver','OnSenderConnected',e.senderId);
+      });
+
+      ctx.addEventListener(cast.framework.system.EventType.SENDER_DISCONNECTED, function(e) {
+        senderCount = Math.max(0, senderCount - 1);
+        var reason  = (e.reason != null ? String(e.reason) : 'unknown');
+        var elapsed = sessionStart ? Math.round((mono()-sessionStart)/1000) : 0;
+        var m = Math.floor(elapsed/60), s = elapsed%60;
+        _lastDiscoMs = mono();
+        dbg('Sender DISCONNECTED — reason:'+reason+' after '+m+':'+(s<10?'0':'')+s+' remaining:'+senderCount);
+        saveLastDisco(reason, elapsed);
+        if (senderCount === 0) {
+          // Delay the overlay: CastPlugin auto-reconnects in ~5s.
+          // If reconnect arrives within 15s we cancel the overlay — invisible to user.
+          // Only show if no reconnect after 15s (genuine disconnect: app killed, WiFi lost).
+          var _discoReason = reason;
+          _overlayTimer = setTimeout(function() { _overlayTimer = null; showReconnect(_discoReason); }, 90000);
+        }
+        var payload = JSON.stringify({ senderId:e.senderId, reason:reason, elapsedSeconds:elapsed });
+        if (unityInst) unityInst.SendMessage('CastReceiver','OnSenderDisconnected',payload);
+      });
+
+      // Red de seguridad: cualquier Promise rechazada sin .catch() acaba aquí.
+      window.addEventListener('unhandledrejection', function(ev) {
+        dbg('⚠ PROMISE SIN CATCH: '+kaErr(ev.reason));
+      });
+
+      // Sin esto, un pm.load() que falla no deja rastro en el log.
+      try {
+        var _pm = ctx.getPlayerManager();
+        _pm.addEventListener(cast.framework.events.EventType.ERROR, function(e) {
+          dbg('KA pm ERROR: '+(e.detailedErrorCode||'?')+' / '+(e.reason||'?'));
+        });
+        _pm.addEventListener(cast.framework.events.EventType.MEDIA_FINISHED, function(e) {
+          dbg('KA pm MEDIA_FINISHED: '+(e.endedReason||'?'));
+        });
+        _pm.addEventListener(cast.framework.events.EventType.PLAYING, function() {
+          dbg('KA pm PLAYING ✅');
+        });
+      } catch(e) { dbg('KA pm listeners FAIL: '+e.message); }
+
+      try {
+        var opts = new cast.framework.CastReceiverOptions();
+        opts.disableIdleTimeout = true;
+        opts.maxInactivity = 3600;
+        opts.customNamespaces = {};
+        opts.customNamespaces[NAMESPACE] = cast.framework.system.MessageType.JSON;
+
+        ctx.start(opts);
+        dbg('ctx.start() OK');
+        // STEP 1: setApplicationStatus 20s ELIMINADO (bisección).
+
+      } catch(e) {
+        showSplashError('📡','Error Cast SDK',
+          'ctx.start() falló: '+e.message+'<br>Reinicia el dispositivo e inténtalo de nuevo.',
+          false);
+        return;
+      }
+
+      // STEP 1: KEEPALIVE 30s (receiver→sender) ELIMINADO (bisección).
+      // Reemplazado por watchdog del vídeo + log de currentTime cada 3s/10s.
+      setInterval(function() {
+        if (senderCount === 0) return;
+        var ka = kaPlayerState(), fb = document.getElementById('ka-fallback');
+        if (fb && fb.paused) { var p2 = fb.play(); if (p2 && p2.catch) p2.catch(function(){}); }
+        // Solo el cast-media-player cuenta para el heartbeat de Cast; el fallback es
+        // un <video> suelto y a Cast le da igual. Estado real, sin proxies: `ct > 0`
+        // se quedó en true tras el END_OF_STREAM y bloqueó los reintentos para
+        // siempre (el tries=2 con L=1 e IDLE del test KA3).
+        if (ka.state === 'PLAYING' || ka.state === 'BUFFERING') {
+          _kaLoaded   = true;
+          _kaLoadTries = 0;      // reproduce → perdonamos los intentos fallidos previos
+        } else {
+          // IDLE/PAUSED = no hay media activa = la sesión se está muriendo.
+          // Con REPEAT_SINGLE no deberíamos llegar aquí; es la red por si el
+          // firmware del Xiaomi ignora el bucle. Rearmar y recargar.
+          if (_kaLoaded) dbg('⚠ KA: player cayó a '+ka.state+' → recargando vídeo');
+          _kaLoaded = false;
+        }
+        if (ka.state === 'PAUSED') { try { ctx.getPlayerManager().play(); } catch(e) {} }
+        if (!_kaLoaded) kaLoad();  // reintenta pm.load (máx 8 fallos seguidos)
+        // log cada ~10s (cada 3 ticks) — clave para el diagnóstico del PASO 1:
+        // si ct se CONGELA antes del corte → Unity starva el decode (PASO 2a).
+        // si ct AVANZA y cae igual → starvation del heartbeat Cast (PASO 2b).
+        _kaTick++;
+        if (_kaTick % 3 === 0) {
+          // ct con 3 decimales: con toFixed(1) un 0.02 se pintaba como "0.0" y no
+          // se distinguía del 0 exacto. L = _kaLoaded (por qué se paran los tries).
+          var ct  = (typeof ka.ct === 'number') ? ka.ct.toFixed(3) : ('n/a:'+ka.ct);
+          var fct = fb ? fb.currentTime.toFixed(1) : 'n/a';
+          var t   = sessionStart ? Math.round((mono()-sessionStart)/1000) : 0;
+          dbg('KA t='+t+'s cmp:'+ka.state+' ct='+ct+' tries='+_kaLoadTries+
+              ' L='+(_kaLoaded?'1':'0')+' fb:'+(fb && !fb.paused ? '▶' : '⏸')+' fct='+fct);
+        }
+      }, 3000);
+
+      window.__castOnUnityReady = function(instance) {
+        dbg('Unity READY — flushing '+pendingMsgs.length+' msgs');
+        unityInst = instance;
+        pendingMsgs.forEach(function(m){
+          instance.SendMessage('CastReceiver','OnMessageReceived',m);
+        });
+        pendingMsgs = [];
+        hideSplash();
+      };
+    })();
+
+    // ── Dev test mode (?devtest=1) ────────────────────────────────────────────
+    // Dispara INIT automático sin Cast SDK — solo para testing local en Chrome.
+    // NO afecta producción (el param no estará en la URL de R2).
+    (function() {
+      if (new URLSearchParams(window.location.search).get('devtest') !== '1') return;
+      dbg('DEV MODE: auto-INIT activado');
+      var _devInterval = setInterval(function() {
+        if (!window.unityInstance) return;
+        clearInterval(_devInterval);
+        // Decos de prueba: las 3 anclas + cañón + columna. y≈-3.5 a z=2.5 = suelo
+        // (el suelo sube con la perspectiva 2.5D). Sirve para verificar en local que
+        // ningún material sale magenta tras un build (las anclas eran el caso dudoso).
+        // instanceId DEBE tener formato itemId_N: ParseDecoItemIds deriva la key
+        // de Addressables partiendo por el último '_' (deco_anchor_0 → deco_anchor).
+        var testDecos = { items: [
+          { itemId: 'deco_anchor',           instanceId: 'deco_anchor_0',           position: {x:-5, y:-2.8, z:2.0}, scaleFactor: 1 },
+          { itemId: 'deco_anchor_rust',      instanceId: 'deco_anchor_rust_0',       position: {x:-3, y:-2.8, z:2.0}, scaleFactor: 1 },
+          { itemId: 'deco_anchor_oldrust',   instanceId: 'deco_anchor_oldrust_0',    position: {x:-1, y:-2.8, z:2.0}, scaleFactor: 1 },
+          { itemId: 'deco_coral_corallium',  instanceId: 'deco_coral_corallium_0',   position: {x: 1, y:-2.8, z:2.0}, scaleFactor: 1 },
+          { itemId: 'deco_coral_heliopora',  instanceId: 'deco_coral_heliopora_0',   position: {x: 3, y:-2.8, z:2.0}, scaleFactor: 1 },
+          { itemId: 'deco_coral_distichopora',instanceId: 'deco_coral_distichopora_0',position: {x: 5, y:-2.8, z:2.0}, scaleFactor: 1 }
+        ]};
+        var testState = {
+          activeFish: [{speciesId: 'fish_banggai_cardinalfish', nickname: 'TestFish'}],
+          bgId: 'bg_kelp', subId: 'sub_moss', lightId: 'light_white',
+          ambientMode: 'day', fishSpeed: 1.0, selectedTankId: 'tank_l',
+          decoJson: JSON.stringify(testDecos)
+        };
+        var msg = JSON.stringify({ type: 'INIT', payload: JSON.stringify(testState) });
+        dbg('DEV MODE: sending INIT...');
+        window.unityInstance.SendMessage('CastReceiver', 'OnMessageReceived', msg);
+      }, 500);
+    })();
+
+    // ── Device input (Android TV remote + keyboard shortcuts) ────────────────
+    // Enter / OK button (Android TV remote center) → startle (fish scatter)
+    // F key / MediaPlayPause button                → feed (pellets drop, fish swim to eat)
+    // In devtest mode these are triggered by keyboard so you can test without a TV remote.
+    // Devtest-only UPDATE shortcuts (only active with ?devtest=1):
+    //   A → add_fish (moorish idol)   Z → remove_fish (moorish idol)
+    //   B → change_bg (cycle)         S → change_sub (cycle)
+    (function() {
+      function sendDeviceInput(action) {
+        if (!window.unityInstance) return;
+        dbg('Input: ' + action);
+        window.unityInstance.SendMessage('CastReceiver', 'OnDeviceInput', action);
+      }
+      function sendCastUpdate(type, value) {
+        if (!window.unityInstance) { dbg('Unity not ready for UPDATE'); return; }
+        var payload = JSON.stringify({ type: type, value: value });
+        var msg = JSON.stringify({ type: 'UPDATE', payload: payload });
+        dbg('DEV UPDATE: ' + type + ' = ' + value);
+        window.unityInstance.SendMessage('CastReceiver', 'OnMessageReceived', msg);
+      }
+      var _devBgIdx  = 0;
+      var _devSubIdx = 0;
+      var DEV_BGS  = ['bg_ocean','bg_reef','bg_cave','bg_abyss','bg_sunset','bg_tropical'];
+      var DEV_SUBS = ['sub_sand','sub_gravel','sub_black','sub_coral'];
+      var isDevTest = new URLSearchParams(window.location.search).get('devtest') === '1';
+
+      window.addEventListener('keydown', function(e) {
+        switch (e.keyCode) {
+          case 13:  // Enter → OK button on Android TV remote
+            e.preventDefault();
+            sendDeviceInput('startle');
+            break;
+          case 70:  // F key → feed (devtest convenience + MediaPlayPause fallback)
+          case 179: // MediaPlayPause (some Android TV remotes)
+            e.preventDefault();
+            sendDeviceInput('feed');
+            break;
+          // ── Devtest-only UPDATE shortcuts ─────────────────────────────────
+          case 65:  // A → add moorish idol
+            if (!isDevTest) break;
+            e.preventDefault();
+            sendCastUpdate('add_fish', JSON.stringify({ speciesId: 'fish_moorish_idol', nickname: 'Cast Test' }));
+            break;
+          case 90:  // Z → remove moorish idol
+            if (!isDevTest) break;
+            e.preventDefault();
+            sendCastUpdate('remove_fish', 'fish_moorish_idol');
+            break;
+          case 66:  // B → cycle background
+            if (!isDevTest) break;
+            e.preventDefault();
+            sendCastUpdate('change_bg', DEV_BGS[_devBgIdx++ % DEV_BGS.length]);
+            break;
+          case 83:  // S → cycle substrate
+            if (!isDevTest) break;
+            e.preventDefault();
+            sendCastUpdate('change_sub', DEV_SUBS[_devSubIdx++ % DEV_SUBS.length]);
+            break;
+        }
+      }, false);
+    })();
+    </script>
+
+    <!-- ════════════════════════════════════════════════════════════════════════
+         UNITY LOADER
+         Carga en background mientras la splash está visible.
+         Timeout de 120s — si no termina, muestra error de memoria/red.
+    ════════════════════════════════════════════════════════════════════════ -->
+    <script>
+    // ═══ ESCALÓN CONFIGURABLE — Unity diferido hasta RUNG_CONFIG del sender ═══════
+    // Un SOLO receiver en R2 sirve todos los escalones. El sender manda
+    // {type:'RUNG_CONFIG', unity:bool} justo tras conectar y ESO decide si Unity
+    // carga o no. Única variable entre escalones = ese flag. Unity NO arranca en
+    // page-load: se difiere hasta el mensaje (o 12s de fallback = Unity ON, para
+    // que un sender móvil normal siga viendo el acuario).
+    var _unityDecided = false;
+    function skipUnity() {
+      if (_unityDecided) return; _unityDecided = true;
+      dbg('⚙ Unity OMITIDO (escalón sin Unity). Solo vídeo keepalive + Cast bridge.');
+      try { hideSplash(); } catch(e) { dbg('hideSplash fail: '+e.message); }
+    }
+    function startUnityNow() {
+      if (_unityDecided) return; _unityDecided = true;
+      if (!(hasWebGL2 && (isDevTest || !window.__castSdkFailed))) { dbg('Unity: sin WebGL2/SDK — no cargo'); return; }
+      setSplashStatus('Cargando…');
+      dbg('Starting Unity loader...');
+
+      var canvas    = document.querySelector('#unity-canvas');
+      var buildUrl  = 'Build';
+      var loaderUrl = buildUrl + '/webgl-min.loader.js';
+
+      // Timeout: si Unity no carga en 120s → error con pista de causa
+      var _loadTimeout = setTimeout(function() {
+        showSplashError(
+          '💾',
+          'Este dispositivo necesita más memoria',
+          'El acuario 3D no pudo cargarse.<br>' +
+          'El dispositivo no tiene suficiente memoria RAM o su procesador es demasiado lento ' +
+          'para compilar el motor 3D.',
+          true  // muestra recomendación de dispositivo
+        );
+      }, 120000);
+
+      var config = {
+        arguments:          [],
+        dataUrl:            buildUrl + '/webgl-min.data',
+        frameworkUrl:       buildUrl + '/webgl-min.framework.js',
+        codeUrl:            buildUrl + '/webgl-min.wasm',
+        streamingAssetsUrl: 'StreamingAssets',
+        companyName:        'Appquarium',
+        productName:        'Appquarium',
+        productVersion:     '1.2.1',
+        showBanner:         function(msg, type) {
+          if (type === 'error') dbg('Unity banner ERR: '+msg.substring(0,60));
+        },
+      };
+
+      canvas.style.width  = '100%';
+      canvas.style.height = '100%';
+
+      var script = document.createElement('script');
+      script.src     = loaderUrl;
+      script.onerror = function() {
+        clearTimeout(_loadTimeout);
+        showSplashError(
+          '🌐',
+          'Error de red',
+          'No se pudo descargar el motor 3D.<br>' +
+          'Verifica que el dispositivo tiene conexión a Internet y vuelve a intentarlo.',
+          false
+        );
+      };
+      script.onload = function() {
+        dbg('loader.js OK');
+        var lastPct = 0;
+        createUnityInstance(canvas, config, function(progress) {
+          document.querySelector('#unity-progress-bar-full').style.width = 100*progress+'%';
+          var pct = Math.round(progress * 100);
+          if (pct >= lastPct + 20) {
+            setSplashStatus('Cargando… '+pct+'%', pct);
+            dbg('Unity '+pct+'%');
+            lastPct = pct;
+          }
+        }).then(function(instance) {
+          clearTimeout(_loadTimeout);
+          dbg('Unity loaded ✅');
+          document.querySelector('#unity-fullscreen-button').onclick = function() {
+            instance.SetFullscreen(1);
+          };
+          window.unityInstance = instance;
+          if (window.__castOnUnityReady) window.__castOnUnityReady(instance);
+          else if (isDevTest) hideSplash();
+        }).catch(function(message) {
+          clearTimeout(_loadTimeout);
+          dbg('Unity catch: '+String(message).substring(0,100));
+          var msg  = String(message).toLowerCase();
+          var isOOM = msg.indexOf('memory') !== -1 || msg.indexOf('oom') !== -1
+                   || msg.indexOf('out of') !== -1 || msg.indexOf('range') !== -1;
+          showSplashError(
+            isOOM ? '💾' : '⚠️',
+            isOOM ? 'Memoria insuficiente' : 'Error al cargar',
+            isOOM
+              ? 'El dispositivo no tiene suficiente memoria RAM para el acuario 3D.'
+              : 'No se pudo iniciar el motor 3D.<br><small style="opacity:.6">'+
+                String(message).substring(0,120)+'</small>',
+            isOOM
+          );
+        });
+      };
+      document.body.appendChild(script);
+      dbg('loader.js fetch started');
+    }
+
+    // El Cast bridge llama esto al recibir RUNG_CONFIG del sender.
+    window.__applyRungConfig = function(unityOn) {
+      if (unityOn) startUnityNow(); else skipUnity();
+    };
+    // ═══ RUNG 9 — vídeo desde el inicio, cargar Unity DIFERIDO ══════════════════
+    // Idea del user: dejar el vídeo keepalive solo (como RUNG 1, que aguanta),
+    // y cargar Unity a los N ms con la conexión YA asentada. Aísla si el corte es
+    // "~3min tras cargar Unity" (llegue cuando llegue) o si una conexión vieja
+    // sobrevive a la carga. _unityDecided=true bloquea el fallback de 12s; al
+    // disparar, lo reseteamos para permitir el load real.
+    window.__delayedUnity = function(delayMs) {
+      _unityDecided = true;                       // bloquea el fallback de 12s y skipUnity
+      try { hideSplash(); } catch(e) {}           // muestra el vídeo mientras tanto
+      dbg('⚙ Unity DIFERIDO — se cargará a los ' + Math.round(delayMs/1000) + 's (solo vídeo hasta entonces)');
+      setTimeout(function() {
+        _unityDecided = false;                    // permitir el load ahora
+        dbg('⚙ Cargando Unity AHORA — conexión asentada ' + Math.round(delayMs/1000) + 's');
+        startUnityNow();
+      }, delayMs);
+    };
+    // ═══ RUNG 10 — descargar los assets de Unity SIN instanciarlo ══════════════
+    // RUNG 9 cortó a mitad de la descarga de Unity (~64MB). ¿Es la saturación de
+    // red o el WebGL/WASM? Aquí descargamos los MISMOS ficheros (.wasm 44MB +
+    // .data 20MB) por fetch y los tiramos — SIN crear contexto WebGL ni instanciar.
+    // Si corta ~15s tras empezar → es la red. Si aguanta → es el WebGL/WASM.
+    window.__netLoad = function(delayMs) {
+      _unityDecided = true;                       // que NO cargue Unity nunca
+      try { hideSplash(); } catch(e) {}
+      dbg('⚙ NET diferido — a los ' + Math.round(delayMs/1000) + 's descargará ~64MB de assets (sin Unity)');
+      setTimeout(function() {
+        var urls = ['Build/webgl-min.wasm', 'Build/webgl-output.data', 'Build/webgl-min.framework.js'];
+        dbg('⚙ NET: descargando ~64MB de assets Unity por fetch, SIN instanciar…');
+        urls.forEach(function(u) {
+          fetch(u, { cache: 'no-store' })
+            .then(function(r) { return r.arrayBuffer(); })
+            .then(function(b) { dbg('⚙ NET: ' + u + ' OK ' + Math.round(b.byteLength/1e6) + 'MB'); })
+            .catch(function(e) { dbg('⚙ NET fail ' + u + ': ' + e); });
+        });
+      }, delayMs);
+    };
+    // RUNG 3: agrandar el vídeo keepalive a PANTALLA COMPLETA (invisible, opacity
+    // 0.02) para forzar compositing real bajo la carga GPU de Unity. Hipótesis:
+    // con Unity acaparando la GPU, un vídeo de 8px deja de componer frames y la
+    // plataforma corta; a fullscreen no lo puede ningunear.
+    window.__kaBig = function() {
+      try {
+        var css = 'position:fixed;top:0;left:0;width:100%;height:100%;opacity:0.02;'
+                + 'pointer-events:none;background:transparent;object-fit:cover;';
+        var p = document.getElementById('ka-player');
+        var f = document.getElementById('ka-fallback');
+        if (p) p.style.cssText = css + 'z-index:460;overflow:hidden;';
+        if (f) f.style.cssText = css + 'z-index:461;';
+        dbg('⚙ ka video → FULLSCREEN (compositing real encima de Unity)');
+      } catch(e) { dbg('kaBig fail: '+e.message); }
+    };
+
+    // ═══ RUNG 11 — contexto WebGL2 crudo + render loop, SIN Unity ══════════════
+    // RUNG 10 descartó la red. Queda separar: ¿el CONTEXTO WEBGL (GPU/render) o la
+    // instanciación del WASM/engine? Creamos un WebGL2 crudo y renderizamos en
+    // bucle (color cambiante para verlo en la TV), sin nada de Unity/WASM. Si
+    // corta → el WebView del Xiaomi mata Cast cuando hay WebGL activo. Si aguanta
+    // → es el WASM/engine de Unity específicamente.
+    window.__rawWebGL = function(delayMs) {
+      _unityDecided = true;                       // que NO cargue Unity nunca
+      try { hideSplash(); } catch(e) {}
+      dbg('⚙ rawWebGL diferido — contexto WebGL2 crudo a los ' + Math.round(delayMs/1000) + 's (sin Unity)');
+      setTimeout(function() {
+        try {
+          var cv = document.createElement('canvas');
+          cv.width = 960; cv.height = 600;
+          cv.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:5;';
+          document.body.appendChild(cv);
+          var gl = cv.getContext('webgl2') || cv.getContext('webgl');
+          if (!gl) { dbg('⚙ rawWebGL: el device NO da contexto WebGL — test inválido'); return; }
+          dbg('⚙ rawWebGL: contexto ' + (cv.getContext ? 'WebGL creado' : '?') + ' + render loop ACTIVO (SIN Unity/WASM)');
+          var t = 0;
+          (function render() {
+            t += 0.02;
+            gl.clearColor((Math.sin(t) + 1) / 2, 0.15, 0.3, 1);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+            requestAnimationFrame(render);
+          })();
+        } catch(e) { dbg('rawWebGL fail: ' + e.message); }
+      }, delayMs);
+    };
+
+    // ═══ RUNG 12 — WebGL2 PESADO sin Unity (¿huella GPU o WASM?) ════════════════
+    // RUNG 11 probó que un contexto WebGL2 VACÍO (cero GPU) aguanta >8min. Esto
+    // asigna ~192MB de texturas GPU reales + draw calls por frame, SIN WASM.
+    //   CORTA ~3min como Unity → la causa es la HUELLA GPU (fix: WebGL1 /
+    //                            powerPreference LowPower / ★ Reduce TV Textures).
+    //   AGUANTA               → es el lado WASM/CPU del engine (sin fix app-side).
+    // ⚠ Si sale WEBGLCONTEXTLOST = el device se quedó sin GPU (OTRO fallo, no el
+    //   corte de transporte de ~3min) → bajar TEX_N y repetir.
+    window.__gpuHeavy = function(delayMs) {
+      _unityDecided = true;                       // que NO cargue Unity nunca
+      try { hideSplash(); } catch(e) {}
+      var TEX_N = 12, TEX_SZ = 2048;              // 12 × 2048² RGBA8 ≈ 192 MB GPU
+      dbg('⚙ gpuHeavy diferido — WebGL2 pesado (' + TEX_N + '×' + TEX_SZ + '² ≈ ' + Math.round(TEX_N*TEX_SZ*TEX_SZ*4/1048576) + 'MB GPU) a los ' + Math.round(delayMs/1000) + 's (sin Unity)');
+      setTimeout(function() {
+        try {
+          var cv = document.createElement('canvas');
+          cv.width = 960; cv.height = 600;
+          cv.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:5;';
+          document.body.appendChild(cv);
+          cv.addEventListener('webglcontextlost', function(e) {
+            e.preventDefault();
+            dbg('⚙ gpuHeavy: ⚠ WEBGLCONTEXTLOST — el device se quedó sin GPU (OTRO fallo, NO el corte de transporte). Bajar TEX_N.');
+          });
+          var gl = cv.getContext('webgl2') || cv.getContext('webgl');
+          if (!gl) { dbg('⚙ gpuHeavy: el device NO da contexto WebGL — test inválido'); return; }
+          var isGL2 = (typeof WebGL2RenderingContext !== 'undefined') && (gl instanceof WebGL2RenderingContext);
+
+          var vsSrc, fsSrc;
+          if (isGL2) {
+            vsSrc = '#version 300 es\nin vec2 aPos; out vec2 vUV; void main(){ vUV=aPos*0.5+0.5; gl_Position=vec4(aPos,0.0,1.0); }';
+            fsSrc = '#version 300 es\nprecision mediump float; in vec2 vUV; uniform sampler2D uTex; uniform float uT; out vec4 frag; void main(){ vec4 c=texture(uTex,vUV); frag=vec4(c.rgb*0.5+vec3(0.5+0.5*sin(uT),0.15,0.3),1.0); }';
+          } else {
+            vsSrc = 'attribute vec2 aPos; varying vec2 vUV; void main(){ vUV=aPos*0.5+0.5; gl_Position=vec4(aPos,0.0,1.0); }';
+            fsSrc = 'precision mediump float; varying vec2 vUV; uniform sampler2D uTex; uniform float uT; void main(){ vec4 c=texture2D(uTex,vUV); gl_FragColor=vec4(c.rgb*0.5+vec3(0.5+0.5*sin(uT),0.15,0.3),1.0); }';
+          }
+          function sh(type, src) {
+            var s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+            if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) dbg('⚙ gpuHeavy shader err: ' + gl.getShaderInfoLog(s));
+            return s;
+          }
+          var prog = gl.createProgram();
+          gl.attachShader(prog, sh(gl.VERTEX_SHADER, vsSrc));
+          gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, fsSrc));
+          gl.bindAttribLocation(prog, 0, 'aPos');
+          gl.linkProgram(prog);
+          if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) { dbg('⚙ gpuHeavy link err: ' + gl.getProgramInfoLog(prog)); return; }
+          gl.useProgram(prog);
+          var uTex = gl.getUniformLocation(prog, 'uTex');
+          var uT = gl.getUniformLocation(prog, 'uT');
+
+          var vbo = gl.createBuffer();
+          gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+          gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+          gl.enableVertexAttribArray(0);
+          gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+          // Asignar TEX_N texturas grandes = GPU real (texImage2D null → el driver
+          // reserva; se comprometen al muestrearlas cada frame en el render loop).
+          var texs = [], okN = 0;
+          for (var i = 0; i < TEX_N; i++) {
+            var tx = gl.createTexture();
+            gl.bindTexture(gl.TEXTURE_2D, tx);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, TEX_SZ, TEX_SZ, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+            if (gl.getError() === gl.NO_ERROR) okN++;
+            texs.push(tx);
+          }
+          dbg('⚙ gpuHeavy: ' + okN + '/' + TEX_N + ' texturas ' + TEX_SZ + '² asignadas (≈' + Math.round(okN*TEX_SZ*TEX_SZ*4/1048576) + 'MB GPU) + render loop ACTIVO (SIN Unity/WASM)');
+
+          var t = 0;
+          (function render() {
+            t += 0.02;
+            gl.viewport(0, 0, cv.width, cv.height);
+            // muestrea TODAS las texturas por frame → todas residentes y usadas
+            for (var j = 0; j < texs.length; j++) {
+              gl.activeTexture(gl.TEXTURE0);
+              gl.bindTexture(gl.TEXTURE_2D, texs[j]);
+              gl.uniform1i(uTex, 0);
+              gl.uniform1f(uT, t + j*0.3);
+              gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+            }
+            requestAnimationFrame(render);
+          })();
+        } catch(e) { dbg('gpuHeavy fail: ' + e.message); }
+      }, delayMs);
+    };
+
+    // ═══ RUNG 13 — SATURAR TODOS LOS CORES sin Unity (¿hilos de fondo del WASM?) ══
+    // RUNG 8 bloqueó 1 core (hilo principal) y aguantó. Esto peg-ea TODOS los cores
+    // con N Web Workers ~30s (mímica del warmup del WASM de Unity: compilación en
+    // background + pthreads de emscripten), SIN Unity/WASM. El medidor de lag del
+    // hilo principal debería seguir BAJO (los workers son otros hilos) — igual que
+    // en prod con Unity (lag <240ms al morir).
+    //   CORTA ~3min → es la SATURACIÓN MULTI-CORE del warmup (posible mitigación).
+    //   AGUANTA     → es intrínseco del WASM de Unity → sin fix → reconexión.
+    window.__coreSaturate = function(delayMs) {
+      _unityDecided = true;                       // que NO cargue Unity nunca
+      try { hideSplash(); } catch(e) {}
+      var CORES = (navigator.hardwareConcurrency || 4);
+      var SAT_N = CORES + 2;                       // oversubscribe: ningún core libre
+      var SAT_MS = 30000;                          // ráfaga ~30s = warmup de Unity
+      dbg('⚙ coreSaturate diferido — ' + SAT_N + ' workers (' + CORES + ' cores) ×' + (SAT_MS/1000) + 's a los ' + Math.round(delayMs/1000) + 's (sin Unity/WASM)');
+      setTimeout(function() {
+        try {
+          // Worker inline: busy-wait real (sqrt) hasta cumplir ms → pega el core.
+          var wsrc = 'self.onmessage=function(e){var end=performance.now()+e.data.ms;var x=0;while(performance.now()<end){for(var i=0;i<100000;i++){x+=Math.sqrt(i*2.7+1);}}self.postMessage({done:true});};';
+          var url = URL.createObjectURL(new Blob([wsrc], { type: 'application/javascript' }));
+          var started = 0, done = 0, t0 = performance.now();
+          for (var i = 0; i < SAT_N; i++) {
+            try {
+              var w = new Worker(url);
+              w.onmessage = function() {
+                done++;
+                if (done === started) dbg('⚙ coreSaturate: ' + done + '/' + started + ' workers TERMINADOS a los ' + Math.round((performance.now()-t0)/1000) + 's — cores libres de nuevo');
+              };
+              w.onerror = function(ev) { dbg('⚙ coreSaturate worker err: ' + (ev.message || ev)); };
+              w.postMessage({ ms: SAT_MS });
+              started++;
+            } catch(ew) { dbg('⚙ coreSaturate: Worker no soportado: ' + ew.message); break; }
+          }
+          if (started === 0) { dbg('⚙ coreSaturate: 0 workers arrancados — test INVÁLIDO (¿Worker/blob bloqueado?)'); return; }
+          dbg('⚙ coreSaturate: ' + started + ' workers ARRANCADOS pegando cores ~' + (SAT_MS/1000) + 's (SIN Unity/WASM) — el hilo principal debería seguir suelto');
+        } catch(e) { dbg('coreSaturate fail: ' + e.message); }
+      }, delayMs);
+    };
+
+    // ═══ RUNG 14 — COMPILAR el .wasm real de Unity SIN instanciar ══════════════
+    // Delta de UNA variable sobre RUNG 10 (fetch+descartar, aguantó): aquí, tras
+    // descargar el MISMO .wasm de 44MB, lo pasamos por WebAssembly.compile() —
+    // exactamente el paso de compilación que hace Unity — pero NO lo instanciamos
+    // (sin WebAssembly.Memory, sin runtime emscripten, sin GL, sin correr nada).
+    // Reproduce fielmente el pipeline del compilador WASM de V8 (hilos de fondo
+    // incluidos), lo que RUNG 13 (sqrt en workers) no podía imitar.
+    //   CORTA ~2min tras compilar → es la COMPILACIÓN del módulo (fix fino: wasm
+    //                               más pequeño / streaming compile).
+    //   AGUANTA                   → es la INSTANCIACIÓN/memoria/runtime, NO el
+    //                               compile (fix fino: bajar Initial Memory 64MB).
+    window.__wasmCompile = function(delayMs) {
+      _unityDecided = true;                       // que NO cargue Unity nunca
+      try { hideSplash(); } catch(e) {}
+      dbg('⚙ wasmCompile diferido — a los ' + Math.round(delayMs/1000) + 's: fetch .wasm real (44MB) + WebAssembly.compile() SIN instanciar');
+      setTimeout(function() {
+        var u = 'Build/webgl-min.wasm';
+        var t0 = performance.now();
+        dbg('⚙ wasmCompile: descargando ' + u + ' (44MB), SIN instanciar…');
+        fetch(u, { cache: 'no-store' })
+          .then(function(r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.arrayBuffer();
+          })
+          .then(function(b) {
+            dbg('⚙ wasmCompile: descargado ' + Math.round(b.byteLength/1e6) + 'MB en ' + Math.round((performance.now()-t0)/1000) + 's → WebAssembly.compile() (mismo paso que Unity)…');
+            var tc = performance.now();
+            return WebAssembly.compile(b).then(function(mod) {
+              // Retener el módulo para que no se recolecte durante la medición
+              // (Unity también lo retiene). NO se instancia: sin memoria/runtime/GL.
+              window.__lastCompiledWasm = mod;
+              dbg('⚙ wasmCompile: ✅ COMPILADO en ' + Math.round((performance.now()-tc)/1000) + 's — módulo LISTO pero NO instanciado (sin memoria, sin runtime, sin GL, sin correr). Vigila si corta ~2min tras esta línea.');
+            });
+          })
+          .catch(function(e) { dbg('⚙ wasmCompile fail: ' + e); });
+      }, delayMs);
+    };
+
+    // ═══ RUNG 15 — INSTANCIAR WASM con memoria grande sin Unity (¿memoria o engine?) ══
+    // RUNG 14 (compilar el .wasm real SIN instanciar) aguantó → NO es la compilación.
+    // Último proxy: instanciamos un módulo WASM sintético MÍNIMO que declara una
+    // memoria de 64MB (máx 512MB — idéntica a la config de Unity: Initial 64 / Max
+    // 512) y COMMITEA todas sus páginas. Reproduce la maquinaria WASM-instantiate +
+    // reserva/commit de la memoria lineal, SIN el código del engine de Unity.
+    //   CORTA ~2min → es la MEMORIA/instanciación WASM (fix: bajar Initial Memory 64MB).
+    //   AGUANTA     → es el código de init del engine de Unity en sí (sin proxy JS;
+    //                 solo quedan knobs del build o el Remote Debugger).
+    window.__wasmMem = function(delayMs) {
+      _unityDecided = true;                       // que NO cargue Unity nunca
+      try { hideSplash(); } catch(e) {}
+      if (window.__wasmMemRan) return;            // guard: RUNG_CONFIG se manda 3× (retries)
+      window.__wasmMemRan = true;
+      dbg('⚙ wasmMem diferido — a los ' + Math.round(delayMs/1000) + 's: instanciar WASM con memoria 64MB→512MB + commit (sin Unity)');
+      setTimeout(function() {
+        try {
+          // Módulo WASM sintético: sólo una memoria (min 1024 pág=64MB, max 8192=512MB) exportada.
+          var bytes = new Uint8Array([
+            0x00,0x61,0x73,0x6d, 0x01,0x00,0x00,0x00,        // magic + version
+            0x05,0x06,0x01, 0x01,0x80,0x08,0x80,0x40,        // memory: 1 mem, min1024 max8192
+            0x07,0x05,0x01, 0x01,0x6d, 0x02,0x00             // export "m" (memory idx 0)
+          ]);
+          var t0 = performance.now();
+          WebAssembly.instantiate(bytes).then(function(res) {
+            var mem = res.instance.exports.m;
+            window.__wasmMemInstance = res.instance;   // retener (como hace Unity)
+            dbg('⚙ wasmMem: ✅ INSTANCIADO — WebAssembly.Memory ' + Math.round(mem.buffer.byteLength/1048576) + 'MB (máx 512MB) en ' + Math.round(performance.now()-t0) + 'ms → committing páginas…');
+            // Commit: escribir 1 byte cada 4KB fuerza páginas físicas (como el heap de Unity al arrancar).
+            var view = new Uint8Array(mem.buffer), n = 0;
+            for (var off = 0; off < view.length; off += 4096) { view[off] = 1; n++; }
+            dbg('⚙ wasmMem: ✅ COMMIT de ' + Math.round(n*4096/1048576) + 'MB hecho (memoria física reservada, SIN código de Unity). Vigila si corta ~2min tras esta línea.');
+          }).catch(function(e) { dbg('⚙ wasmMem instantiate fail: ' + e); });
+        } catch(e) { dbg('wasmMem fail: ' + e.message); }
+      }, delayMs);
+    };
+
+    // ═══ RUNG 16 — ESPÍA de init de Unity (Unity ON + hooks a APIs globales) ════
+    // La bisección aditiva (RUNG 10-15) llegó al techo: todo lo genérico aguanta;
+    // lo único que corta es el CÓDIGO real de Unity (RUNG 2). En vez de adivinar
+    // qué añadir, instrumentamos el Unity REAL: envolvemos las APIs globales que
+    // Unity podría tocar al arrancar y logueamos CADA llamada → lista concreta de
+    // acciones que nuestros proxies NO reprodujeron (ésas son las siguientes a
+    // replicar). Unity corre normal (los hooks sólo observan y delegan) → sigue
+    // cortando a ~198s; lo que importa es el log de init capturado hasta el corte.
+    window.__spyInit = function() {
+      if (window.__spyInstalled) return; window.__spyInstalled = true;
+      var N = 0, MAX = 220, seenExt = {};
+      function slog(s) { if (N++ < MAX) dbg('🕵 ' + s); else if (N === MAX + 1) dbg('🕵 …(límite de log alcanzado)'); }
+      function bindNew(C, args) { return new (Function.prototype.bind.apply(C, [null].concat([].slice.call(args)))); }
+      slog('SPY instalado. baseline: cores=' + (navigator.hardwareConcurrency || '?') + ' crossOriginIsolated=' + (('crossOriginIsolated' in self) ? self.crossOriginIsolated : '?') + ' SharedArrayBuffer=' + (typeof SharedArrayBuffer !== 'undefined'));
+
+      // 1) canvas.getContext — atributos del contexto WebGL de Unity (CLAVE: los
+      //    proxies usaban getContext('webgl2') SIN atributos; Unity pasa varios).
+      try {
+        var _gc = HTMLCanvasElement.prototype.getContext;
+        HTMLCanvasElement.prototype.getContext = function(type, attrs) {
+          try { slog('canvas.getContext(' + type + (attrs ? ', ' + JSON.stringify(attrs) : '') + ')'); } catch(e) {}
+          return _gc.apply(this, arguments);
+        };
+      } catch(e) { slog('hook getContext fail: ' + e.message); }
+
+      // 2) WebGL getExtension — qué extensiones pide Unity (únicas).
+      try {
+        [self.WebGLRenderingContext, self.WebGL2RenderingContext].forEach(function(C) {
+          if (!C) return;
+          var _ge = C.prototype.getExtension;
+          C.prototype.getExtension = function(name) {
+            if (name && !seenExt[name]) { seenExt[name] = 1; slog('gl.getExtension(' + name + ')'); }
+            return _ge.apply(this, arguments);
+          };
+        });
+      } catch(e) { slog('hook getExtension fail: ' + e.message); }
+
+      // 3) AudioContext — Unity crea uno (RUNG 4 lo suspendía, pero Unity igual lo CREA).
+      try {
+        ['AudioContext', 'webkitAudioContext'].forEach(function(k) {
+          var C = self[k]; if (!C) return;
+          var W = function() { slog('new ' + k + '()'); return bindNew(C, arguments); };
+          W.prototype = C.prototype; self[k] = W;
+        });
+      } catch(e) { slog('hook AudioContext fail: ' + e.message); }
+
+      // 4) Worker — pthreads de emscripten (RUNG 13 usó workers PLANOS, no de Unity).
+      try {
+        var _W = self.Worker;
+        if (_W) {
+          var WW = function(url) { slog('new Worker(' + ('' + url).slice(0, 70) + ')'); return bindNew(_W, arguments); };
+          WW.prototype = _W.prototype; self.Worker = WW;
+        }
+      } catch(e) { slog('hook Worker fail: ' + e.message); }
+
+      // 5) SharedArrayBuffer — memoria compartida de pthreads (si el contexto la da).
+      try {
+        var _SAB = self.SharedArrayBuffer;
+        if (_SAB) {
+          var SW = function(len) { slog('new SharedArrayBuffer(' + len + ')'); return new _SAB(len); };
+          SW.prototype = _SAB.prototype; self.SharedArrayBuffer = SW;
+        }
+      } catch(e) { slog('hook SAB fail: ' + e.message); }
+
+      // 6) fullscreen / pointerlock / wakeLock — ¿Unity pide algo de pantalla/energía?
+      try {
+        ['requestFullscreen', 'webkitRequestFullscreen', 'mozRequestFullScreen'].forEach(function(m) {
+          if (!Element.prototype[m]) return;
+          var _f = Element.prototype[m];
+          Element.prototype[m] = function() { slog('Element.' + m + '()'); return _f.apply(this, arguments); };
+        });
+        if (Element.prototype.requestPointerLock) {
+          var _pl = Element.prototype.requestPointerLock;
+          Element.prototype.requestPointerLock = function() { slog('requestPointerLock()'); return _pl.apply(this, arguments); };
+        }
+        if (navigator.wakeLock && navigator.wakeLock.request) {
+          var _wl = navigator.wakeLock.request;
+          navigator.wakeLock.request = function() { slog('navigator.wakeLock.request(' + arguments[0] + ')'); return _wl.apply(navigator.wakeLock, arguments); };
+        }
+      } catch(e) { slog('hook fullscreen/wakelock fail: ' + e.message); }
+
+      // 7) WebAssembly instantiate/compile — cómo instancia Unity (streaming?) + tamaño.
+      try {
+        ['instantiateStreaming', 'compileStreaming', 'instantiate', 'compile'].forEach(function(m) {
+          if (!WebAssembly[m]) return;
+          var _wa = WebAssembly[m];
+          WebAssembly[m] = function(src) {
+            var info = (src && src.byteLength) ? Math.round(src.byteLength / 1e6) + 'MB' : (src && (src.url || src instanceof Response) ? 'stream' : '');
+            slog('WebAssembly.' + m + '(' + info + ')');
+            return _wa.apply(this, arguments);
+          };
+        });
+      } catch(e) { slog('hook WebAssembly fail: ' + e.message); }
+
+      // 8) mediaSession — Unity podría fijar metadata/handlers (posible conflicto con Cast media).
+      try { if (navigator.mediaSession) slog('navigator.mediaSession presente (vigilar si Unity lo toca)'); } catch(e) {}
+
+      slog('SPY hooks activos — arrancando Unity…');
+    };
+
+    // ═══ RUNG 17 — replicar el CONTEXTO de Unity sin engine (aditivo DIRIGIDO) ══
+    // RUNG 16 (espía) reveló lo que Unity hace y los proxies NO: contexto WebGL2
+    // con powerPreference:"high-performance" + stencil/depth/alpha, 18 extensiones
+    // concretas, y un new AudioContext(). RUNG 11 (contexto WebGL2 pelado) aguantó;
+    // aquí le añadimos ESAS 4 cosas exactas, SIN el engine de Unity.
+    //   CORTA ~180s → el disparador está en el contexto/exts/audio → bisecar
+    //                 (empezar por powerPreference; fix = PlayerSettings.WebGL).
+    //   AGUANTA     → el disparador está más adentro (ejecución del engine) →
+    //                 Remote Debugger / rebuild escena vacía.
+    window.__unityCtx = function(delayMs) {
+      _unityDecided = true;                       // que NO cargue Unity nunca
+      try { hideSplash(); } catch(e) {}
+      if (window.__unityCtxRan) return; window.__unityCtxRan = true;
+      dbg('⚙ unityCtx diferido — a los ' + Math.round(delayMs/1000) + 's: WebGL2 con atributos EXACTOS de Unity (powerPreference:high-performance) + 18 extensiones + AudioContext, SIN engine');
+      setTimeout(function() {
+        try {
+          // 1) AudioContext (Unity crea uno ~23s; nuestros proxies NUNCA).
+          try {
+            var AC = self.AudioContext || self.webkitAudioContext;
+            if (AC) { window.__uctxAudio = new AC(); dbg('⚙ unityCtx: new AudioContext() state=' + window.__uctxAudio.state + ' sr=' + window.__uctxAudio.sampleRate); }
+            else dbg('⚙ unityCtx: sin AudioContext en el device');
+          } catch(ea) { dbg('⚙ unityCtx audio fail: ' + ea.message); }
+          // 2) contexto WebGL2 con los atributos EXACTOS de Unity (clave: powerPreference).
+          var cv = document.createElement('canvas'); cv.width = 960; cv.height = 600;
+          cv.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:5;';
+          document.body.appendChild(cv);
+          var attrs = { alpha:true, depth:true, stencil:true, antialias:false, premultipliedAlpha:false, preserveDrawingBuffer:false, powerPreference:'high-performance', failIfMajorPerformanceCaveat:false };
+          var gl = cv.getContext('webgl2', attrs);
+          if (!gl) { dbg('⚙ unityCtx: sin WebGL2 — test inválido'); return; }
+          dbg('⚙ unityCtx: WebGL2 con powerPreference=high-performance + stencil/depth/alpha creado');
+          // 3) las MISMAS 18 extensiones que pidió Unity (RUNG 16).
+          var exts = ['WEBGL_debug_renderer_info','ANGLE_instanced_arrays','OES_vertex_array_object','WEBGL_draw_buffers','WEBGL_draw_instanced_base_vertex_base_instance','WEBGL_multi_draw_instanced_base_vertex_base_instance','EXT_disjoint_timer_query','EXT_disjoint_timer_query_webgl2','WEBGL_multi_draw','EXT_color_buffer_float','EXT_float_blend','OES_texture_float_linear','EXT_texture_filter_anisotropic','WEBGL_compressed_texture_astc','WEBGL_compressed_texture_etc','WEBGL_compressed_texture_etc1','EXT_blend_minmax','WEBGL_compressed_texture_s3tc_srgb'];
+          var got = 0; exts.forEach(function(n) { try { if (gl.getExtension(n)) got++; } catch(e) {} });
+          dbg('⚙ unityCtx: ' + got + '/' + exts.length + ' extensiones obtenidas (como Unity)');
+          // 4) render loop simple para mantener el contexto activo (como RUNG 11, que aguantó).
+          var t = 0;
+          (function render() { t += 0.02; gl.clearColor((Math.sin(t)+1)/2, 0.15, 0.3, 1); gl.clear(gl.COLOR_BUFFER_BIT); requestAnimationFrame(render); })();
+          dbg('⚙ unityCtx: render loop ACTIVO (powerPref high-perf + audio + ' + got + ' exts, SIN engine Unity). Vigila si corta ~2min.');
+        } catch(e) { dbg('unityCtx fail: ' + e.message); }
+      }, delayMs);
+    };
+
+    // ═══ RUNG 18 — ESPÍA de operaciones GL de Unity (Unity ON, mismo método RUNG 16) ══
+    // RUNG 17 descartó el MONTAJE del contexto. Queda lo que Unity EJECUTA
+    // renderizando. Instrumentamos el contexto WebGL con contadores de las ops
+    // distintivas de bajo volumen (FBOs, renderbuffers, shaders, texturas, y sobre
+    // todo readPixels/finish/clientWaitSync = sync GPU) + resumen cada 10s. Unity
+    // corre normal → corta ~198s; el valor es la huella de render capturada.
+    //   readPixels/finish/sync > 0 → SOSPECHOSO fuerte (sync GPU puede stallar el
+    //     compositing/heartbeat de la plataforma) → replicar en RUNG 19.
+    window.__glSpy = function() {
+      if (window.__glSpyInstalled) return; window.__glSpyInstalled = true;
+      var c = { fbo:0, rtt:0, rbuf:0, rbMS:0, link:0, tex2d:0, tex3d:0, texStor:0, readPixels:0, finish:0, flush:0, cws:0, fence:0, draws:0, texMB:0 };
+      var firsts = {};
+      function first(k, s) { if (!firsts[k]) { firsts[k] = 1; dbg('🔬 1ª ' + s); } }
+      function mb(w, h, d) { return (typeof w === 'number' && typeof h === 'number') ? (w * h * (d || 1) * 4) / 1048576 : 0; }
+      [self.WebGLRenderingContext, self.WebGL2RenderingContext].forEach(function(C) {
+        if (!C) return;
+        var P = C.prototype;
+        function wrap(name, fn) { if (!P[name]) return; var o = P[name]; P[name] = function() { try { fn.apply(this, arguments); } catch(e) {} return o.apply(this, arguments); }; }
+        wrap('createFramebuffer', function() { c.fbo++; first('fbo', 'createFramebuffer'); });
+        wrap('framebufferTexture2D', function() { c.rtt++; first('rtt', 'framebufferTexture2D (render-to-texture)'); });
+        wrap('createRenderbuffer', function() { c.rbuf++; });
+        wrap('renderbufferStorage', function(t, f, w, h) { first('rb', 'renderbufferStorage ' + w + 'x' + h); });
+        wrap('renderbufferStorageMultisample', function(t, s, f, w, h) { c.rbMS++; first('rbMS', 'renderbufferStorageMultisample samples=' + s + ' ' + w + 'x' + h); });
+        wrap('linkProgram', function() { c.link++; });
+        wrap('texImage2D', function(t, l, i, w, h) { c.tex2d++; c.texMB += mb(w, h); });
+        wrap('texImage3D', function(t, l, i, w, h, d) { c.tex3d++; c.texMB += mb(w, h, d); });
+        wrap('texStorage2D', function(t, lv, f, w, h) { c.texStor++; c.texMB += mb(w, h); });
+        wrap('readPixels', function() { c.readPixels++; first('readPixels', 'readPixels (GPU→CPU readback, FUERZA sync)'); });
+        wrap('finish', function() { c.finish++; first('finish', 'glFinish (FUERZA sync GPU)'); });
+        wrap('flush', function() { c.flush++; });
+        wrap('clientWaitSync', function() { c.cws++; first('cws', 'clientWaitSync (sync GPU)'); });
+        wrap('fenceSync', function() { c.fence++; first('fence', 'fenceSync'); });
+        wrap('drawArrays', function() { c.draws++; });
+        wrap('drawElements', function() { c.draws++; });
+        if (P.drawArraysInstanced) wrap('drawArraysInstanced', function() { c.draws++; });
+        if (P.drawElementsInstanced) wrap('drawElementsInstanced', function() { c.draws++; });
+      });
+      window.__glc = c;
+      var _n = 0;
+      setInterval(function() {
+        _n++;
+        dbg('🔬 GL#' + _n + ' fbo=' + c.fbo + ' rtt=' + c.rtt + ' rbuf=' + c.rbuf + '(ms' + c.rbMS + ') progs=' + c.link + ' tex=' + c.tex2d + '/' + Math.round(c.texMB) + 'MB texStor=' + c.texStor + ' readPix=' + c.readPixels + ' finish=' + c.finish + ' cws=' + c.cws + ' fence=' + c.fence + ' draws=' + c.draws);
+      }, 10000);
+      dbg('🔬 GL-spy instalado (cuenta las ops de render de Unity + resumen cada 10s)');
+    };
+
+    // ═══ RUNG 19 — replicar las FENCES GPU de Unity (single variable = A) ═══════
+    // RUNG 18 reveló que Unity usa fenceSync + clientWaitSync CONTINUOS (sync
+    // GPU↔CPU), algo que ningún proxy hizo. clientWaitSync BLOQUEA la CPU esperando
+    // a la GPU → puede serializar con el compositor/present de la plataforma Cast.
+    // Aquí: WebGL2 high-perf + draws reales + fenceSync/clientWaitSync por frame,
+    // SIN engine Unity.
+    //   CORTA ~180-216s → las fences GPU son el disparador (fix: Graphics Jobs /
+    //                     pipeline de sync de Unity, o intrínseco de WebGL2 en Cast).
+    //   AGUANTA         → RUNG 20 = FBO render-to-texture 1440p (candidato B).
+    window.__glFence = function(delayMs) {
+      _unityDecided = true;                       // que NO cargue Unity nunca
+      try { hideSplash(); } catch(e) {}
+      if (window.__glFenceRan) return; window.__glFenceRan = true;
+      dbg('⚙ glFence diferido — a los ' + Math.round(delayMs/1000) + 's: WebGL2 high-perf + draws + fenceSync/clientWaitSync por frame (como Unity), SIN engine');
+      setTimeout(function() {
+        try {
+          var cv = document.createElement('canvas'); cv.width = 960; cv.height = 600;
+          cv.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:5;';
+          document.body.appendChild(cv);
+          var gl = cv.getContext('webgl2', { alpha:true, depth:true, stencil:true, antialias:false, powerPreference:'high-performance' });
+          if (!gl) { dbg('⚙ glFence: sin WebGL2 — test inválido'); return; }
+          if (typeof gl.fenceSync !== 'function') { dbg('⚙ glFence: contexto sin fenceSync — test inválido'); return; }
+          var vs = '#version 300 es\nin vec2 p; out vec2 uv; void main(){ uv=p*0.5+0.5; gl_Position=vec4(p,0.,1.); }';
+          var fs = '#version 300 es\nprecision mediump float; in vec2 uv; uniform sampler2D tx; uniform float u; out vec4 o; void main(){ o = texture(tx,uv)*0.5 + vec4(0.5+0.5*sin(u),0.15,0.3,1.); }';
+          function sh(ty, s) { var x = gl.createShader(ty); gl.shaderSource(x, s); gl.compileShader(x); if (!gl.getShaderParameter(x, gl.COMPILE_STATUS)) dbg('⚙ glFence shader err: ' + gl.getShaderInfoLog(x)); return x; }
+          var pr = gl.createProgram(); gl.attachShader(pr, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, fs));
+          gl.bindAttribLocation(pr, 0, 'p'); gl.linkProgram(pr); gl.useProgram(pr);
+          var uTx = gl.getUniformLocation(pr, 'tx'), uU = gl.getUniformLocation(pr, 'u');
+          var vb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vb);
+          gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+          gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+          var texs = [];
+          for (var i = 0; i < 8; i++) { var tx = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tx); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1024, 1024, 0, gl.RGBA, gl.UNSIGNED_BYTE, null); texs.push(tx); }
+          dbg('⚙ glFence: contexto + shader + 8 texturas listos → render loop con fenceSync/clientWaitSync por frame');
+          var t = 0, fc = 0, cwc = 0, frames = 0;
+          (function render() {
+            t += 0.02; frames++;
+            gl.viewport(0, 0, cv.width, cv.height);
+            for (var j = 0; j < texs.length; j++) { gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, texs[j]); gl.uniform1i(uTx, 0); gl.uniform1f(uU, t + j*0.3); gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); }
+            // fence como Unity: 1 fenceSync + ~2 clientWaitSync por frame
+            var s = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0); fc++;
+            gl.flush();
+            gl.clientWaitSync(s, gl.SYNC_FLUSH_COMMANDS_BIT, 5000000); cwc++;  // espera hasta 5ms
+            gl.clientWaitSync(s, 0, 0); cwc++;                                  // poll
+            gl.deleteSync(s);
+            requestAnimationFrame(render);
+          })();
+          setInterval(function() { dbg('⚙ glFence: frames=' + frames + ' fenceSync=' + fc + ' clientWaitSync=' + cwc); }, 10000);
+        } catch(e) { dbg('glFence fail: ' + e.message); }
+      }, delayMs);
+    };
+
+    // ═══ RUNG 20 — replicar el FBO render-to-texture 1440p de Unity (candidato B) ══
+    // RUNG 19 descartó las fences. Queda el otro hallazgo de RUNG 18: Unity renderiza
+    // a un FBO offscreen de 2560x1440 (color RGBA8 + depth24_stencil8) y lo blitea a
+    // la pantalla. Ningún proxy lo hizo (todos dibujaban directo al canvas). Aquí:
+    // WebGL2 high-perf + FBO 2560x1440 + draw dentro + blitFramebuffer por frame.
+    //   CORTA ~180-216s → el render offscreen 1440p es el disparador (fix: renderScale
+    //                     / resolución del RT / offscreen buffer en Unity).
+    //   AGUANTA         → no está en las ops GL replicadas → combinación acumulada /
+    //                     present de emscripten / Remote Debugger.
+    window.__glFbo = function(delayMs) {
+      _unityDecided = true;                       // que NO cargue Unity nunca
+      try { hideSplash(); } catch(e) {}
+      if (window.__glFboRan) return; window.__glFboRan = true;
+      dbg('⚙ glFbo diferido — a los ' + Math.round(delayMs/1000) + 's: WebGL2 high-perf + FBO render-to-texture 2560x1440 + blit por frame (como Unity), SIN engine');
+      setTimeout(function() {
+        try {
+          var RW = 2560, RH = 1440;
+          var cv = document.createElement('canvas'); cv.width = 960; cv.height = 600;
+          cv.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:5;';
+          document.body.appendChild(cv);
+          var gl = cv.getContext('webgl2', { alpha:true, depth:true, stencil:true, antialias:false, powerPreference:'high-performance' });
+          if (!gl) { dbg('⚙ glFbo: sin WebGL2 — test inválido'); return; }
+          // FBO: color texture 2560x1440 + depth24_stencil8 renderbuffer (como Unity)
+          var colorTex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, colorTex);
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, RW, RH, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+          var rb = gl.createRenderbuffer(); gl.bindRenderbuffer(gl.RENDERBUFFER, rb);
+          gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH24_STENCIL8, RW, RH);
+          var fbo = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+          gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, colorTex, 0);
+          gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_STENCIL_ATTACHMENT, gl.RENDERBUFFER, rb);
+          var stt = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+          if (stt !== gl.FRAMEBUFFER_COMPLETE) { dbg('⚙ glFbo: FBO incompleto 0x' + stt.toString(16) + ' — test inválido'); return; }
+          gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+          // shader + textura para dibujar dentro del FBO
+          var vs = '#version 300 es\nin vec2 p; out vec2 uv; void main(){ uv=p*0.5+0.5; gl_Position=vec4(p,0.,1.); }';
+          var fs = '#version 300 es\nprecision mediump float; in vec2 uv; uniform sampler2D tx; uniform float u; out vec4 o; void main(){ o = texture(tx,uv)*0.5 + vec4(0.5+0.5*sin(u),0.15,0.3,1.); }';
+          function sh(ty, s) { var x = gl.createShader(ty); gl.shaderSource(x, s); gl.compileShader(x); if (!gl.getShaderParameter(x, gl.COMPILE_STATUS)) dbg('⚙ glFbo shader err: ' + gl.getShaderInfoLog(x)); return x; }
+          var pr = gl.createProgram(); gl.attachShader(pr, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, fs));
+          gl.bindAttribLocation(pr, 0, 'p'); gl.linkProgram(pr); gl.useProgram(pr);
+          var uTx = gl.getUniformLocation(pr, 'tx'), uU = gl.getUniformLocation(pr, 'u');
+          var vb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vb);
+          gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+          gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+          var tx = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tx); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1024, 1024, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+          gl.enable(gl.DEPTH_TEST);
+          dbg('⚙ glFbo: FBO 2560x1440 (color RGBA8 + depth24_stencil8) COMPLETO → render-to-texture + blit por frame');
+          var t = 0, frames = 0;
+          (function render() {
+            t += 0.02; frames++;
+            // 1) render a la FBO 1440p
+            gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+            gl.viewport(0, 0, RW, RH);
+            gl.clearColor(0.05, 0.1, 0.2, 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+            gl.useProgram(pr); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tx); gl.uniform1i(uTx, 0); gl.uniform1f(uU, t);
+            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+            // 2) blit FBO → canvas (downscale 1440p → 960x600, como Unity)
+            gl.bindFramebuffer(gl.READ_FRAMEBUFFER, fbo);
+            gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
+            gl.blitFramebuffer(0, 0, RW, RH, 0, 0, 960, 600, gl.COLOR_BUFFER_BIT, gl.LINEAR);
+            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+            requestAnimationFrame(render);
+          })();
+          setInterval(function() { dbg('⚙ glFbo: frames=' + frames + ' (render-to-texture 1440p + blit)'); }, 10000);
+        } catch(e) { dbg('glFbo fail: ' + e.message); }
+      }, delayMs);
+    };
+
+    // ═══ RUNG 21 — KITCHEN SINK: TODO junto a la intensidad de Unity ═══════════
+    // Cada op replicada por separado (17/19/20/12) aguantó. Aquí TODO en un mismo
+    // render loop, para cazar un disparador EMERGENTE de la combinación: canvas de
+    // present 1920x1080 (grande, como Unity) + FBO 1440p render-to-texture + 12
+    // texturas + depth + blending + blit + fenceSync/clientWaitSync por frame. SIN
+    // engine WASM/C#.
+    //   CORTA ~180-216s → es la combinación/intensidad (REPRODUCIDO sin Unity →
+    //                     bisecar quitando piezas).
+    //   AGUANTA         → el disparador es el engine WASM / el present de emscripten,
+    //                     NO alcanzable por proxy JS → Remote Debugger / escena vacía.
+    window.__glCombo = function(delayMs) {
+      _unityDecided = true;                       // que NO cargue Unity nunca
+      try { hideSplash(); } catch(e) {}
+      if (window.__glComboRan) return; window.__glComboRan = true;
+      dbg('⚙ glCombo diferido — a los ' + Math.round(delayMs/1000) + 's: TODO junto (canvas 1920x1080 + FBO 1440p + 12 tex + depth/blend + blit + fences/frame), SIN engine');
+      setTimeout(function() {
+        try {
+          var RW = 2560, RH = 1440;
+          var cv = document.createElement('canvas'); cv.width = 1920; cv.height = 1080;  // present surface GRANDE como Unity
+          cv.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:5;';
+          document.body.appendChild(cv);
+          var gl = cv.getContext('webgl2', { alpha:true, depth:true, stencil:true, antialias:false, premultipliedAlpha:false, preserveDrawingBuffer:false, powerPreference:'high-performance' });
+          if (!gl) { dbg('⚙ glCombo: sin WebGL2 — test inválido'); return; }
+          // FBO 1440p (color RGBA8 + depth24_stencil8)
+          var colorTex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, colorTex); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, RW, RH, 0, gl.RGBA, gl.UNSIGNED_BYTE, null); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+          var rb = gl.createRenderbuffer(); gl.bindRenderbuffer(gl.RENDERBUFFER, rb); gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH24_STENCIL8, RW, RH);
+          var fbo = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, fbo); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, colorTex, 0); gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_STENCIL_ATTACHMENT, gl.RENDERBUFFER, rb);
+          if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) { dbg('⚙ glCombo: FBO incompleto — test inválido'); return; }
+          gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+          var vs = '#version 300 es\nin vec2 p; out vec2 uv; void main(){ uv=p*0.5+0.5; gl_Position=vec4(p,0.,1.); }';
+          var fs = '#version 300 es\nprecision mediump float; in vec2 uv; uniform sampler2D tx; uniform float u; out vec4 o; void main(){ o = texture(tx,uv)*0.5 + vec4(0.5+0.5*sin(u),0.15,0.3,1.); }';
+          function sh(ty, s) { var x = gl.createShader(ty); gl.shaderSource(x, s); gl.compileShader(x); if (!gl.getShaderParameter(x, gl.COMPILE_STATUS)) dbg('⚙ glCombo shader err: ' + gl.getShaderInfoLog(x)); return x; }
+          var pr = gl.createProgram(); gl.attachShader(pr, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, fs)); gl.bindAttribLocation(pr, 0, 'p'); gl.linkProgram(pr); gl.useProgram(pr);
+          var uTx = gl.getUniformLocation(pr, 'tx'), uU = gl.getUniformLocation(pr, 'u');
+          var vbuf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vbuf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+          var texs = [];
+          for (var i = 0; i < 12; i++) { var tx = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tx); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1024, 1024, 0, gl.RGBA, gl.UNSIGNED_BYTE, null); texs.push(tx); }
+          gl.enable(gl.DEPTH_TEST); gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+          dbg('⚙ glCombo: canvas 1920x1080 + FBO 1440p + 12 tex + depth/blend listos → loop COMBINADO con fences');
+          var t = 0, frames = 0;
+          (function render() {
+            t += 0.02; frames++;
+            gl.bindFramebuffer(gl.FRAMEBUFFER, fbo); gl.viewport(0, 0, RW, RH); gl.clearColor(0.05, 0.1, 0.2, 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+            gl.useProgram(pr);
+            for (var j = 0; j < texs.length; j++) { gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, texs[j]); gl.uniform1i(uTx, 0); gl.uniform1f(uU, t + j*0.3); gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); }
+            gl.bindFramebuffer(gl.READ_FRAMEBUFFER, fbo); gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null); gl.blitFramebuffer(0, 0, RW, RH, 0, 0, 1920, 1080, gl.COLOR_BUFFER_BIT, gl.LINEAR); gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+            var s = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0); gl.flush(); gl.clientWaitSync(s, gl.SYNC_FLUSH_COMMANDS_BIT, 5000000); gl.deleteSync(s);
+            requestAnimationFrame(render);
+          })();
+          setInterval(function() { dbg('⚙ glCombo: frames=' + frames + ' (1080p present + FBO 1440p + 12 draws + blit + fence)'); }, 10000);
+        } catch(e) { dbg('glCombo fail: ' + e.message); }
+      }, delayMs);
+    };
+
+    // ═══ RUNG 4 — matar el audio de Unity ══════════════════════════════════════
+    // Hipótesis: Unity WebGL crea un AudioContext al arrancar y le roba a la
+    // plataforma el rol de "media activa" al vídeo keepalive → idle timeout ~3min.
+    // Capturamos TODO AudioContext creado (parcheando el constructor ANTES de que
+    // Unity cargue) y, si el escalón lo pide, los suspendemos en bucle → Unity
+    // queda sin foco de audio y el vídeo debería volver a ser la media activa.
+    var _audioCtxs = [];
+    (function patchAudioContext() {
+      var O = window.AudioContext || window.webkitAudioContext;
+      if (!O || typeof Reflect === 'undefined' || !Reflect.construct) return;
+      function Wrapped() {
+        var c = Reflect.construct(O, arguments);
+        _audioCtxs.push(c);
+        return c;
+      }
+      Wrapped.prototype = O.prototype;
+      window.AudioContext = Wrapped;
+      window.webkitAudioContext = Wrapped;
+    })();
+    window.__killUnityAudio = function() {
+      // suspender en bucle: Unity puede intentar resumir su contexto
+      setInterval(function() {
+        var n = 0;
+        for (var i = 0; i < _audioCtxs.length; i++) {
+          try { if (_audioCtxs[i].state === 'running') { _audioCtxs[i].suspend(); n++; } } catch(e) {}
+        }
+        if (n > 0) dbg('⚙ killUnityAudio: suspendidos '+n+'/'+_audioCtxs.length+' AudioContext');
+      }, 1000);
+      dbg('⚙ killUnityAudio ARMADO (capturados '+_audioCtxs.length+' al arrancar; se suspenden en bucle)');
+    };
+
+    // ═══ RUNG 5 — LOGS INTERNOS DEL FRAMEWORK ══════════════════════════════════
+    // setLoggerLevel(DEBUG) hace que CAF loguee sus internos (heartbeat, comms con
+    // el sender, razón del disconnect) a la CONSOLA. Como no hay DevTools en el
+    // Xiaomi, interceptamos console.* y lo streameamos por nuestro canal al PC.
+    // Filtramos a líneas cast/heartbeat/sender + todo warn/error (si no, Unity
+    // spamea la consola y ahoga la señal). Guard anti-recursión (_inCon) porque
+    // dbg() puede escribir a consola.
+    // ═══ RUNG 6 — estrangular el requestAnimationFrame de Unity ════════════════
+    // Hipótesis (log RUNG 5): el corte es de la capa de transporte, no de CAF, y
+    // Unity acapara el event loop (STALL 9.7s al arrancar). Si el bucle rAF de
+    // Unity retrasa el heartbeat de transporte, bajarlo a ~4fps le da aire. Debe
+    // aplicarse ANTES de que Unity capture requestAnimationFrame (createUnityInstance).
+    window.__throttleRaf = function(fps) {
+      try {
+        var interval = Math.max(1, Math.round(1000 / fps));
+        window.requestAnimationFrame = function(cb) {
+          return setTimeout(function() { cb(performance.now()); }, interval);
+        };
+        window.cancelAnimationFrame = function(id) { clearTimeout(id); };
+        dbg('⚙ requestAnimationFrame ESTRANGULADO a ~' + fps + 'fps (Unity renderizará lento)');
+      } catch(e) { dbg('throttleRaf fail: ' + e.message); }
+    };
+
+    // ═══ RUNG 7 — cargar Unity y DESTRUIRLO (Quit) ════════════════════════════
+    // Si tras destruir el contexto WebGL de Unity la sesión AGUANTA → el daño es
+    // la EXISTENCIA continua del runtime (idea de fix: cargar/descargar bajo
+    // demanda). Si corta igual → el daño se hizo al cargar, irreversible.
+    // Unity tarda ~28s en cargar aquí; esperamos a unityInstance y luego 15s.
+    window.__quitUnity = function() {
+      var waited = 0;
+      var poll = setInterval(function() {
+        waited += 1000;
+        if (window.unityInstance) {
+          clearInterval(poll);
+          dbg('⚙ Unity presente → Quit() programado en 15s');
+          setTimeout(function() {
+            try {
+              dbg('⚙ Llamando Unity.Quit() — se destruye el contexto WebGL');
+              var p = window.unityInstance.Quit();
+              if (p && p.then) p.then(function(){ dbg('⚙ Unity.Quit() COMPLETADO — solo queda el vídeo keepalive'); })
+                               .catch(function(e){ dbg('⚙ Quit rechazado: ' + e); });
+            } catch(e) { dbg('quitUnity fail: ' + e.message); }
+          }, 15000);
+        } else if (waited > 60000) { clearInterval(poll); dbg('⚙ Quit: unityInstance nunca apareció'); }
+      }, 1000);
+      dbg('⚙ __quitUnity ARMADO (esperando a que Unity cargue)');
+    };
+
+    // ═══ RUNG 8 — bloqueo artificial del hilo, SIN Unity ══════════════════════
+    // RUNG 7 probó que el daño se hace al CARGAR Unity, una vez, irreversible. El
+    // candidato nº1 es el STALL de ~6s del hilo al cargar. Aquí lo reproducimos
+    // SIN Unity: parte de RUNG 1 (que aguanta) + un busy-wait que congela el hilo
+    // 7s a los 15s. Si esto solo corta a ~3min → el corte es el bloqueo del hilo
+    // matando el heartbeat de transporte → FIX = evitar el bloqueo (WASM async).
+    window.__artificialStall = function(ms) {
+      setTimeout(function() {
+        dbg('⚙ STALL ARTIFICIAL de ' + ms + 'ms empezando (hilo congelado)…');
+        var end = performance.now() + ms;
+        while (performance.now() < end) { /* busy-wait: bloquea el hilo principal */ }
+        dbg('⚙ STALL ARTIFICIAL terminado tras ' + ms + 'ms');
+      }, 15000);
+      dbg('⚙ __artificialStall ARMADO (7s de bloqueo a los 15s, SIN Unity)');
+    };
+
+    var _inCon = false;
+    window.__verbose = function() {
+      try {
+        ['log','debug','info','warn','error'].forEach(function(m) {
+          var orig = console[m] ? console[m].bind(console) : function(){};
+          console[m] = function() {
+            orig.apply(null, arguments);
+            if (_inCon) return;
+            _inCon = true;
+            try {
+              var s = Array.prototype.map.call(arguments, function(a) {
+                try { return (typeof a === 'string') ? a : JSON.stringify(a); } catch(e) { return String(a); }
+              }).join(' ');
+              if (m === 'warn' || m === 'error' ||
+                  /cast|sender|heartbeat|inactiv|disconnect|timeout|pong|ping|channel|session|shutdown/i.test(s)) {
+                dbg('CON.' + m + ': ' + s.slice(0, 240));
+              }
+            } catch(e) {}
+            _inCon = false;
+          };
+        });
+        var C = cast.framework.CastReceiverContext.getInstance();
+        if (C.setLoggerLevel && cast.framework.LoggerLevel) {
+          C.setLoggerLevel(cast.framework.LoggerLevel.DEBUG);
+        }
+        dbg('⚙ VERBOSE ON: console capturado (filtrado) + setLoggerLevel(DEBUG)');
+      } catch(e) { dbg('verbose fail: ' + e.message); }
+    };
+    // Fallback: si nadie manda RUNG_CONFIG (sender móvil normal) → Unity ON a los 12s.
+    setTimeout(function(){ if (!_unityDecided) { dbg('⚙ sin RUNG_CONFIG en 12s → default Unity ON'); startUnityNow(); } }, 12000);
+    </script>
+
+    <!-- ════════════════════════════════════════════════════════════════════════
+         FALLBACK WebGL 1 / No WebGL — usa la splash como pantalla de error
+         (La lógica ya está arriba en showSplashError, esto solo configura
+         el mensaje especial de "dispositivo no compatible".)
+    ════════════════════════════════════════════════════════════════════════ -->
+    <script>
+    if (!hasWebGL2) {
+      document.querySelector('#unity-container').style.display = 'none';
+      window.__liteOnMessage = function(){};
+    }
+    </script>
+
+  </body>
+</html>
