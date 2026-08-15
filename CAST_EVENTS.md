@@ -1,5 +1,10 @@
 # Cast Events — Arquitectura y Backlog
 
+> ⚠ **Parcialmente obsoleto.** El backlog de eventos «no implementados ni en el sender ni en
+> el receiver» (`FEED`, `AMBIENT_TOGGLE`, `ADD_FISH`/`REMOVE_FISH`) **está cerrado**: los 11
+> tipos funcionan en ambos extremos. Tampoco es cierto ya el «sin día/noche reactivo».
+> Estado real y protocolo vigente: `CAST_UPDATES.md` y `TODO.md`.
+
 **Actualizado:** 2026-06-08
 
 ---

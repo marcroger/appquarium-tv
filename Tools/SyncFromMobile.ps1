@@ -38,36 +38,61 @@ if (-not (Test-Path $TvRoot)) {
 }
 
 # Carpetas que se sincronizan COMPLETAS (todo su contenido recursivo, incluye .meta)
+#
+# ⚠⚠ 2026-08-15 — SE HAN QUITADO DE AQUÍ:
+#
+#   Assets\Scripts\Tank          -> contiene DecorationPlacer.cs, TankBackground.cs y
+#                                   WaterSurface.cs, los tres con arreglos TV-only. La
+#                                   versión móvil llama a CastManager.Instance, que en TV
+#                                   NO EXISTE (ni hay stub) -> el proyecto deja de compilar.
+#                                   Además se perdería el lote visual validado el 15-ago.
+#   Assets\ScriptableObjects\*   -> regla dura del proyecto: "NUNCA sync de SOs en bloque".
+#                                   Rompe las refs a prefab ({guid} -> {fileID:0}); obligaba
+#                                   a re-ejecutar "★ Assign Fish Prefabs" cada vez y bastaba
+#                                   olvidarlo una sola vez para romperlo todo.
+#
+# Si necesitas algo de esas carpetas, cópialo A MANO, fichero a fichero, mirando el diff.
 $FoldersToSync = @(
     "Assets\Scripts\Fish",
-    "Assets\Scripts\Tank",
     "Assets\Scripts\Data",
-    "Assets\ScriptableObjects\Fish",
-    "Assets\ScriptableObjects\Decorations",
-    "Assets\ScriptableObjects\Tanks",
     "Assets\Resources\Data"
 )
 
 # Archivos específicos que se sincronizan individualmente (con su .meta)
 $FilesToSync = @(
-    "Assets\Scripts\Core\AmbientModeController.cs",
     "Assets\Scripts\Core\AquariumCameraController.cs",
     "Assets\Scripts\Core\AudioManager.cs",
-    "Assets\Scripts\Core\PostProcessingSetup.cs",
-    "Assets\Scripts\Core\FishSpawner.cs",
-    "Assets\Scripts\Core\FoodItem.cs",
     "Assets\Scripts\Utils\AppFlags.cs",
-    "Assets\Scripts\Utils\AppVersion.cs",
     "Assets\Scripts\Utils\CatalogLoader.cs"
 )
 
 # Archivos a INSPECCIONAR (no copiar) — el TV tiene versión slim/modificada.
 # Si difieren del mobile, mostrar warning pero NO sobreescribir automáticamente.
+#
+# ⚠ 2026-08-15 — ampliada tras auditar fichero a fichero. Lo que se perdía en cada caso:
+#   PostProcessingSetup.cs   bloom OFF + Tonemapping Neutral + sat/contrast -> vuelven los 7 fps
+#   DecorationPlacer.cs      tint dual _Color/_BaseColor, BioLumEmissionScale 0.25, remap X,
+#                            RemoveAllDecos, GetFloorSurfaceY (de ahí cuelgan las sombras)
+#   FishSpawner.cs           DespawnOneBySpecies (lo llama TvSceneBootstrap -> no compila)
+#   AmbientModeController.cs la versión móvil llama a CastManager -> no compila
+#   TankBackground.cs        orden de shaders para el color space de WebGL
+#   WaterSurface.cs          idem
+#   FoodItem.cs              mesh/material compartidos; sin ellos, fuga de GPU por pellet
+#   AppVersion.cs            el móvil va por 1.2.2/37; subirlo renombra el catálogo remoto
+#                            a catalog_1.2.2 y el player desplegado deja de encontrarlo
 $FilesToWarn = @(
     "Assets\Scripts\Core\AquariumManager.cs",
     "Assets\Scripts\Core\CastReceiver.cs",
     "Assets\Scripts\Core\CastDataTypes.cs",
-    "Assets\Scripts\Core\TvSceneBootstrap.cs"
+    "Assets\Scripts\Core\TvSceneBootstrap.cs",
+    "Assets\Scripts\Core\PostProcessingSetup.cs",
+    "Assets\Scripts\Core\FishSpawner.cs",
+    "Assets\Scripts\Core\FoodItem.cs",
+    "Assets\Scripts\Core\AmbientModeController.cs",
+    "Assets\Scripts\Tank\DecorationPlacer.cs",
+    "Assets\Scripts\Tank\TankBackground.cs",
+    "Assets\Scripts\Tank\WaterSurface.cs",
+    "Assets\Scripts\Utils\AppVersion.cs"
 )
 
 # ── Helpers ──────────────────────────────────────────────────────────────────

@@ -41,6 +41,25 @@ public class TvSceneBootstrap : MonoBehaviour
     static readonly Color C_ACCENT = new Color(0.0f,   0.85f,  1.0f,   1f); // cyan
     static readonly Color C_MUTED  = new Color(0.6f,   0.6f,   0.6f,   1f);
 
+    private Coroutine _loadRoutine;
+
+    // ⚠ 2026-08-15 — esto vivía en Start() y era una carrera.
+    // AmbientModeController está serializado en la escena con autoFollowRealTime:1, y es
+    // este script quien lo corrige. Los dos usaban Start(), sin Script Execution Order
+    // definido: si ganaba el controller, aplicaba el modo según la hora real SIN actualizar
+    // CurrentMode (se queda en Day), y el INIT posterior con ambientMode="day" salía por el
+    // early-return de SetMode → casteabas a las 22:00 y la tele se quedaba en modo noche
+    // con el móvil diciendo día. Awake() SIEMPRE precede a cualquier Start().
+    void AplicarAjustesAmbiente()
+    {
+        var amb = FindFirstObjectByType<AmbientModeController>();
+        if (amb != null)
+        {
+            amb.alwaysAmbient      = alwaysAmbient;
+            amb.autoFollowRealTime = false;
+        }
+    }
+
     void Awake()
     {
         if (Instance != null && Instance != this) { Destroy(gameObject); return; }
@@ -61,12 +80,6 @@ public class TvSceneBootstrap : MonoBehaviour
 
     void Start()
     {
-        var amb = FindFirstObjectByType<AmbientModeController>();
-        if (amb != null)
-        {
-            amb.alwaysAmbient      = alwaysAmbient;
-            amb.autoFollowRealTime = false;
-        }
 
         var uiGo = GameObject.Find("UIManager");
         if (uiGo != null) uiGo.SetActive(false);
@@ -122,7 +135,14 @@ public class TvSceneBootstrap : MonoBehaviour
         if (state == null) { Debug.LogWarning("[TvScene] INIT received null state."); JsBridge.Log("ERR: INIT state is null — JSON parse failed!"); return; }
         Debug.Log($"[TvScene] INIT — fish:{state.activeFish?.Count ?? 0} bg:{state.bgId}");
         JsBridge.Log($"INIT: fish={state.activeFish?.Count ?? 0} bg={state.bgId} tank={state.selectedTankId}");
-        StartCoroutine(LoadAndInitializeCoroutine(state));
+
+        // ⚠ 2026-08-15 — parar la carga anterior antes de arrancar otra.
+        // Si el sender caía y reconectaba MIENTRAS se bajaban bundles (carga fría ~40 s,
+        // muy probable), corrían dos corrutinas a la vez: la nueva liberaba handles que la
+        // vieja aún iba a usar, se hacía doble DespawnAll + doble spawn, y el
+        // HideLoadingOverlay de la primera destapaba la pantalla a media carga de la segunda.
+        if (_loadRoutine != null) StopCoroutine(_loadRoutine);
+        _loadRoutine = StartCoroutine(LoadAndInitializeCoroutine(state));
     }
 
     public void ApplyUpdate(TvUpdateMessage upd)
@@ -498,7 +518,7 @@ public class TvSceneBootstrap : MonoBehaviour
         var mgr = AquariumManager.Instance;
         if (mgr == null) return;
 
-        int count = mgr.fishSpawner.DespawnBySpecies(speciesId);
+        int count = mgr.fishSpawner.DespawnOneBySpecies(speciesId);
         JsBridge.Log($"remove_fish: {speciesId} (removed={count})");
 
         // Release bundle only if it was runtime-loaded and no instances remain

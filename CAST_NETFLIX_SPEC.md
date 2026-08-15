@@ -1,5 +1,14 @@
 # Cast Netflix Architecture — Spec ejecutable
 
+> ✅ **COMPLETADO — mergeado a `main` en `325a931` (2026-08-15).**
+> Este spec describe un refactor **ya hecho**; sus checkboxes sin marcar y sus «notas para el
+> implementador» son del proceso, no trabajo pendiente. Cifras del enunciado que ya no valen:
+> `.data` **16,9 MB** (el spec dice 411 MB), **5** refs directas a SOs en TvScene (decía 84, y
+> ≤10 era su propio criterio de éxito), los bundles de pez pesan ~1,5 MB (decía 2,5 KB).
+> ⚠ **NO ejecutar su «Fase A.0 OBLIGATORIO: sincronizar desde el móvil»** — hoy eso rompe la
+> compilación y borra el lote visual. Ver el aviso en `CLAUDE.md` → «Sync desde mobile».
+> `Initial Memory Size` real: **64 MB**, no los 256 MB del spec (256 fue la causa del OOM).
+
 **Estado:** 2026-05-26 — spec listo para implementación por Sonnet.
 **Pre-requisito:** lectura de [BUILD_REPORT_2026-05-25.md](BUILD_REPORT_2026-05-25.md) (diagnóstico) y [ADDRESSABLES_ROADMAP.md](ADDRESSABLES_ROADMAP.md) (estado bundles).
 

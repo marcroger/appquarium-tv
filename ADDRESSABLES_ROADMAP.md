@@ -1,5 +1,11 @@
 # Cast Receiver — Unity Addressables
 
+> ⚠ **Contenido dado por pendiente que ya está hecho.** «PRÓXIMO PASO: los 23 peces
+> restantes» y «stubs de 2,5 KB sin buildear» son de mayo: **los 25 peces están buildeados y
+> en R2 desde el 2026-06-08**, y sus bundles pesan ~1,5 MB. «Las decos nunca se han validado
+> visualmente en TV» tampoco vale: validadas el 2026-08-15 contando píxeles.
+> La tabla «Estado actual — 2026-05-28» está desfasada (`.data` real: 16,9 MB, no 26 MB).
+
 **Actualizado:** 2026-06-02
 
 > **⭐ PRÓXIMO PASO:** Peces restantes (23) + validar decos en TV → aplicar FishUnlit a cada pez (cambiar .mat + ★ New Build + deploy). Ver §"Workflow por pez" abajo.

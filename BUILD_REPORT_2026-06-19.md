@@ -1,5 +1,13 @@
 # BUILD REPORT — 2026-06-19
 
+> ⚠⚠ **DOCUMENTO HISTÓRICO — NO SEGUIR SUS INSTRUCCIONES.**
+> Contiene comandos de deploy con `--delete` contra la raíz del bucket R2. Ese comando
+> **borra `keepalive_black.mp4`** (el vídeo keepalive del que dependen las sesiones largas),
+> `silence.wav` y los rigs de diagnóstico. `--exclude "bundles/*"` **NO** protege de eso:
+> sólo protege el prefijo `bundles/`, y en la raíz hay más cosas que no están en
+> `webgl-output/`. El comando correcto está en `CLAUDE.md` → «Comandos clave».
+> Se conserva por su valor de registro, no como guía.
+
 ## Resumen ejecutivo
 
 🎉 **FLUIDO CONFIRMADO EN XIAOMI TV BOX S VÍA CAST** — primera sesión con framerate perceptiblemente suave. Cierra el bloqueo de rendimiento que llevaba semanas (7fps bloqueado). Hito de calidad de experiencia Fase A.2.

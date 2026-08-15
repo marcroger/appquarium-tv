@@ -41,6 +41,20 @@ for f,ct in [('webgl-output-empty.loader.js','application/javascript'),
     body=open(B+f,'rb').read()
     cl.put_object(Bucket='appquarium-tv', Key='Build/'+f, Body=body, ContentType=ct, CacheControl='public, max-age=60')
     print('  subido', f, len(body))
+# ⚠ 2026-08-15 — copia de seguridad ANTES de pisar el receiver de produccion.
+# Este script sube el rig de diagnostico sobre /index.html, que es LA TELE DE VERDAD, y
+# no hacia backup ni pedia confirmacion: si la tanda se abortaba a media, la produccion se
+# quedaba con el rig vacio hasta que alguien lo notara. (restore-production-receiver.sh si
+# respalda; este no.) El backup queda con marca de tiempo para poder volver siempre.
+import time
+try:
+    prod = cl.get_object(Bucket='appquarium-tv', Key='index.html')['Body'].read()
+    clave = 'backup/index.html.%s' % time.strftime('%Y%m%d-%H%M%S')
+    cl.put_object(Bucket='appquarium-tv', Key=clave, Body=prod, ContentType='text/html')
+    print('  backup del receiver de produccion ->', clave, len(prod), 'B')
+except Exception as e:
+    raise SystemExit('ABORTA: no he podido respaldar el index.html de produccion: %s' % e)
+
 cl.put_object(Bucket='appquarium-tv', Key='index.html', Body=open('Tools/rcv-empty-test.html','rb').read(),
     ContentType='text/html', CacheControl='public, max-age=15')
 print('  receiver: rcv-empty-test (EMPTY-mem)')

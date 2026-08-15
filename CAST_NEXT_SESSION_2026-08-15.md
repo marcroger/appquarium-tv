@@ -1,4 +1,9 @@
-# ▶▶ EMPEZAR AQUÍ — próxima sesión
+# Sesión 2026-08-15 — COMPLETADA (histórico)
+
+> ✅ **Todo lo que pedía este documento está hecho**: desplegado en R2 y validado en la tele
+> el 2026-08-15. El punto de entrada actual es **`CAST_NEXT_SESSION_2026-08-16.md`**.
+>
+> ⚠⚠ **El comando de deploy de §1 era PELIGROSO** — ver el aviso ahí mismo. No usarlo.
 
 > Escrito al cierre del 2026-08-12. La sesión anterior está en `CAST_NEXT_SESSION_2026-08-12.md`.
 > **El build está HECHO y el receiver PREPARADO. Falta subir a R2 y ver el resultado en la tele.**
@@ -10,17 +15,23 @@
 
 Todo está listo en local. Es un solo paso y no requiere reconstruir nada.
 
-```powershell
-$env:AWS_REQUEST_CHECKSUM_CALCULATION = "when_required"
-$env:AWS_RESPONSE_CHECKSUM_VALIDATION = "when_supported"
+⚠⚠ **EL COMANDO QUE HABÍA AQUÍ ERA DESTRUCTIVO — NO USARLO.** Se conserva tachado como registro:
 
-aws s3 sync webgl-output/ s3://appquarium-tv/ `
-  --profile r2 `
-  --endpoint-url https://2aa2b7914f4ce7ce81e38d694b6219dc.r2.cloudflarestorage.com `
-  --delete --exclude "bundles/*" --cache-control "public, max-age=3600"
-```
+~~`aws s3 sync webgl-output/ s3://appquarium-tv/ --delete --exclude "bundles/*"`~~
 
-⚠ `--exclude "bundles/*"` es **obligatorio** con `--delete`, o se borran los 92 bundles.
+**Por qué el `--exclude` no bastaba** (y por qué la regla se propagó a 4 documentos durante
+meses sin fallar): el incidente original de mayo fue que `--delete` borraba `bundles/`, y se
+generalizó mal — «añadir `--exclude "bundles/*"`» en vez de «no usar `--delete` en la raíz».
+Funcionó mientras la raíz sólo tenía el player. Hoy la raíz **también** tiene ficheros que no
+están en `webgl-output/` y que `--delete` se lleva por delante:
+
+| Clave en R2 | Qué es |
+|---|---|
+| `keepalive_black.mp4` | el vídeo keepalive: el receiver lo referencia 2×. Sin él se caen las sesiones largas |
+| `silence.wav` | idem, audio |
+| `Build/webgl-min.*` · `Build/webgl-output-empty.*` | los rigs de diagnóstico del disconnect |
+
+El comando correcto (acotado a `Build/`, sin `--delete`) está en `CLAUDE.md` → «Comandos clave».
 ⚠ `index.html` y `settings.json` van aparte **con boto3** (ver `CLAUDE.md`): el `aws s3 cp` de la
 CLI 2.23+ falla en ficheros pequeños con `SignatureDoesNotMatch`.
 

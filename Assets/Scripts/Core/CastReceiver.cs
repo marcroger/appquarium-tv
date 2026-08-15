@@ -27,8 +27,17 @@ public class CastReceiver : MonoBehaviour
     /// Entry point called from JavaScript by the Cast Receiver SDK.
     /// Parses the CastMessage and routes INIT / UPDATE to TvSceneBootstrap.
     /// </summary>
+    // ⚠ 2026-08-15 — TODO el parseo va dentro de un try.
+    // El player se compila con `Exception Support: None` (obligatorio: con wasm-exceptions
+    // el Cast device peta). Con esa opción una excepción managed NO se puede capturar aguas
+    // arriba: aborta el runtime IL2CPP en seco. El acuario se queda congelado en el último
+    // frame, sin mensaje y sin forma de recuperarse (con disableIdleTimeout ni siquiera se
+    // cierra la sesión sola). Antes los dos FromJson del payload estaban FUERA del try, así
+    // que bastaba un UPDATE sin `payload` o con JSON malformado —y el único emisor es la app
+    // móvil, que no vive en este repo— para colgar la tele.
     public void OnMessageReceived(string json)
     {
+        if (string.IsNullOrEmpty(json)) return;
         Debug.Log($"[CastReceiver] ← {json.Substring(0, Mathf.Min(100, json.Length))}…");
 
         CastMessage msg;
@@ -40,14 +49,20 @@ public class CastReceiver : MonoBehaviour
         switch (msg.type)
         {
             case "INIT":
-                var state = JsonUtility.FromJson<TvAquariumState>(msg.payload);
+                TvAquariumState state;
+                try   { state = JsonUtility.FromJson<TvAquariumState>(msg.payload); }
+                catch (System.Exception e) { JsBridge.Log("ERR: INIT con payload ilegible — " + e.Message); return; }
+                if (state == null) { JsBridge.Log("ERR: INIT con payload vacío — ignorado"); return; }
                 if (TvSceneBootstrap.Instance == null)
                     JsBridge.Log("ERR: TvSceneBootstrap.Instance is NULL at INIT time!");
                 TvSceneBootstrap.Instance?.InitializeFromState(state);
                 break;
 
             case "UPDATE":
-                var upd = JsonUtility.FromJson<TvUpdateMessage>(msg.payload);
+                TvUpdateMessage upd;
+                try   { upd = JsonUtility.FromJson<TvUpdateMessage>(msg.payload); }
+                catch (System.Exception e) { JsBridge.Log("ERR: UPDATE con payload ilegible — " + e.Message); return; }
+                if (upd == null || string.IsNullOrEmpty(upd.type)) { JsBridge.Log("ERR: UPDATE sin tipo — ignorado"); return; }
                 TvSceneBootstrap.Instance?.ApplyUpdate(upd);
                 break;
 

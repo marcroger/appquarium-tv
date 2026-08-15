@@ -77,8 +77,13 @@ public class TankBackground : MonoBehaviour
     public void InitializeBackground()
     {
         // Destruir instancias previas (al reinicializar por cambio de tanque)
+        // ⚠ 2026-08-15 — "TankNightOverlay" FALTABA en esta limpieza.
+        // Cada reconexión (el móvil manda INIT en cada OnCastConnected) creaba un quad de
+        // noche nuevo dejando el anterior a alpha 0.75 para siempre, porque _nightOverlay
+        // sólo apunta al último. El acuario se oscurecía en escalera hasta quedar negro.
         foreach (Transform child in transform)
-            if (child.name == "TankBackground" || child.name == "TankDirtyOverlay")
+            if (child.name == "TankBackground" || child.name == "TankDirtyOverlay"
+                || child.name == "TankNightOverlay")
                 Destroy(child.gameObject);
 
         Bounds bounds = GetComponent<TankController>().GetTankBounds();
@@ -94,6 +99,10 @@ public class TankBackground : MonoBehaviour
         }
 
         BuildNightOverlay(bounds);
+        // -= antes del += : OnModeChanged es estático y OnDestroy nunca corre (este
+        // componente no se destruye entre INITs), así que cada reconexión acumulaba una
+        // suscripción más del mismo delegate.
+        AmbientModeController.OnModeChanged -= OnAmbientModeChanged;
         AmbientModeController.OnModeChanged += OnAmbientModeChanged;
 
         // Sincronizar con el modo actual al arrancar

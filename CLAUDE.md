@@ -66,7 +66,13 @@ TV (este proyecto)
 
 ## Sync desde mobile
 
-**SIEMPRE antes de cualquier build/deploy:** sincronizar cambios del mobile.
+**⚠ NO sincronices "por si acaso" antes de un build.** Este doc decía "SIEMPRE antes de
+cualquier build/deploy", y era la instrucción más peligrosa que tenía: `SyncFromMobile.ps1`
+copiaba carpetas enteras, y las versiones móviles de `AmbientModeController.cs` y
+`DecorationPlacer.cs` llaman a `CastManager.Instance`, que **en TV no existe ni tiene stub**
+→ el proyecto deja de compilar. De paso se llevaba por delante el lote visual validado.
+El script se acotó el 2026-08-15 (ver sus comentarios). Sincroniza sólo cuando el móvil haya
+cambiado algo que TV necesita, mira el `-DryRun` primero, y revisa los avisos uno a uno.
 
 ```powershell
 # Listar diffs (no copia)
@@ -89,7 +95,10 @@ Detalle de qué se sincroniza, qué NO, y por qué: ver `SYNC_NOTES.md`.
 Los `.meta` de mobile tienen `loadType:0` (Decompress on Load, OK en Android 6 GB).
 En WebGL/Cast esto causa **OOM → Chrome muere → pantalla azul sin peces** (bug recurrente).
 Después de cada sync, verificar `Assets/Resources/Audio/*.meta`:
-- `loadType: 0` → cambiar a `loadType: 2` (Compressed in Memory) — si no, rebuild + deploy
+- `loadType: 0` → cambiar a `loadType: 2` — si no, rebuild + deploy
+  ⚠ **`2` es `Streaming` en el enum de Unity, NO "Compressed in Memory"** (que es el `1`).
+  Este doc lo etiquetaba mal y el riesgo es que alguien lo "corrija" a 1. El valor validado
+  contra el device es el **2**; lo que importa es que NO sea 0 (Decompress on Load = OOM).
 - Referencia correcta: `ambient_water.wav.meta` (loadType:2, quality:0.7, forceToMono:0)
 - `ambient_bubbles.wav.meta` (loadType:2, forceToMono:1, quality:0.7, 3D:0)
 
@@ -149,11 +158,12 @@ si construyes por GUI, comprobarlo antes con `Appquarium TV → 📏 Ver Code Op
 - Handlers UPDATE: `add_fish`, `remove_fish`, `add_deco`, `remove_deco`, `change_bg`, `change_sub`, `change_light`
 - `DecorationPlacer.PlaceAt()` aplica tint a `_BaseColor` Y `_Color`
 
-**⚠ PENDIENTE — Disconnect sender (mobile):**
-- Se desconecta a los ~2-3 min. Root cause probable: Android Doze mata el proceso del sender.
-- Fix en mobile (repo separado): PARTIAL_WAKE_LOCK en `CastPlugin.java` + keepalive PING sender→receiver cada 60s.
-- Para diagnosticar: ver razón en panel debug TV al desconectar (`reason:REQUESTED_BY_SENDER` vs `reason:unknown`).
-- `reason:unknown` = Android mató el proceso → WakeLock en mobile es el fix.
+**✅ RESUELTO — Disconnect sender (2026-08-10).** ⚠ La causa que este doc daba era **falsa**:
+no era Android Doze. Era **presión de memoria del sistema por el tamaño del `.wasm`**; se
+arregló bajándolo de 44,2 a 25,4 MB (−7 paquetes de runtime + `DiskSizeLTO`). Validado el
+2026-08-15 con sesiones de 900 s y 420 s, 0 cortes.
+(El `PARTIAL_WAKE_LOCK` y el PING cada 60 s que proponía como fix ya estaban en el móvil
+desde antes, en `CastPlugin.java` — no eran lo que faltaba.)
 
 **settings.json auto-parcheado** por `TvBuildPostprocess.cs` tras cada build — no intervención manual.
 **SBP cache incremental:** 1 pez cold = 2:01h | 2 peces incremental = 1:39h | todo cacheado = 9s.
@@ -174,10 +184,19 @@ Ver `BUILD_REPORT_2026-05-28.md` para histórico de la Fase A.1.
 | Maximum Memory Size | 512 MB |
 | Memory Growth Mode | Geometric (0.2 step, 96 MB cap) |
 | Strip Engine Code | ON |
-| Managed Stripping Level | **High** |
+| Managed Stripping Level | **Minimal** (`WebGL: 4`) ⚠ el doc decía High — era falso |
 | IL2CPP Code Generation | **OptimizeSize** |
 
-> **⚠ NO cambiar Managed Stripping a menos que haya TypeLoadException en runtime.** High stripping es necesario para que el wasm quepa en memoria del Cast device.
+> **⚠ 2026-08-15 — CORREGIDO: el nivel real es `Minimal`, no High.** `ProjectSettings.asset:919`
+> → `managedStrippingLevel: { WebGL: 4 }`, y en el enum de Unity 4 = Minimal (High es 3).
+> Comprobado además en el output del linker del build del 12-ago: `Unity.Addressables.dll`
+> pesa lo mismo antes y después de strippear (0 % de reducción), que es exactamente lo que
+> hace Minimal — copiar los ensamblados sin tocarlos.
+>
+> **Oportunidad pendiente:** subirlo a High (`3`) reduciría el `.wasm`, y el tamaño del `.wasm`
+> es la causa raíz confirmada de los cortes de sesión. `Assets/link.xml` ya preserva los tipos
+> de URP que High podría romper. Requiere rebuild (~55 min) + revalidación en la tele, y el
+> riesgo clásico es `TypeLoadException` en runtime. No hacerlo a la ligera, pero está sobre la mesa.
 
 ### Comandos clave
 
@@ -189,7 +208,11 @@ curl -I -H "Origin: https://anything" https://pub-2b11cc17bdef4f75bd4d34eeabbd60
 # ❌ NO usar "Update a Previous Build" — es para workflows CCD (Unity Cloud), no para R2 self-hosted.
 #    Causa builds fantasma que no producen output cuando hay nuevas dependencias.
 #    "New Build" con SBP cache ya es efectivamente incremental: solo reconstruye lo que cambió.
-# Build WebGL player: File → Build Settings → Build (output en webgl-output/)
+# Build WebGL player — RUTA RECOMENDADA (batchmode, con el Editor CERRADO):
+#   "/c/Program Files/Unity/Hub/Editor/6000.3.10f1/Editor/Unity.exe" #     -batchmode -quit -nographics -projectPath . -buildTarget WebGL #     -executeMethod TvProdBuild.BuildProd -logFile build-prod.log
+# Fuerza DiskSizeLTO por código y corre PreflightAudio() (aborta si falta un clip de ambiente).
+# La ruta por GUI (File → Build Settings → Build) también vale desde el 2026-08-15: el LTO
+# ahora se aplica en un IPreprocessBuildWithReport, así que ya no depende de por dónde entres.
 # NOTA: ambos son pasos INDEPENDIENTES. Solo rebuild player si cambió código C#.
 
 # Si el build tarda demasiado: reducir texturas primero
@@ -292,8 +315,8 @@ print('OK index.html')
 | `Assets/Scripts/Data/` | FishData, DecorationData, TankData (sync mobile) |
 | `Assets/Scripts/Utils/` | AppFlags, AppVersion, CatalogLoader (sync mobile) |
 | `Assets/Scripts/Stubs/` | TvStubs (stubs para clases mobile-only referenciadas indirectamente) |
-| `Assets/Editor/` | TvAddressablesSetup, TvBuildTools, SyncFromMobileMenu, **TvBuildPostprocess** (parchea settings.json tras cada build) |
-| `Tools/` | SyncFromMobile.ps1 |
+| `Assets/Editor/` | TvAddressablesSetup, TvBuildTools, SyncFromMobileMenu, **TvBuildPostprocess** (parchea settings.json tras cada build), **TvProdBuild** ⭐ (build de producción en batchmode + preflight de audio), **TvWasmOptimize** ⭐ (fuerza `DiskSizeLTO` en cualquier build), TvEmptyTestBuild, TvShadowDiag |
+| `Tools/` | ~30 ficheros. Los que importan: **SyncFromMobile.ps1**, **cast-headless.js** (sender sin navegador), **cast-run.sh** (ciclo de medición completo), **restore-production-receiver.sh**, y los `rcv-*.html` (receivers de diagnóstico). ⚠ Varios escriben en R2 de producción. |
 
 ---
 
@@ -305,7 +328,13 @@ print('OK index.html')
 - **`ctx.start()` — parámetros correctos:** `{ disableIdleTimeout: true, maxInactivity: 3600 }`
   - `disableIdleTimeout: true` — no shutdown cuando 0 senders conectados
   - `maxInactivity: 3600` — no desconectar sender "inactivo". ⚠ El SDK **rechaza valores ≤ 5** con error en runtime. Usar 3600 (1h) como "nunca".
-  - El keepalive cada 60s en JS (`sendCustomMessage`) complementa esto para Cast Built-In implementations que ignoran `maxInactivity`.
+  - ⚠ **El keepalive JS de 60 s que decía este doc YA NO EXISTE** (`index.html`: *"KEEPALIVE 30s
+    (receiver→sender) ELIMINADO (bisección)"*), y el PONG también está suprimido. Lo que mantiene
+    viva la sesión hoy es el **vídeo keepalive** (`keepalive_black.mp4` en bucle), que este doc
+    no mencionaba en ningún sitio — y que el comando de deploy con `--delete` borraba.
+  - ⚠ Contradicción abierta: el research de julio sostiene que fijar `maxInactivity` es
+    contraproducente. En disco gana lo de aquí (3600) y es la configuración con la que se han
+    validado las sesiones de 900 s. No tocar sin una tanda A/B.
 - WebGL Chromium en Cast = sandbox MUY estricto:
   - `Exception Support: None` (sino peta con wasm-exceptions)
   - `WebAssembly 2023 features: OFF`
@@ -323,7 +352,10 @@ print('OK index.html')
 | `Audio_Remote` | PackSeparately | 1 clip (`ambient_music`) | 1 |
 | `Default Local Group` | PackTogether | scaffolding | 1 |
 
-Total bundles en R2: **92+** (fish×25 + decos×54 + envs×11 + audio×2). Algunos tienen versiones duplicadas de builds anteriores — el catalog siempre apunta al correcto.
+Total: **186 bundles en local, 188 claves en R2** (fish×25 + decos×54 + envs×11 + audio×1 +
+duplicados de builds anteriores que nadie ha limpiado). El catalog apunta siempre al correcto.
+⚠ Falta en esta tabla el grupo **`Shared_Local`** (7 entradas, PackTogether, rutas locales),
+que es el grupo local de verdad; `Default Local Group` tiene 0 entradas y no produce bundle.
 
 **LZ4 compression** confirmado. **NonRecursiveBuilding=true** — ⚠ NO cambiar a `false` (causa 47 min/bundle, builds de 30h+). Ver `feedback_nonrecursivebuilding.md`.
 

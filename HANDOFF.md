@@ -1,5 +1,15 @@
 # HANDOFF — Continuar mañana
 
+> ⚠⚠ **DOCUMENTO HISTÓRICO (2026-05-22) — NO SEGUIR SUS INSTRUCCIONES.**
+> Está escrito en imperativo ("lo que TÚ tienes que hacer") pero **dos de sus pasos rompen
+> el receiver hoy**:
+> · «Compression Format: **Gzip**» → el valor correcto es **Disabled** (`webGLCompressionFormat: 2`),
+>   precisamente para evitar el doble-gzip de R2.
+> · el deploy con `--exclude "StreamingAssets/*"` → `StreamingAssets/aa/` **debe** subirse
+>   (lleva `catalog.hash` y `settings.json`); excluirlo deja un player que nunca actualiza el catálogo.
+> Cita además ficheros `*.data.unityweb` que ya no se generan.
+> El estado vigente está en `CLAUDE.md` y en `CAST_NEXT_SESSION_2026-08-16.md`.
+
 **Trabajo nocturno completado:** 2026-05-22 ~22:00
 **Próxima sesión esperada:** sábado 2026-05-23 AM
 

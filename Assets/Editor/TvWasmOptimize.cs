@@ -19,6 +19,27 @@ using UnityEngine;
 /// Se usa reflexión a propósito: el tipo vive en UnityEditor.WebGL.Extensions y así el
 /// script compila aunque el módulo WebGL no esté instalado.
 /// </summary>
+/// <summary>
+/// Fuerza el Code Optimization de WebGL a DiskSizeLTO en CUALQUIER build, venga de donde venga.
+///
+/// ⚠ 2026-08-15 — antes esto sólo lo hacía `TvProdBuild.BuildProd` (la ruta batchmode).
+/// El ajuste vive en `Library/EditorUserBuildSettings.asset`, que **no está en git**: al
+/// borrar la Library vuelve a `BuildTimes` y el `.wasm` pasa de 25,4 a 44,2 MB — que es la
+/// causa raíz confirmada de los cortes de sesión Cast. Quien construyera desde
+/// `File → Build Settings → Build` se lo saltaba sin enterarse.
+/// </summary>
+public class TvWasmOptimizePreBuild : UnityEditor.Build.IPreprocessBuildWithReport
+{
+    public int callbackOrder => 0;
+
+    public void OnPreprocessBuild(UnityEditor.Build.Reporting.BuildReport report)
+    {
+        if (report.summary.platform != BuildTarget.WebGL) return;
+        TvWasmOptimize.SetDiskSizeLTO();
+        Debug.Log("[WasmOpt] Pre-build: Code Optimization forzado a DiskSizeLTO.");
+    }
+}
+
 public static class TvWasmOptimize
 {
     const string TypeName = "UnityEditor.WebGL.UserBuildSettings, UnityEditor.WebGL.Extensions";

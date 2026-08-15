@@ -100,7 +100,10 @@ public class AquariumManager : MonoBehaviour
             selectedBgId        = state.bgId,
             selectedSubId       = state.subId,
             lightPresetId       = state.lightId,
-            fishSpeedMultiplier = state.fishSpeed
+            // El móvil protege el <= 0 en su SaveSystem; la TV recibe el número crudo por
+            // Cast y no lo comprobaba: un fishSpeed 0 (o un JSON sin el campo) dejaba TODOS
+            // los peces clavados en el sitio, sin ningún error.
+            fishSpeedMultiplier = state.fishSpeed <= 0f ? 1f : Mathf.Clamp(state.fishSpeed, 0.25f, 3f)
         };
         if (state.activeFish != null)
         {
@@ -201,7 +204,10 @@ public class AquariumManager : MonoBehaviour
             selectedBgId      = state.bgId,
             selectedSubId     = state.subId,
             lightPresetId     = state.lightId,
-            fishSpeedMultiplier = state.fishSpeed
+            // El móvil protege el <= 0 en su SaveSystem; la TV recibe el número crudo por
+            // Cast y no lo comprobaba: un fishSpeed 0 (o un JSON sin el campo) dejaba TODOS
+            // los peces clavados en el sitio, sin ningún error.
+            fishSpeedMultiplier = state.fishSpeed <= 0f ? 1f : Mathf.Clamp(state.fishSpeed, 0.25f, 3f)
         };
 
         if (state.activeFish != null)

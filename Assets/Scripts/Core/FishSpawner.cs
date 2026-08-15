@@ -203,7 +203,28 @@ public class FishSpawner : MonoBehaviour
             Debug.Log($"[FishSpawner] ✅ {replaced} peces reemplazados de placeholder a modelo real.");
     }
 
-    /// <summary>Despawns the first active fish matching speciesId. Returns count removed.</summary>
+    /// <summary>
+    /// Quita UN pez de la especie indicada. Devuelve cuántos quitó (0 ó 1).
+    ///
+    /// ⚠ 2026-08-15 — el móvil saca peces DE UNO EN UNO (por uid), pero el protocolo Cast
+    /// sólo transporta la especie: `SendUpdate("remove_fish", savedFish.speciesId)`.
+    /// La TV llamaba a DespawnBySpecies, que borra TODOS los coincidentes: si tenías 3
+    /// Banggai y quitabas uno en el móvil, en la tele desaparecían los tres. Sin ningún
+    /// error: el log decía alegremente "removed=3".
+    /// </summary>
+    public int DespawnOneBySpecies(string speciesId)
+    {
+        foreach (var f in _activeFish)
+        {
+            if (f == null || f.Data?.itemId != speciesId) continue;
+            _activeFish.Remove(f);
+            Destroy(f.gameObject);
+            return 1;
+        }
+        return 0;
+    }
+
+    /// <summary>Quita TODOS los peces de la especie. Devuelve cuántos quitó.</summary>
     public int DespawnBySpecies(string speciesId)
     {
         var toRemove = new List<FishAgent>();

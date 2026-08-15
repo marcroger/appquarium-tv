@@ -37,6 +37,10 @@ const FISH     = parseInt(arg('fish', '0'), 10);
 //   --update speed=1.8@120
 // Sirve para verificar EN EL DEVICE los 11 tipos de UPDATE, que hasta el 2026-08-15
 // solo estaban verificados en codigo y en el Chrome local con ?devtest=1.
+// --diag → enciende los HUD de FPS/stats del receiver (que van APAGADOS en produccion
+// desde el 2026-08-15). Sin esto no se puede leer el FPS por screencap.
+const DIAG = argv.includes('--diag');
+
 const UPDATES = argv.reduce((acc, a, i) => {
   if (a !== '--update' || !argv[i + 1]) return acc;
   const m = /^([a-z_]+)=(.*)@(\d+)$/.exec(argv[i + 1]);
@@ -46,6 +50,15 @@ const UPDATES = argv.reduce((acc, a, i) => {
 }, []);
 
 const APP_ID = '8F6C873F';
+
+// ⚠ Guardas contra mediciones falsas. Las dos que van aqui YA han mordido:
+//   · SPECIES.slice(0, FISH) capaba en silencio -> `--fish 25` medía 12 y el numero
+//     parecia bueno. Ahora hay 25 especies, pero `--fish 40` volveria a capar callando.
+//   · RUNG_CONFIG: el receiver LIMPIO desplegado el 2026-08-15 ya no tiene handler, asi
+//     que todos los escalones miden lo mismo. `--rung 23` NO apaga el video keepalive y
+//     `--rung 1` SI arranca Unity, pero el log sigue imprimiendo "RUNG_CONFIG enviado".
+//     Solo los receivers de diagnostico (Tools/rcv-*.html) lo entienden.
+function abortar(motivo) { console.error('ABORTA: ' + motivo); process.exit(1); }
 const NS_APP = 'urn:x-cast:dev.unknownaerials.appquarium';   // canal de diag del receiver
 const NS_CONN = 'urn:x-cast:com.google.cast.tp.connection';
 const NS_HEART = 'urn:x-cast:com.google.cast.tp.heartbeat';
@@ -106,6 +119,15 @@ const DECOS = [
   { instanceId: 'deco_shell_tridacna_0',    itemId: 'deco_shell_tridacna',    position: { x:  2.4, y: -2.8, z: 2.0 }, scaleFactor: 0.8, flipped: false, rotationY: 200 },
   { instanceId: 'deco_starfish_blue_0',     itemId: 'deco_starfish_blue',     position: { x:  3.2, y: -2.8, z: 2.0 }, scaleFactor: 0.7, flipped: false, rotationY: 260 },
 ];
+
+if (!STOP && FISH > SPECIES.length) {
+  abortar(`pediste --fish ${FISH} y solo hay ${SPECIES.length} especies; se mediria ${SPECIES.length} EN SILENCIO.`);
+}
+if (!STOP && RUNG !== '2' && !argv.includes('--allow-noop-rung')) {
+  abortar(`--rung ${RUNG} no hace NADA contra el receiver de produccion (no tiene handler de ` +
+          `RUNG_CONFIG desde el 2026-08-15). La tanda mediria lo mismo que --rung 2 pero con ` +
+          `otra etiqueta. Usa --allow-noop-rung si estas casteando un receiver de diagnostico.`);
+}
 
 const t0 = Date.now();
 const el = () => ((Date.now() - t0) / 1000).toFixed(1).padStart(6);
@@ -183,12 +205,22 @@ client.connect(HOST, () => {
       try { receiver.send({ type: 'GET_STATUS', requestId: requestId++ }); } catch (e) {}
     }, 4000);
     poll.unref && poll.unref();
+    let ausencias = 0;
     receiver.on('message', (data) => {
       if (!data.status) return;
+      // ⚠ Hacen falta DOS lecturas seguidas sin la app antes de dar la sesion por caida.
+      // Un RECEIVER_STATUS transitorio (cambios de volumen, estados intermedios) puede
+      // llegar sin la clave `applications` y cortaba la tanda al instante, quedando
+      // registrada como una caida real: generador silencioso de duraciones falsas.
       const apps = data.status.applications || [];
       if (joined && !apps.find(a => a.appId === APP_ID)) {
-        clearInterval(poll);
-        finish(0, 'la app ha desaparecido del device (sesión caída)');
+        ausencias++;
+        if (ausencias >= 2) {
+          clearInterval(poll);
+          finish(0, 'la app ha desaparecido del device (sesión caída)');
+        }
+      } else {
+        ausencias = 0;
       }
     });
     appConn.on('message', (msg) => {
@@ -240,6 +272,15 @@ client.connect(HOST, () => {
       }, 3000);
     } else {
       log('⚠ sin --fish: la escena quedará VACÍA (no se carga ningún bundle remoto)');
+    }
+
+    if (DIAG) {
+      setTimeout(() => {
+        try {
+          appChan.send({ type: 'DIAG', value: 'on' });
+          log('DIAG enviado → HUD de FPS/stats encendidos en el receiver');
+        } catch (e) { log('fallo al enviar DIAG: ' + e.message); }
+      }, 3500);
     }
 
     // ── UPDATEs programados ──────────────────────────────────────────────────

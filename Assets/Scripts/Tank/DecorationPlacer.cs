@@ -488,6 +488,16 @@ public class DecorationPlacer : MonoBehaviour
         };
         _placed[instanceId] = pd;
 
+        // ⚠ 2026-08-15 — reaplicar la bioluminiscencia AQUÍ, no antes.
+        // El bloque de biolum de más arriba llama a SetBioLumStrength() para el caso "se
+        // coloca de noche", pero ese método itera _placed... y esta deco no entraba en
+        // _placed hasta esta línea, 80 más abajo: la guarda era un no-op.
+        // Escenario que rompía: reconexión de noche. RemoveAllDecos limpia _bioLumMats pero
+        // no _bioLumCurrentStrength, las decos se recolocan y SetNight() sale por su
+        // early-return (el modo no ha cambiado) → los corales se quedaban apagados toda la
+        // sesión, que es justo cuando se supone que tienen que brillar.
+        if (_bioLumCurrentStrength > 0.001f) SetBioLumStrength(_bioLumCurrentStrength);
+
         // Inicializar userRot: cuaternión acumulado que representa la rotación del usuario en espacio mundo.
         // • savedUserRot != null → cargado desde save nuevo formato (quaternion directo).
         // • fromSave sin quaternion → reconstruir desde rotationY/tiltX legacy (saves antiguos).
@@ -1704,7 +1714,6 @@ public class DecorationPlacer : MonoBehaviour
                 var mat = mats[i];
                 if (mat == null) { newMats[i] = mat; continue; }
                 string sname = mat.shader != null ? mat.shader.name : "";
-                JsBridge.Log($"FixMat {go.name}: mat={mat.name} shader={sname}");
 
                 // ⚠ 2026-08-11 — FishUnlit en una DECO la deja SIN ILUMINACIÓN.
                 // El ancla venía de fábrica con Appquarium/FishUnlit y esta guarda la
@@ -1746,6 +1755,13 @@ public class DecorationPlacer : MonoBehaviour
                 else if (mat.HasProperty("baseColorFactor"))  baseColor = mat.GetColor("baseColorFactor");
                 else if (mat.HasProperty("_Color"))           baseColor = mat.GetColor("_Color");
 
+                // ⚠ 2026-08-15 — antes se logueaba CADA material inspeccionado (por material,
+                // por renderer, por prefab): cientos de mensajes en ráfaga durante la carga,
+                // y cada línea de log viaja por el canal Cast hasta la app del móvil.
+                // Ahora sólo se anota la CONVERSIÓN, que es la señal útil y es rara.
+                // (Aquel log, además, engañaba: imprimía el shader de ENTRADA, y hacía pensar
+                //  que el ancla seguía en FishUnlit cuando ya se estaba convirtiendo.)
+                JsBridge.Log($"FixMat {go.name}: {mat.name} [{sname}] → {litTarget.name}");
                 var fixedMat = new Material(litTarget) { name = mat.name + "_DECOLIT" };
                 if (baseTex != null) fixedMat.SetTexture("_MainTex", baseTex);
                 if (fixedMat.HasProperty("_Color"))      fixedMat.SetColor("_Color", baseColor);

@@ -36,14 +36,14 @@ TV CastReceiver.OnMessageReceived(json)
 | `speed` | `"1.5"` (float) | Multiplicador velocidad peces |
 | `feed` | `""` | Spawna comida visual, peces van a comer |
 | `startle` | `""` | Peces huyen (scatter) |
-| `refresh` | `""` | TV espera nuevo INIT (no hace nada solo) |
+| `refresh` | `""` | TV espera nuevo INIT (no hace nada solo). ⚠ **El móvil NUNCA lo manda** (0 call sites): sólo existe en la TV. |
 
 ### Nuevos en 2026-06-20
 
 | type | value | Descripción |
 |------|-------|-------------|
 | `add_fish` | JSON `TvAddFishPayload` | Spawna un pez. Carga bundle si no estaba en INIT. |
-| `remove_fish` | `speciesId` (string) | Elimina pez(ces) de esa especie. Libera bundle si era runtime. |
+| `remove_fish` | `speciesId` (string) | Elimina **UN** pez de esa especie. Libera bundle si era runtime y no quedan más. ⚠ El protocolo transporta **especie, no uid**: si tienes 3 Banggai la TV no sabe cuál has quitado, y quita el primero. Hasta el 2026-08-15 quitaba **los tres** (`DespawnBySpecies` → ahora `DespawnOneBySpecies`). |
 | `add_deco` | JSON `TvAddDecoPayload` | Coloca una deco. Carga bundle si no estaba en INIT. |
 | `remove_deco` | `instanceId` (string) | Quita una instancia de deco. Libera bundle si no queda ninguna del tipo. |
 | `change_bg` | `bgId` (string) | Cambia fondo. Sin Addressables — presets hardcoded en TankBackground. |
@@ -61,8 +61,10 @@ TV CastReceiver.OnMessageReceived(json)
 public class TvAddFishPayload {
     public string speciesId;  // "fish_moorish_idol"
     public string nickname;   // "Nemo"
+    public float  ageScale;   // 0.40 cría / 0.65 juvenil / 1.00 adulto / 1.18 senior
 }
 ```
+⚠ Este doc omitía `ageScale`, que el móvil **sí** envía desde 2026-06-26.
 
 Mobile serializa: `value = JsonUtility.ToJson(new TvAddFishPayload { speciesId, nickname })`
 
@@ -145,3 +147,31 @@ Con `?devtest=1` en la URL local (`http://localhost:3001/?devtest=1`):
 | `Assets/Scripts/Core/FishSpawner.cs` | Añadido `DespawnBySpecies(string speciesId)` |
 | `Assets/Scripts/Core/TvSceneBootstrap.cs` | Handle registry + release en reconexión + 7 nuevos casos UPDATE |
 | `Assets/WebGLTemplates/CastReceiver/index.html` | Devtest shortcuts A/Z/B/S + `sendCastUpdate()` helper |
+
+
+---
+
+## Huecos del protocolo (verificado 2026-08-15, requiere cambio en el móvil)
+
+El móvil **no** manda ningún UPDATE al editar una deco ya colocada. No hay `SendUpdate` en
+`UpdatePlacedTransform`, `ApplyUserRotDelta`, `ApplyUserTiltDelta`, `UpdatePlacedScale`,
+`ResetTransform` ni `FlipDeco`, ni en el renombrado de peces. Y `TvAddDecoPayload` tampoco
+lleva `tiltX` ni el cuaternión de rotación de usuario, así que ni el `add_deco` inicial puede
+transportarlos.
+
+**Efecto:** colocas un coral y lo giras/escalas en el móvil → en la tele se queda con la
+orientación del primer frame hasta que reconectes (el INIT sí manda el estado exacto).
+
+No es un bug de la TV: es un hueco del protocolo. Arreglarlo pide tocar el repo móvil.
+
+## Verificación end-to-end en el device
+
+Hasta el 2026-08-15 los 11 tipos estaban probados **en código y en Chrome local**, nunca contra
+la tele. Ya se puede, con el harness:
+
+```bash
+node Tools/cast-headless.js --ip <IP> --fish 12 --diag      --update ambient=night@75 --update feed=@130
+```
+
+`ambient=night` verificado en el Xiaomi el 2026-08-15: la luminancia media del agua bajó de
+**170 a 92**. `--diag` enciende los HUD de FPS/stats del receiver, que en producción van apagados.

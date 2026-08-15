@@ -119,8 +119,22 @@ public class TankLightingController : MonoBehaviour
 
     // ── Init ─────────────────────────────────────────────────────────────────
 
+    private bool _baselineCapturada;
+
     public void Initialize(Bounds tankBounds)
     {
+        // ⚠ 2026-08-15 — destruir las luces de la pasada anterior.
+        // Initialize() corre en CADA INIT (el móvil manda uno en cada OnCastConnected) y
+        // creaba 3 spots + 1 fill + 1 Volume nuevos SIN destruir los viejos: 10 reconexiones
+        // = 30 spots acumulados en un Mali-G31. Las demás ramas (BubbleSystem, WaterSurface,
+        // DecorationPlacer, TankBackground) sí limpian; ésta era la única que no.
+        for (int i = transform.childCount - 1; i >= 0; i--)
+        {
+            var c = transform.GetChild(i);
+            if (c.name.StartsWith("TankLight_") || c.name == "TankLightingVolume")
+                Destroy(c.gameObject);
+        }
+
         // ── DIAGNÓSTICO: listar TODAS las luces presentes en escena ──────────
         var allLights = FindObjectsByType<Light>(FindObjectsSortMode.None);
         Debug.Log($"[ShadowDiag] TankLighting.Initialize() — {allLights.Length} luces en escena:");
@@ -132,8 +146,15 @@ public class TankLightingController : MonoBehaviour
         {
             if (l.type == LightType.Directional) { _dirLight = l; break; }
         }
-        _dirBaseIntensity = _dirLight != null ? _dirLight.intensity : 1.2f;
-        _ambientBase      = RenderSettings.ambientLight;
+        // La línea base se captura UNA vez. Antes se re-capturaba en cada INIT sobre valores
+        // ya modificados por el preset anterior → el tanque se iba oscureciendo/aclarando en
+        // escalera a cada reconexión.
+        if (!_baselineCapturada)
+        {
+            _dirBaseIntensity = _dirLight != null ? _dirLight.intensity : 1.2f;
+            _ambientBase      = RenderSettings.ambientLight;
+            _baselineCapturada = true;
+        }
 
         // Forzar Hard shadows
         if (_dirLight != null)

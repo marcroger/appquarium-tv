@@ -1,5 +1,14 @@
 # Functional Review — Cast TV vs Mobile App
 
+> ⚠⚠ **OBSOLETO (2026-06-19) — su hallazgo principal es FALSO a día de hoy.**
+> Dice «HALLAZGO CRÍTICO: el móvil nunca llama a `SendUpdate`». **Lo llama en 12 sitios**
+> (verificado el 2026-08-15 en el repo móvil: `AmbientModeController`, `AquariumManager`,
+> `InputHandler`, `DecorationPlacer`, `DecoPanel`, `UIManager`). Los **11 tipos de UPDATE están
+> conectados en ambos extremos**, y el `ambient=night` se verificó ya en el device real.
+> Otras filas falsas: «feed visual no implementado» (existe `TvFoodManager`), «burbujas no
+> existe» (existe y está en git), «biolum y panel debug pendientes de deploy» (desplegados).
+> **Peligro concreto:** alguien lo lee y reimplementa la Fase B en el móvil, que ya está hecha.
+
 Mapa completo de funcionalidad: qué llega via Cast, qué está implementado en TV,
 qué falta y qué está pendiente en el lado mobile.
 

@@ -1,5 +1,29 @@
 # SYNC_NOTES — Sincronización con appquarium-unity mobile
 
+> ⚠⚠ **LEER ANTES DE SINCRONIZAR NADA (actualizado 2026-08-15).**
+>
+> Este documento listaba como sincronizables ficheros que en TV **están modificados a propósito**.
+> Sincronizarlos en bloque tenía dos daños, ambos verificados:
+>
+> **1. El proyecto deja de compilar.** Las versiones móviles de `AmbientModeController.cs` y
+> `DecorationPlacer.cs` llaman a `CastManager.Instance`. En TV **no existe `CastManager` ni hay
+> stub** — se borró a propósito.
+>
+> **2. Se pierde trabajo validado en la tele.** Divergencias reales medidas hoy:
+>
+> | Fichero | Qué se pierde |
+> |---|---|
+> | `Core/PostProcessingSetup.cs` | bloom OFF + Tonemapping Neutral + sat/contrast → vuelven los 7 fps |
+> | `Tank/DecorationPlacer.cs` | tint dual `_Color`/`_BaseColor`, `BioLumEmissionScale` 0.25, remap X, `RemoveAllDecos`, `GetFloorSurfaceY` (de ahí cuelgan las sombras) |
+> | `Core/FishSpawner.cs` | `DespawnOneBySpecies` → `TvSceneBootstrap` no compila |
+> | `Tank/TankBackground.cs`, `Tank/WaterSurface.cs` | orden de shaders para el color space de WebGL |
+> | `Core/FoodItem.cs` | mesh/material compartidos; sin ellos, fuga de GPU por pellet |
+> | `Utils/AppVersion.cs` | el móvil va por 1.2.2/37: subirlo renombra el catálogo remoto a `catalog_1.2.2` y el player desplegado deja de encontrarlo |
+>
+> `Tools/SyncFromMobile.ps1` se acotó el 2026-08-15: ya **no** sincroniza `Scripts\Tank` ni
+> `ScriptableObjects\*` en bloque, y los 12 ficheros de arriba están en `$FilesToWarn`.
+> Aun así: **`-DryRun` primero, siempre**, y revisar los avisos uno a uno.
+
 **Proyecto TV (este):** receiver Cast Unity WebGL — `github.com/marcroger/appquarium-tv`
 **Proyecto mobile (separado):** `D:\dev\appquarium-unity\` — `github.com/marcroger/appquarium-unity` (no público)
 
