@@ -1,4 +1,5 @@
 using UnityEditor;
+using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
 using UnityEngine;
 
@@ -18,12 +19,46 @@ using UnityEngine;
 /// </summary>
 public static class TvProdBuild
 {
-    public static void BuildProd()
+    /// <summary>Entrada de batchmode (-executeMethod). Cierra el Editor al terminar.</summary>
+    public static void BuildProd() => Ejecutar(salirAlTerminar: true);
+
+    /// <summary>
+    /// Entrada desde el Editor abierto. Mismo build exacto, pero SIN cerrar el Editor.
+    /// (Añadido 2026-08-15: `BuildProd` llamaba a `EditorApplication.Exit` incondicionalmente,
+    /// así que dispararlo desde el menú te cerraba Unity al acabar.)
+    /// </summary>
+    [MenuItem("Appquarium TV/⭐ Build Player (producción)", priority = 1)]
+    public static void BuildProdDesdeMenu() => Ejecutar(salirAlTerminar: false);
+
+    private static void Ejecutar(bool salirAlTerminar)
     {
-        if (!PreflightAudio()) { EditorApplication.Exit(1); return; }
+        if (!PreflightAudio())
+        {
+            if (salirAlTerminar) EditorApplication.Exit(1);
+            return;
+        }
 
         // Asegura el mismo nivel de optimización que se validó en el rig.
         TvWasmOptimize.SetDiskSizeLTO();
+
+        // ⚠ 2026-08-15 — Managed Stripping a High, forzado por código.
+        // Durante meses CLAUDE.md afirmaba que estaba en High; el valor real era Minimal
+        // (`managedStrippingLevel: WebGL: 4`; en el enum de Unity High es el 3). Se comprobó
+        // en el output del linker: Unity.Addressables.dll pesaba EXACTAMENTE lo mismo antes y
+        // después de strippear. Y el tamaño del .wasm es la causa raíz confirmada de los
+        // cortes de sesión Cast, así que el código muerto ahí dentro se paga en estabilidad.
+        // La red de seguridad está puesta: Assets/link.xml preserva los tipos de URP Volume
+        // que el High se llevaría por delante (se usan vía profile.Add<T>() genérico, que el
+        // análisis estático no ve), y el link.xml que genera Addressables preserva FishData
+        // y DecorationData. Si aparece un TypeLoadException en runtime, el sospechoso es un
+        // tipo instanciado por reflexión que falte en alguno de esos dos link.xml.
+        var objetivo = NamedBuildTarget.WebGL;
+        var nivel = PlayerSettings.GetManagedStrippingLevel(objetivo);
+        if (nivel != ManagedStrippingLevel.High)
+        {
+            PlayerSettings.SetManagedStrippingLevel(objetivo, ManagedStrippingLevel.High);
+            Debug.Log("[ProdBuild] Managed Stripping " + nivel + " → High.");
+        }
 
         var scenes = new[] { "Assets/Scenes/TvScene.unity" };
         var opts = new BuildPlayerOptions
@@ -39,7 +74,7 @@ public static class TvProdBuild
         var s = report.summary;
         Debug.Log("[ProdBuild] " + s.result + " · " + s.totalSize + " bytes · " + s.totalTime +
                   " · errores=" + s.totalErrors);
-        EditorApplication.Exit(s.result == BuildResult.Succeeded ? 0 : 1);
+        if (salirAlTerminar) EditorApplication.Exit(s.result == BuildResult.Succeeded ? 0 : 1);
     }
 
     /// <summary>
