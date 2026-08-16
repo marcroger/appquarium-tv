@@ -18,7 +18,7 @@ MonoBehaviour:
     convertido en parte del arrecife."
   category: 4
   placement: 0
-  prefab: {fileID: -6689036041284674117, guid: a8c23729fc0ce9b489e383b1c56b7c27, type: 3}
+  prefab: {fileID: 9187067236076865318, guid: 11da714f4aba20242b9921d01839f51f, type: 3}
   defaultScale: {x: 1.01, y: 1.01, z: 1.01}
   defaultRotationY: 180
   defaultRotationX: -90
@@ -38,8 +38,12 @@ MonoBehaviour:
   hasGlow: 0
   glowColor: {r: 1, g: 1, b: 1, a: 1}
   glowIntensity: 0.8
+  hasBioLuminescence: 0
+  bioGlowIntensity: 1.5
   isMountTarget: 1
   canMountOthers: 0
+  embedDepth: -0.03
+  supportPointLocal: {x: 0, y: 0, z: 0}
   stressReduction: 0.00005
   hungerRateBonus: 0
   generatesBubbles: 0

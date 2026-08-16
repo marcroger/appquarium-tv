@@ -41,6 +41,23 @@ const FISH     = parseInt(arg('fish', '0'), 10);
 // desde el 2026-08-15). Sin esto no se puede leer el FPS por screencap.
 const DIAG = argv.includes('--diag');
 
+// --decos a,b,c  -> sustituye la lista fija de decos por las indicadas (itemIds).
+// Se colocan repartidas en el suelo. Sirve para aislar UNA deco y compararla antes/despues
+// de tocarla, que es como se valida un cambio de formato sin engañarse.
+const DECOS_OVERRIDE = (function () {
+  const i = argv.indexOf('--decos');
+  if (i < 0 || !argv[i + 1]) return null;
+  const ids = argv[i + 1].split(',').map(s => s.trim()).filter(Boolean);
+  const n = ids.length;
+  return ids.map((id, k) => ({
+    instanceId: id + '_0',
+    itemId: id,
+    // repartidas simetricamente respecto al centro
+    position: { x: n === 1 ? 0 : -2.6 + (5.2 * k) / (n - 1), y: -2.8, z: 2.0 },
+    scaleFactor: 1.0, flipped: false, rotationY: 0,
+  }));
+})();
+
 const UPDATES = argv.reduce((acc, a, i) => {
   if (a !== '--update' || !argv[i + 1]) return acc;
   const m = /^([a-z_]+)=(.*)@(\d+)$/.exec(argv[i + 1]);
@@ -250,7 +267,7 @@ client.connect(HOST, () => {
           activeFish: SPECIES.slice(0, FISH).map((s, i) => ({
             speciesId: s, nickname: 'test' + i, ageScale: 1.0,
           })),
-          decoJson: JSON.stringify({ items: DECOS }),
+          decoJson: JSON.stringify({ items: DECOS_OVERRIDE || DECOS }),
           bgId: 'bg_tropical',
           subId: 'sub_sand',
           lightId: 'light_white',
@@ -267,7 +284,7 @@ client.connect(HOST, () => {
         };
         try {
           appChan.send({ type: 'INIT', payload: JSON.stringify(state) });
-          log(`INIT enviado → ${state.activeFish.length} peces · ${DECOS.length} decos · ${state.bgId}`);
+          log(`INIT enviado → ${state.activeFish.length} peces · ${(DECOS_OVERRIDE || DECOS).length} decos${DECOS_OVERRIDE ? ' (override: ' + DECOS_OVERRIDE.map(d => d.itemId).join(',') + ')' : ''} · ${state.bgId}`);
         } catch (e) { log('fallo al enviar INIT: ' + e.message); }
       }, 3000);
     } else {
