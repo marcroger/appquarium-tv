@@ -1,0 +1,1050 @@
+<!DOCTYPE html>
+<html lang="en-us">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <title>Appquarium TV</title>
+    <link rel="shortcut icon" href="TemplateData/favicon.ico">
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html, body { width: 100%; height: 100%; background: #000; overflow: hidden; }
+      #unity-container { width: 100%; height: 100%; }
+    </style>
+    <script src="https://www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"
+            onerror="window.__castSdkFailed=true"></script>
+  </head>
+  <body>
+
+    <!-- ════════════════════════════════════════════════════════════════════════
+         SPLASH OVERLAY
+         Aparece instantáneamente al conectar Cast (solo HTML/CSS, sin Unity).
+         Unity carga en background — se hace fade-out cuando está listo.
+         En caso de error, la splash se convierte en pantalla de error.
+    ════════════════════════════════════════════════════════════════════════ -->
+    <div id="splash" style="
+      position:fixed; top:0; left:0; width:100%; height:100%; z-index:500;
+      background:linear-gradient(160deg,#040E1A 0%,#071828 55%,#0A2030 100%);
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      font-family:'Helvetica Neue',Helvetica,Arial,sans-serif; color:#DEEEE8;
+      transition:opacity 0.8s ease; text-align:center; padding:60px; box-sizing:border-box;
+    ">
+      <!-- Logo -->
+      <div id="splash-logo" style="
+        font-size:80px; font-weight:700; letter-spacing:6px; color:#0DE8FF;
+        text-shadow:0 0 40px rgba(13,232,255,0.4); margin-bottom:16px;
+      ">APPQUARIUM</div>
+
+      <div style="width:80px;height:2px;background:#3BB8A0;border-radius:2px;opacity:0.6;margin-bottom:40px;"></div>
+
+      <!-- Estado normal: texto + barra de progreso -->
+      <div id="splash-normal">
+        <div id="splash-status" style="font-size:22px;color:#3BB8A0;letter-spacing:2px;">
+          Iniciando…
+        </div>
+        <div id="splash-bar-wrap" style="
+          width:320px;height:4px;background:rgba(59,184,160,0.15);
+          border-radius:2px;margin:24px auto 0;overflow:hidden;display:none;
+        ">
+          <div id="splash-bar" style="
+            height:100%;width:0%;background:#3BB8A0;
+            border-radius:2px;transition:width 0.3s;
+          "></div>
+        </div>
+      </div>
+
+      <!-- Estado de error: oculto por defecto -->
+      <div id="splash-error" style="display:none;max-width:720px;">
+        <div id="err-icon"  style="font-size:56px;margin-bottom:20px;"></div>
+        <div id="err-title" style="font-size:30px;font-weight:700;margin-bottom:12px;color:#FF6B6B;"></div>
+        <div id="err-desc"  style="font-size:20px;color:#6A9888;line-height:1.7;"></div>
+        <div id="err-device" style="
+          margin-top:36px;padding:20px 40px;
+          border:1px solid rgba(59,184,160,0.25);border-radius:14px;
+          background:rgba(59,184,160,0.06);display:none;
+        ">
+          <div style="font-size:12px;color:#6A9888;text-transform:uppercase;letter-spacing:2px;margin-bottom:8px;">
+            Dispositivo recomendado
+          </div>
+          <div style="font-size:20px;color:#3BB8A0;font-weight:600;">Chromecast con Google TV</div>
+          <div style="font-size:14px;color:#4A7868;margin-top:6px;">o dispositivo con 2 GB RAM y WebGL 2</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Debug panel — diagnóstico. Elevado fuera de la zona de overscan de la TV
+         y con el log más reciente arriba (ver dbg()). -->
+    <div id="dbg-panel" style="
+      position:fixed;bottom:8vh;left:3vw;width:94%;z-index:9999;
+      background:rgba(0,0,0,0.82);color:#0ff;
+      font:bold 15px/1.35 monospace;padding:6px 12px;
+      box-sizing:border-box;pointer-events:none;
+      max-height:62vh;overflow:hidden;display:none;border-radius:8px;
+      transition:opacity 1.5s ease;
+    "></div>
+
+    <!-- Sello de versión del receiver — esquina inf. derecha, discreto.
+         Sirve para confirmar QUÉ index.html está corriendo en el device (el Cast
+         puede mantener cacheado el viejo con disableIdleTimeout). Bump en cada deploy. -->
+    <div id="rcv-tag" style="
+      position:fixed;bottom:1vh;right:1vw;z-index:10001;
+      color:rgba(255,255,255,0.40);font:bold 12px monospace;
+      pointer-events:none;letter-spacing:1px;
+    ">rcv 2026-08-16 strip</div>
+
+    <!-- FPS meter — esquina sup. derecha, legible desde el sofá.
+         Mide la cadencia de requestAnimationFrame (el mismo loop con el que
+         Unity WebGL pinta el canvas) → proxy directo del framerate real en el
+         device. Verde ≥50 / amarillo ≥30 / rojo <30. ▼ = peor frame del segundo. -->
+    <div id="fps-meter" style="
+      position:fixed;top:0;right:0;z-index:10000;
+      background:rgba(0,0,0,0.80);color:#6f6;
+      font:bold 22px/1.25 monospace;padding:6px 14px;
+      text-align:right;pointer-events:none;border-bottom-left-radius:0;
+      display:none;   /* 2026-08-15: producción limpia. Se enciende con el mensaje DIAG. */
+    ">FPS —</div>
+
+    <!-- Stats panel — debajo del FPS meter. Solo visible tras Unity READY.
+         Acumula muestras cada segundo, refresca cada 5s.
+         FPS avg/lo/hi de la sesión + WASM heap + JS heap. -->
+    <div id="stats-panel" style="
+      position:fixed;top:42px;right:0;z-index:10000;
+      background:rgba(0,0,0,0.80);color:#8dd;
+      font:bold 13px/1.6 monospace;padding:5px 14px 7px;
+      text-align:right;pointer-events:none;border-bottom-left-radius:10px;
+      border-top:1px solid rgba(255,255,255,0.08);
+      display:none;min-width:190px;
+    "></div>
+
+    <script>
+      // ── Debug logger ──────────────────────────────────────────────────────
+      // ⏱ RELOJ MONÓTONO — no usar Date.now() para MEDIR NADA.
+      // El Xiaomi arranca con el reloj de pared desincronizado y lo cuadra por NTP
+      // a los pocos segundos. Ese salto corrompía TODAS las restas: "duró 8s",
+      // "duró 1:00" y "hace 1286019s" (15 días) salían de ahí, no de la sesión.
+      // performance.now() es monótono: inmune a saltos de reloj.
+      function mono() { return performance.now(); }
+
+      var _dbgLines = [], _dbgT0 = mono();
+      // Sumidero opcional: si está conectado, cada línea del log se transmite al
+      // sender (PC) por el canal Cast → leemos el log ENTERO en el PC sin fotos.
+      // Se conecta más abajo, una vez existe el CastReceiverContext.
+      var _logSink = null;
+      function dbg(msg) {
+        var t = ((mono()-_dbgT0)/1000).toFixed(1);
+        var line = '['+t+'s] '+msg;
+        console.log(line);   // siempre visible via chrome://inspect
+        if (_logSink) { try { _logSink(line); } catch(e) {} }
+        _dbgLines.push(line);
+        if (_dbgLines.length > 40) _dbgLines.shift();
+        var el = document.getElementById('dbg-panel');
+        // 2026-08-12 — si el panel está oculto NO se toca el DOM. Medido el 11-ago:
+        // repintar estos 40 divs por línea costaba ~35 MB de Native Heap (26,6 MB
+        // oculto vs 61-67 visible) y el instrumento añadía presión al sistema que
+        // medía. Bajar la opacidad NO basta — hay que dejar de construirlos.
+        // Para volver a verlo: display:block en #dbg-panel (o desde chrome://inspect).
+        if (el && el.style.display !== 'none') {
+          // Más reciente ARRIBA → la última línea (donde está el error) nunca
+          // queda en el borde inferior que el overscan de la TV recorta.
+          el.innerHTML = _dbgLines.slice().reverse().map(function(l){
+            return '<div>'+l.replace(/</g,'&lt;')+'</div>';
+          }).join('');
+
+          // El panel permanece visible toda la sesión: el corte que se investiga
+          // ocurre a los ~200s, mucho después del auto-hide de 8s que había aquí.
+          el.style.opacity = '1';
+        }
+        _sessLogDirty = true;   // → se persiste en el próximo tick (ver abajo)
+      }
+
+      // Red de seguridad INDEPENDIENTE del canal Cast: persistir el buffer del log
+      // en localStorage (throttle 2s). La página muere en el corte pero localStorage
+      // sobrevive → al re-castear reimprimimos las últimas líneas ANTES del corte.
+      // No depende de que el streaming al PC funcione.
+      var _sessLogDirty = false;
+      setInterval(function() {
+        if (!_sessLogDirty) return;
+        try { localStorage.setItem('aq_sessLog', JSON.stringify(_dbgLines)); } catch (e) {}
+        _sessLogDirty = false;
+      }, 2000);
+
+      // ── Splash helpers ────────────────────────────────────────────────────
+      function setSplashStatus(txt, pct) {
+        var s = document.getElementById('splash-status');
+        if (s) s.textContent = txt;
+        if (pct !== undefined) {
+          document.getElementById('splash-bar-wrap').style.display = 'block';
+          document.getElementById('splash-bar').style.width = pct+'%';
+        }
+      }
+
+      // Convierte la splash en pantalla de error — mismo estilo que "dispositivo no compatible"
+      function showSplashError(icon, title, desc, showDeviceHint) {
+        dbg('ERROR: '+title);
+        document.getElementById('splash-normal').style.display = 'none';
+        document.getElementById('splash-error').style.display  = 'block';
+        document.getElementById('err-icon').textContent  = icon;
+        document.getElementById('err-title').textContent = title;
+        document.getElementById('err-desc').innerHTML    = desc;
+        if (showDeviceHint) document.getElementById('err-device').style.display = 'block';
+        // Muestra panel de debug bajo el error para diagnóstico
+        document.getElementById('dbg-panel').style.display = 'block';
+      }
+
+      function hideSplash() {
+        var s = document.getElementById('splash');
+        if (!s) return;
+        s.style.opacity = '0';
+        setTimeout(function(){ s.style.display='none'; }, 850);
+        // 2026-08-15 — apagar el panel de debug al llegar al acuario.
+        // showSplashError() lo enciende, y antes NADIE lo volvía a apagar: si la carga
+        // fría se pasaba del timeout de 120 s y Unity acababa resolviendo, el usuario veía
+        // el acuario con el panel repintando 40 divs por línea toda la sesión (los ~35 MB
+        // de Native Heap medidos el 11-ago), invisible bajo el canvas pero construyendo DOM.
+        if (!window.__diag) {
+          var p = document.getElementById('dbg-panel');
+          if (p) p.style.display = 'none';
+        }
+      }
+
+      // Captura errores JS globales no manejados
+      window.onerror = function(msg, src, line) {
+        dbg('JS ERR: '+msg+' ('+(src||'').split('/').pop()+':'+line+')');
+      };
+
+      dbg('page loaded');
+
+      // ── Última desconexión persistente ────────────────────────────────────
+      // SHUTDOWN destruye la página → pintar el reason en pantalla NO es fiable.
+      // Lo guardamos en localStorage (setItem es síncrono, da tiempo antes del
+      // teardown) y lo mostramos en el arranque siguiente al re-castear. Así el
+      // motivo del corte sobrevive aunque el receiver se mate a sí mismo.
+      // ⚠ Guardar SOLO la última caída perdía el dato bueno: tras el corte real el
+      // sender auto-reconecta y vuelve a morir a los pocos segundos, y ese flap
+      // sobrescribía el registro (por eso salía "duró 8s" tras un corte de 209s).
+      // Historial de los últimos 10 → se ve el patrón entero, no la basura final.
+      function saveLastDisco(reason, elapsed) {
+        try {
+          var hist = [];
+          try { hist = JSON.parse(localStorage.getItem('aq_discoLog') || '[]'); } catch (e2) {}
+          hist.push({ reason: reason, elapsed: elapsed || 0, ts: Date.now() });
+          while (hist.length > 10) hist.shift();
+          localStorage.setItem('aq_discoLog', JSON.stringify(hist));
+        } catch (e) {}
+      }
+      (function() {
+        try {
+          var hist = JSON.parse(localStorage.getItem('aq_discoLog') || '[]');
+          if (!hist.length) return;
+          // 2026-08-15 — NO se enciende el panel. La caja arrastra historial de las
+          // tandas de julio/agosto en localStorage, así que esto lo encendía SIEMPRE
+          // al arrancar y anulaba el display:none del 12-ago (los ~35 MB de Native
+          // Heap volvían, y encima tapaba la pantalla en plena revisión visual).
+          // El historial sigue saliendo por console.log y por _logSink al PC.
+          for (var i = hist.length - 1; i >= 0; i--) {   // más reciente primero
+            var d = hist[i];
+            var m = Math.floor(d.elapsed / 60), s = d.elapsed % 60;
+            // "duró" ya es monótono y fiable. "hace" cruza recargas de página, así
+            // que SÓLO puede salir del reloj de pared → no fiable en este device
+            // (de ahí el "hace 1286019s"). Se marca con ~ y no se usa para concluir.
+            dbg('⚠ CAÍDA -' + (hist.length - i) + ' → reason:' + d.reason +
+                ' | duró ' + m + ':' + (s < 10 ? '0' : '') + s +
+                ' | hace ~' + Math.round((Date.now() - d.ts) / 1000) + 's (reloj pared, poco fiable)');
+          }
+        } catch (e) {}
+      })();
+
+      // Volcado del log de la sesión ANTERIOR (persiste tras el corte). Últimas 18
+      // líneas → así vemos qué pasó justo antes de morir aunque el streaming falle.
+      (function() {
+        try {
+          var prev = JSON.parse(localStorage.getItem('aq_sessLog') || '[]');
+          if (!prev.length) return;
+          var tail = prev.slice(-18);
+          dbg('━━━ FIN sesión anterior (' + prev.length + ' líneas, últimas ' + tail.length + ') ━━━');
+          for (var i = 0; i < tail.length; i++) dbg('PREV ' + tail[i]);
+          dbg('━━━ INICIO sesión actual ━━━');
+        } catch (e) {}
+      })();
+
+      // ── FPS meter ─────────────────────────────────────────────────────────
+      // rAF-based. Ventana de 1s: avg = media, ▼ = peor frame (stutter).
+      // No empieza a acumular hasta que Unity está vivo, para que la fase de
+      // compilación del wasm (main thread bloqueado) no falsee el número.
+      (function() {
+        var el = document.getElementById('fps-meter');
+        var last = performance.now(), winStart = last;
+        var sum = 0, count = 0, worst = 1e9;
+        function tick(now) {
+          var dt = now - last; last = now;
+          if (window.unityInstance && dt > 0) {
+            var inst = 1000 / dt;
+            if (inst <= 240 && inst >= 5) { sum += inst; count++; if (inst < worst) worst = inst; }
+          }
+          if (now - winStart >= 1000) {
+            if (count > 0) {
+              var avg = sum / count;
+              el.textContent = 'FPS ' + avg.toFixed(0) + '  ▼' + worst.toFixed(0);
+              el.style.color = avg >= 50 ? '#6f6' : (avg >= 30 ? '#ff5' : '#f55');
+              if (window._recordFpsSample) window._recordFpsSample(avg);
+            }
+            winStart = now; sum = 0; count = 0; worst = 1e9;
+          }
+          requestAnimationFrame(tick);
+        }
+        requestAnimationFrame(tick);
+      })();
+
+      // ── Performance stats panel ───────────────────────────────────────────
+      // Recibe muestras de FPS cada segundo (desde el fps meter de arriba).
+      // Actualiza el panel cada 5s con: sesión, FPS avg/lo/hi, WASM heap, JS heap.
+      // Solo se muestra cuando unityInstance existe (acuario activo).
+      (function() {
+        var panel  = document.getElementById('stats-panel');
+        var fpsBuf = [];   // muestras de 1s avg — máx 10 min (600)
+        var t0     = 0;    // performance.now() del primer sample (Unity ya listo)
+
+        function getWasmMB() {
+          try {
+            var m = window.unityInstance && window.unityInstance.Module;
+            if (!m) return 0;
+            var buf = (m.wasmMemory && m.wasmMemory.buffer) || (m.HEAPU8 && m.HEAPU8.buffer);
+            return buf ? Math.round(buf.byteLength / 1048576) : 0;
+          } catch(e) { return 0; }
+        }
+
+        function getHeap() {
+          if (!performance.memory) return null;
+          return {
+            used:  Math.round(performance.memory.usedJSHeapSize  / 1048576),
+            limit: Math.round(performance.memory.jsHeapSizeLimit / 1048576)
+          };
+        }
+
+        function fmtTime(ms) {
+          var s = Math.floor(ms / 1000), m = Math.floor(s / 60); s %= 60;
+          return m + ':' + (s < 10 ? '0' : '') + s;
+        }
+
+        function render() {
+          if (!fpsBuf.length) return;
+          var sum = 0, lo = 999, hi = 0;
+          for (var i = 0; i < fpsBuf.length; i++) {
+            sum += fpsBuf[i];
+            if (fpsBuf[i] < lo) lo = fpsBuf[i];
+            if (fpsBuf[i] > hi) hi = fpsBuf[i];
+          }
+          var avg  = sum / fpsBuf.length;
+          var wasm = getWasmMB();
+          var heap = getHeap();
+          var lines = [
+            'SESSION ' + fmtTime(performance.now() - t0),
+            'FPS avg:' + avg.toFixed(0) + ' lo:' + lo.toFixed(0) + ' hi:' + hi.toFixed(0),
+          ];
+          if (wasm)  lines.push('WASM  ' + wasm + ' MB');
+          if (heap)  lines.push('HEAP  ' + heap.used + '/' + heap.limit + ' MB');
+          panel.innerHTML = lines.join('<br>');
+        }
+
+        // Recibe avg de FPS cada segundo desde el fps meter
+        window._recordFpsSample = function(avg) {
+          if (!window.unityInstance) return;
+          if (!t0) { t0 = performance.now(); if (window.__diag) panel.style.display = 'block'; }
+          fpsBuf.push(avg);
+          if (fpsBuf.length > 600) fpsBuf.shift();
+        };
+
+        setInterval(render, 5000);
+      })();
+
+      // ── Memory ticker ──────────────────────────────────────────────────────
+      // Loguea WASM + JS heap al panel debug cada 10s mientras Unity está vivo.
+      // Las líneas se acumulan (hasta 40) y salen con timestamp → curva de memoria
+      // legible desde la TV y en chrome://inspect aunque la sesión petara.
+      // Si el crash es OOM veremos la última lectura WASM antes de morir (WASM crece
+      // en pasos geométricos; si la última línea es "WASM:92MB" y luego nada = el
+      // siguiente paso a 110MB fue el que no cupo).
+      (function() {
+        var _mt = 0;
+        setInterval(function() {
+          if (!window.unityInstance) return;
+          _mt++;
+          var wasm = 0;
+          try {
+            var m = window.unityInstance.Module;
+            var buf = (m.wasmMemory && m.wasmMemory.buffer) || (m.HEAPU8 && m.HEAPU8.buffer);
+            wasm = buf ? Math.round(buf.byteLength / 1048576) : 0;
+          } catch(e) {}
+          var jsMB = performance.memory
+            ? Math.round(performance.memory.usedJSHeapSize / 1048576) : -1;
+          dbg('MEM#' + _mt + ' WASM:' + wasm + 'MB' + (jsMB >= 0 ? ' JS:' + jsMB + 'MB' : ''));
+        }, 5000);
+      })();
+    </script>
+
+    <!-- ════════════════════════════════════════════════════════════════════════
+         UNITY CANVAS (detrás de la splash hasta que esté listo)
+    ════════════════════════════════════════════════════════════════════════ -->
+    <!-- ════════════════════════════════════════════════════════════════════════
+         KEEPALIVE VIDEO (STEP 1 — bisección disconnect 2055)
+         Vídeo negro en loop reproduciéndose como media real → mantiene la sesión.
+         ⚠ DEBE estar visible ≥1px ENCIMA del canvas (z-index>canvas) con opacity
+         casi 0. NUNCA display:none / z-index negativo → el navegador throttlea el
+         decode y deja de contar como "media activa" (causa probable del corte 205s).
+    ════════════════════════════════════════════════════════════════════════ -->
+    <cast-media-player id="ka-player" style="
+      position:fixed;top:0;left:0;width:8px;height:8px;z-index:450;
+      opacity:0.02;pointer-events:none;background:transparent;overflow:hidden;
+    "></cast-media-player>
+    <video id="ka-fallback" muted loop playsinline autoplay
+      src="https://pub-2b11cc17bdef4f75bd4d34eeabbd6042.r2.dev/keepalive_black.mp4"
+      style="position:fixed;top:0;left:8px;width:8px;height:8px;z-index:451;
+             opacity:0.02;pointer-events:none;object-fit:cover;"></video>
+
+    <div id="unity-container" class="unity-desktop">
+      <canvas id="unity-canvas" width=960 height=600 style="width:100%;height:100%;display:block;" tabindex="-1"></canvas>
+      <div id="unity-loading-bar" style="display:none">
+        <div id="unity-logo"></div>
+        <div id="unity-progress-bar-empty">
+          <div id="unity-progress-bar-full"></div>
+        </div>
+      </div>
+      <div id="unity-warning"></div>
+      <div id="unity-footer">
+        <div id="unity-logo-title-footer"></div>
+        <div id="unity-fullscreen-button"></div>
+        <div id="unity-build-title">Appquarium</div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════════════
+         COMPROBACIONES PREVIAS AL ARRANQUE
+    ════════════════════════════════════════════════════════════════════════ -->
+    <script>
+      // ── 1. WebGL 2 ────────────────────────────────────────────────────────
+      var hasWebGL2 = !!(document.createElement('canvas').getContext('webgl2'));
+      var isDevTest = new URLSearchParams(window.location.search).get('devtest') === '1';
+      dbg('WebGL2: '+hasWebGL2+(isDevTest?' [DEV]':''));
+
+      if (!hasWebGL2) {
+        showSplashError(
+          '📺',
+          'Dispositivo no compatible',
+          'Este dispositivo no soporta WebGL 2, necesario para el acuario 3D.<br>' +
+          'Appquarium TV funciona con dispositivos modernos como:',
+          true
+        );
+      }
+
+      // ── 2. Cast SDK ───────────────────────────────────────────────────────
+      if (!isDevTest && (window.__castSdkFailed || typeof cast === 'undefined' || !cast.framework)) {
+        dbg('Cast SDK not available');
+        if (hasWebGL2) {   // solo muestra si no hay ya error de WebGL2
+          showSplashError(
+            '📡',
+            'Error de conexión Cast',
+            'No se pudo cargar el SDK de Google Cast.<br>' +
+            'Verifica la conexión a Internet del dispositivo.',
+            false
+          );
+        }
+      }
+
+      // ── 3. Memoria disponible (heurística) ────────────────────────────────
+      // navigator.deviceMemory: RAM aproximada en GB (puede no existir en Cast)
+      var RAM = navigator.deviceMemory || null;
+      dbg('deviceMemory: ' + (RAM ? RAM+'GB' : 'unknown'));
+      if (RAM && RAM < 1.5) {
+        // Aviso (no bloquea, el rebuildeado wasm es ~30MB y debería funcionar)
+        dbg('⚠ RAM baja detectada: '+RAM+'GB');
+      }
+    </script>
+
+    <!-- ════════════════════════════════════════════════════════════════════════
+         CAST BRIDGE
+         ctx.start() se llama ANTES de que Unity cargue — la sesión Cast
+         queda activa mientras Unity compila en background.
+    ════════════════════════════════════════════════════════════════════════ -->
+    <script>
+    (function() {
+      if (!hasWebGL2) return;  // ya hay error de WebGL2
+      if (window.__castSdkFailed || typeof cast === 'undefined' || !cast.framework) return;
+
+      var NAMESPACE     = 'urn:x-cast:dev.unknownaerials.appquarium';
+      var unityInst        = null;
+      var pendingMsgs      = [];
+      var senderCount      = 0;
+      var sessionStart     = 0;   // mono() when first sender connected
+      var keepAliveOk      = 0;
+      var _lastDiscoMs     = 0;   // mono() when last SENDER_DISCONNECTED fired
+      var _initForwarded   = false; // true once INIT has been forwarded to Unity at least once
+      var _overlayTimer    = null;  // pending showReconnect() call — cancelled on fast reconnect
+      var keepAliveFail = 0;
+
+      var ctx = cast.framework.CastReceiverContext.getInstance();
+
+      // ═══ LOG REMOTO → SENDER (PC) ══════════════════════════════════════════
+      // Transmite cada línea de dbg() al sender por el canal Cast → log completo
+      // en el PC, sin fotos. En el 1er intento (KA7) no llegó NADA al sender, así
+      // que aquí no adivinamos: contamos envíos/fallos y el motor los reporta en
+      // cada tick. Namespace JSON → mandamos OBJETO (no string; un string podía
+      // reventar el envío). Enviamos al senderId concreto, con broadcast de reserva.
+      var _lastSenderId = null, _logSent = 0, _logFail = 0, _logErr = '';
+      _logSink = function(line) {
+        if (senderCount <= 0) return;
+        var payload = { type:'LOG', line:line };
+        try {
+          ctx.sendCustomMessage(NAMESPACE, _lastSenderId || undefined, payload);
+          _logSent++;
+        } catch (e1) {
+          // reintento como string por si este SDK lo exige así
+          try {
+            ctx.sendCustomMessage(NAMESPACE, _lastSenderId || undefined, JSON.stringify(payload));
+            _logSent++;
+          } catch (e2) { _logFail++; _logErr = (e2 && e2.message) || String(e2); }
+        }
+      };
+
+      // ═══ DETECTOR DE BLOQUEO DEL HILO PRINCIPAL ════════════════════════════
+      // Hipótesis actual (2026-07-17, tras absolver al móvil): Unity WebGL congela
+      // el hilo JS lo bastante como para que el receiver no conteste el heartbeat
+      // del sender → corte a ~186-209s. Un setInterval(1000) que llega TARDE mide
+      // ese bloqueo: si el hilo estuvo parado 4s, el tick se retrasa 4s.
+      (function() {
+        var period = 1000, expected = mono() + period, worst = 0, n = 0;
+        setInterval(function() {
+          var now = mono(), lag = now - expected;
+          expected = now + period;
+          n++;
+          if (lag > worst) worst = lag;
+          // Log sólo si el bloqueo es serio (>1.5s) o cada 30 ticks como resumen.
+          if (lag > 1500) dbg('⚠ STALL: hilo bloqueado '+Math.round(lag)+'ms');
+          if (n % 15 === 0) {
+            dbg('⏱ lag peor='+Math.round(worst)+'ms | 📡 stream sent='+_logSent+
+                ' fail='+_logFail+(_logErr ? ' err='+_logErr : ''));
+            worst = 0;
+          }
+        }, period);
+      })();
+
+      // ═══ CICLO DE VIDA DE LA PÁGINA ════════════════════════════════════════
+      // Si el WebView del Xiaomi mata/congela la página, estos disparan ANTES del
+      // corte y nos dicen el mecanismo (a diferencia de SENDER_DISCONNECTED, que
+      // sólo dice "se fue"). freeze/pagehide = el SO está matando la pestaña.
+      ['pagehide','freeze','resume','visibilitychange','blur','focus'].forEach(function(ev) {
+        window.addEventListener(ev, function() {
+          var extra = (ev === 'visibilitychange') ? ' → '+document.visibilityState : '';
+          dbg('📄 page:'+ev+extra);
+        }, true);
+      });
+
+      // ═══ KEEPALIVE VIDEO (STEP 1) ══════════════════════════════════════════
+      // Hipótesis: reproducir vídeo real mantiene viva la sesión (standalone 360s+).
+      // STEP 1 = vídeo ON, SIN setApplicationStatus/KEEPALIVE/PONG. + log currentTime.
+      var KA_URL = 'https://pub-2b11cc17bdef4f75bd4d34eeabbd6042.r2.dev/keepalive_black.mp4';
+      var _kaLoaded = false, _kaLoadTries = 0, _kaTick = 0, _kaReqId = 0, _kaInFlight = false;
+
+      // Un rechazo de load() puede ser Error, ErrorEvent o un enum numérico.
+      function kaErr(e) {
+        if (e === null || e === undefined) return '(vacío)';
+        if (typeof e === 'number' || typeof e === 'string') return String(e);
+        return (e.detailedErrorCode || e.code || e.type || '') + ' ' + (e.message || e.reason || JSON.stringify(e));
+      }
+
+      // El <video> del cast-media-player vive en su shadow root: querySelector no
+      // lo alcanza. El PlayerManager es la única fuente fiable de su estado.
+      function kaPlayerState() {
+        try {
+          var pm = ctx.getPlayerManager();
+          return { state: pm.getPlayerState(), ct: pm.getCurrentTimeSec() };
+        } catch(e) { return { state: 'ERR:'+e.message, ct: null }; }
+      }
+      function kaLoad() {
+        if (!_kaLoaded && !_kaInFlight && _kaLoadTries < 8) {
+          _kaLoadTries++;
+          _kaInFlight = true;
+          try {
+            var pm  = ctx.getPlayerManager();
+            var req = new cast.framework.messages.LoadRequestData();
+            req.requestId = ++_kaReqId;  // por defecto 0; algunos SDK descartan el request
+            req.autoplay = true;
+            req.media = new cast.framework.messages.MediaInformation();
+            req.media.contentId   = KA_URL;
+            req.media.contentUrl  = KA_URL;
+            req.media.contentType = 'video/mp4';
+            req.media.streamType  = cast.framework.messages.StreamType.BUFFERED;
+
+            // ⭐ CAUSA RAÍZ DEL CORTE (medido 2026-07-17): sin cola en bucle el clip
+            // llega a END_OF_STREAM a los ~24s, el player queda IDLE para siempre y
+            // Cast mata la sesión ~150s después. El `loop=true` de más abajo sólo
+            // afectaba al <video> de respaldo del DOM, que a Cast le da igual.
+            // REPEAT_SINGLE hace que el cast-media-player repita el clip sin fin.
+            var item = new cast.framework.messages.QueueItem();
+            item.media = req.media;
+            req.queueData = new cast.framework.messages.QueueData();
+            req.queueData.items      = [item];
+            req.queueData.repeatMode = cast.framework.messages.RepeatMode.REPEAT_SINGLE;
+            req.queueData.startIndex = 0;
+            // load() devuelve una Promise que se RECHAZA si falla (doc oficial).
+            // Hacer `pm.load(req);` a pelo se tragaba el error → "no sale ningún
+            // error" pese a cmp:IDLE 125s. Sin esto el fallo es invisible.
+            var n = _kaLoadTries;
+            var pr = pm.load(req);
+            dbg('KA: pm.load try#'+n+(pr && pr.then ? ' (promise)' : ' (void!)'));
+            if (pr && pr.then) {
+              pr.then(function()  { _kaInFlight = false; dbg('KA: pm.load#'+n+' RESUELTO ✅'); },
+                      function(e) { _kaInFlight = false; dbg('KA: pm.load#'+n+' RECHAZADO ❌ '+kaErr(e)); });
+            } else { _kaInFlight = false; }
+          } catch(e) { _kaInFlight = false; dbg('KA load FAIL#'+_kaLoadTries+': '+e.message); }
+        }
+        // arrancar también el fallback explícito (frames reales garantizados)
+        var fb = document.getElementById('ka-fallback');
+        if (fb) { fb.muted = true; fb.loop = true; var p = fb.play(); if (p && p.catch) p.catch(function(){}); }
+      }
+
+      // ── Reconnect overlay ────────────────────────────────────────────────────
+      // Shown over the Unity canvas when all senders disconnect.
+      // z-index:400 = above canvas (default), below splash (500) and debug panel (9999).
+      var _reconnectEl = (function() {
+        var el = document.createElement('div');
+        el.style.cssText = [
+          'position:fixed;top:0;left:0;width:100%;height:100%;z-index:400',
+          'background:rgba(4,14,26,0.72)',
+          'display:none;flex-direction:column;align-items:center;justify-content:center',
+          "font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;color:#DEEEE8",
+          'text-align:center;pointer-events:none;opacity:0;transition:opacity 0.6s'
+        ].join(';');
+        el.innerHTML =
+          '<div style="font-size:52px;margin-bottom:20px">📱</div>' +
+          '<div style="font-size:26px;font-weight:700;color:#3BB8A0;letter-spacing:2px;margin-bottom:10px">Sender desconectado</div>' +
+          '<div style="font-size:17px;color:#6A9888;line-height:1.7">Abre Appquarium en el móvil<br>y vuelve a castear para reconectar</div>' +
+          '<div id="rc-timer" style="margin-top:22px;font-size:13px;color:#4A7868;letter-spacing:1px"></div>' +
+          '<div id="rc-reason" style="margin-top:8px;font-size:13px;color:#D98A6A;letter-spacing:1px;font-family:monospace"></div>';
+        document.body.appendChild(el);
+        return el;
+      })();
+      var _rcTimer = null, _rcStart = 0;
+
+      function showReconnect(reason) {
+        _rcStart = mono();
+        var rEl = document.getElementById('rc-reason');
+        if (rEl) rEl.textContent = reason ? ('reason: ' + reason) : '';
+        _reconnectEl.style.display = 'flex';
+        setTimeout(function(){ _reconnectEl.style.opacity='1'; }, 16);
+        clearInterval(_rcTimer);
+        _rcTimer = setInterval(function(){
+          var s = Math.floor((mono()-_rcStart)/1000), m = Math.floor(s/60); s %= 60;
+          var el = document.getElementById('rc-timer');
+          if (el) el.textContent = 'Desconectado hace '+m+':'+(s<10?'0':'')+s;
+        }, 1000);
+      }
+      function hideReconnect() {
+        clearInterval(_rcTimer);
+        _reconnectEl.style.opacity = '0';
+        setTimeout(function(){ _reconnectEl.style.display='none'; }, 650);
+      }
+
+      // ── Cast SDK lifecycle events ────────────────────────────────────────────
+
+      ctx.addEventListener(cast.framework.system.EventType.READY, function() {
+        dbg('Cast SDK READY');
+      });
+      ctx.addEventListener(cast.framework.system.EventType.SHUTDOWN, function(e) {
+        dbg('Cast SDK SHUTDOWN — reason:'+(e.reason||'?'));
+        // SHUTDOWN = the RECEIVER itself is ending the session (idle timeout etc.).
+        // Persist it (page is about to die) and surface it if the overlay survives.
+        var _el = sessionStart ? Math.round((mono()-sessionStart)/1000) : 0;
+        saveLastDisco('SHUTDOWN:'+(e.reason||'?'), _el);
+        showReconnect('SHUTDOWN:'+(e.reason||'?'));
+      });
+
+      ctx.addCustomMessageListener(NAMESPACE, function(event) {
+        var raw  = typeof event.data==='string' ? event.data : JSON.stringify(event.data);
+        var type = (function(r){try{return JSON.parse(r).type;}catch(e){return '?';}})(raw);
+        dbg('Cast msg: '+type);
+        if (type === 'INIT') {
+          var msSinceDisco = _lastDiscoMs > 0 ? (mono() - _lastDiscoMs) : Infinity;
+          // Quick reconnect: aquarium already running, Unity loaded, disconnect < 30s ago.
+          // Skip re-INIT so the scene doesn't reload — the sender auto-reconnects in ~3s
+          // and sends a new INIT with the same state, which would destroy and rebuild
+          // the aquarium unnecessarily. Just hide the overlay and carry on.
+          if (_initForwarded && unityInst && msSinceDisco < 30000) {
+            dbg('INIT skip — reconnect after ' + Math.round(msSinceDisco/1000) + 's, aquarium up');
+            return;
+          }
+          _initForwarded = true;
+          setSplashStatus('Cast conectado — cargando acuario…');
+        }
+
+        // ── DIAG ────────────────────────────────────────────────────────────
+        // Enciende/apaga los HUD de diagnóstico (FPS + stats) EN CALIENTE, sin
+        // redesplegar. Producción va limpia por defecto; cuando hay que medir se
+        // manda { type:'DIAG', value:'on' } desde el sender:
+        //   node Tools/cast-headless.js --fish 12 --diag
+        // Antes el medidor de FPS quedaba encendido en producción entre medición y
+        // medición porque apagarlo exigía tocar el index.html y volver a subirlo.
+        if (type === 'DIAG') {
+          var enc = (function(r){try{return JSON.parse(r).value !== 'off';}catch(e){return true;}})(raw);
+          window.__diag = enc;
+          var fm = document.getElementById('fps-meter');
+          var sp = document.getElementById('stats-panel');
+          if (fm) fm.style.display = enc ? 'block' : 'none';
+          if (sp) sp.style.display = enc ? 'block' : 'none';
+          dbg('DIAG ' + (enc ? 'ON' : 'OFF'));
+          return;
+        }
+
+        if (type === 'PING') {
+          // STEP 1: PONG suprimido (bisección). Solo tragamos el PING para no
+          // reenviarlo a Unity — sin responder al sender.
+          return;
+        }
+
+        if (type === 'PROBE') {
+          // Test 2026-07-17: el sender de prueba manda PROBE cada 5s. Si esto
+          // mantiene viva la conexión >209s → el corte era "sin tráfico
+          // sender→receiver" y el fix es sender-side. Sólo lo tragamos (ya se
+          // logueó "Cast msg: PROBE" arriba); no va a Unity.
+          return;
+        }
+
+        if (unityInst) {
+          unityInst.SendMessage('CastReceiver','OnMessageReceived',raw);
+        } else {
+          pendingMsgs.push(raw);
+          dbg('  buffered ('+pendingMsgs.length+')');
+        }
+      });
+
+      ctx.addEventListener(cast.framework.system.EventType.SENDER_CONNECTED, function(e) {
+        senderCount++;
+        // ⚠ sessionStart se reinicia en cada reconexión: por eso el "duró" del
+        // registro era el del último flap y no el del corte real. Lo marcamos.
+        if (senderCount === 1) {
+          var wasReconnect = sessionStart > 0;
+          sessionStart = mono();
+          if (wasReconnect) {
+            var gap = _lastDiscoMs ? Math.round((mono()-_lastDiscoMs)/1000) : -1;
+            dbg('🔄 RECONEXIÓN del sender ('+gap+'s tras la caída) — contador a cero');
+          }
+        }
+        _lastSenderId = e.senderId;
+        dbg('Sender CONNECTED #'+senderCount+': '+e.senderId);
+        setSplashStatus('Conectado — cargando…');
+        if (_overlayTimer) { clearTimeout(_overlayTimer); _overlayTimer = null; }
+        hideReconnect();
+        kaLoad();  // STEP 1: arrancar vídeo keepalive (reemplaza setApplicationStatus)
+        if (unityInst) unityInst.SendMessage('CastReceiver','OnSenderConnected',e.senderId);
+      });
+
+      ctx.addEventListener(cast.framework.system.EventType.SENDER_DISCONNECTED, function(e) {
+        senderCount = Math.max(0, senderCount - 1);
+        var reason  = (e.reason != null ? String(e.reason) : 'unknown');
+        var elapsed = sessionStart ? Math.round((mono()-sessionStart)/1000) : 0;
+        var m = Math.floor(elapsed/60), s = elapsed%60;
+        _lastDiscoMs = mono();
+        dbg('Sender DISCONNECTED — reason:'+reason+' after '+m+':'+(s<10?'0':'')+s+' remaining:'+senderCount);
+        saveLastDisco(reason, elapsed);
+        if (senderCount === 0) {
+          // Delay the overlay: CastPlugin auto-reconnects in ~5s.
+          // If reconnect arrives within 15s we cancel the overlay — invisible to user.
+          // Only show if no reconnect after 15s (genuine disconnect: app killed, WiFi lost).
+          var _discoReason = reason;
+          _overlayTimer = setTimeout(function() { _overlayTimer = null; showReconnect(_discoReason); }, 90000);
+        }
+        var payload = JSON.stringify({ senderId:e.senderId, reason:reason, elapsedSeconds:elapsed });
+        if (unityInst) unityInst.SendMessage('CastReceiver','OnSenderDisconnected',payload);
+      });
+
+      // Red de seguridad: cualquier Promise rechazada sin .catch() acaba aquí.
+      window.addEventListener('unhandledrejection', function(ev) {
+        dbg('⚠ PROMISE SIN CATCH: '+kaErr(ev.reason));
+      });
+
+      // Sin esto, un pm.load() que falla no deja rastro en el log.
+      try {
+        var _pm = ctx.getPlayerManager();
+        _pm.addEventListener(cast.framework.events.EventType.ERROR, function(e) {
+          dbg('KA pm ERROR: '+(e.detailedErrorCode||'?')+' / '+(e.reason||'?'));
+        });
+        _pm.addEventListener(cast.framework.events.EventType.MEDIA_FINISHED, function(e) {
+          dbg('KA pm MEDIA_FINISHED: '+(e.endedReason||'?'));
+        });
+        _pm.addEventListener(cast.framework.events.EventType.PLAYING, function() {
+          dbg('KA pm PLAYING ✅');
+        });
+      } catch(e) { dbg('KA pm listeners FAIL: '+e.message); }
+
+      try {
+        var opts = new cast.framework.CastReceiverOptions();
+        opts.disableIdleTimeout = true;
+        opts.maxInactivity = 3600;
+        opts.customNamespaces = {};
+        opts.customNamespaces[NAMESPACE] = cast.framework.system.MessageType.JSON;
+
+        ctx.start(opts);
+        dbg('ctx.start() OK');
+        // STEP 1: setApplicationStatus 20s ELIMINADO (bisección).
+
+      } catch(e) {
+        showSplashError('📡','Error Cast SDK',
+          'ctx.start() falló: '+e.message+'<br>Reinicia el dispositivo e inténtalo de nuevo.',
+          false);
+        return;
+      }
+
+      // STEP 1: KEEPALIVE 30s (receiver→sender) ELIMINADO (bisección).
+      // Reemplazado por watchdog del vídeo + log de currentTime cada 3s/10s.
+      setInterval(function() {
+        if (senderCount === 0) return;
+        var ka = kaPlayerState(), fb = document.getElementById('ka-fallback');
+        if (fb && fb.paused) { var p2 = fb.play(); if (p2 && p2.catch) p2.catch(function(){}); }
+        // Solo el cast-media-player cuenta para el heartbeat de Cast; el fallback es
+        // un <video> suelto y a Cast le da igual. Estado real, sin proxies: `ct > 0`
+        // se quedó en true tras el END_OF_STREAM y bloqueó los reintentos para
+        // siempre (el tries=2 con L=1 e IDLE del test KA3).
+        if (ka.state === 'PLAYING' || ka.state === 'BUFFERING') {
+          _kaLoaded   = true;
+          _kaLoadTries = 0;      // reproduce → perdonamos los intentos fallidos previos
+        } else {
+          // IDLE/PAUSED = no hay media activa = la sesión se está muriendo.
+          // Con REPEAT_SINGLE no deberíamos llegar aquí; es la red por si el
+          // firmware del Xiaomi ignora el bucle. Rearmar y recargar.
+          if (_kaLoaded) dbg('⚠ KA: player cayó a '+ka.state+' → recargando vídeo');
+          _kaLoaded = false;
+        }
+        if (ka.state === 'PAUSED') { try { ctx.getPlayerManager().play(); } catch(e) {} }
+        if (!_kaLoaded) kaLoad();  // reintenta pm.load (máx 8 fallos seguidos)
+        // log cada ~10s (cada 3 ticks) — clave para el diagnóstico del PASO 1:
+        // si ct se CONGELA antes del corte → Unity starva el decode (PASO 2a).
+        // si ct AVANZA y cae igual → starvation del heartbeat Cast (PASO 2b).
+        _kaTick++;
+        if (_kaTick % 3 === 0) {
+          // ct con 3 decimales: con toFixed(1) un 0.02 se pintaba como "0.0" y no
+          // se distinguía del 0 exacto. L = _kaLoaded (por qué se paran los tries).
+          var ct  = (typeof ka.ct === 'number') ? ka.ct.toFixed(3) : ('n/a:'+ka.ct);
+          var fct = fb ? fb.currentTime.toFixed(1) : 'n/a';
+          var t   = sessionStart ? Math.round((mono()-sessionStart)/1000) : 0;
+          dbg('KA t='+t+'s cmp:'+ka.state+' ct='+ct+' tries='+_kaLoadTries+
+              ' L='+(_kaLoaded?'1':'0')+' fb:'+(fb && !fb.paused ? '▶' : '⏸')+' fct='+fct);
+        }
+      }, 3000);
+
+      window.__castOnUnityReady = function(instance) {
+        dbg('Unity READY — flushing '+pendingMsgs.length+' msgs');
+        unityInst = instance;
+        pendingMsgs.forEach(function(m){
+          instance.SendMessage('CastReceiver','OnMessageReceived',m);
+        });
+        pendingMsgs = [];
+        hideSplash();
+      };
+    })();
+
+    // ── Dev test mode (?devtest=1) ────────────────────────────────────────────
+    // Dispara INIT automático sin Cast SDK — solo para testing local en Chrome.
+    // NO afecta producción (el param no estará en la URL de R2).
+    (function() {
+      if (new URLSearchParams(window.location.search).get('devtest') !== '1') return;
+      dbg('DEV MODE: auto-INIT activado');
+      var _devInterval = setInterval(function() {
+        if (!window.unityInstance) return;
+        clearInterval(_devInterval);
+        // Decos de prueba: las 3 anclas + cañón + columna. y≈-3.5 a z=2.5 = suelo
+        // (el suelo sube con la perspectiva 2.5D). Sirve para verificar en local que
+        // ningún material sale magenta tras un build (las anclas eran el caso dudoso).
+        // instanceId DEBE tener formato itemId_N: ParseDecoItemIds deriva la key
+        // de Addressables partiendo por el último '_' (deco_anchor_0 → deco_anchor).
+        var testDecos = { items: [
+          { itemId: 'deco_anchor',           instanceId: 'deco_anchor_0',           position: {x:-5, y:-2.8, z:2.0}, scaleFactor: 1 },
+          { itemId: 'deco_anchor_rust',      instanceId: 'deco_anchor_rust_0',       position: {x:-3, y:-2.8, z:2.0}, scaleFactor: 1 },
+          { itemId: 'deco_anchor_oldrust',   instanceId: 'deco_anchor_oldrust_0',    position: {x:-1, y:-2.8, z:2.0}, scaleFactor: 1 },
+          { itemId: 'deco_coral_corallium',  instanceId: 'deco_coral_corallium_0',   position: {x: 1, y:-2.8, z:2.0}, scaleFactor: 1 },
+          { itemId: 'deco_coral_heliopora',  instanceId: 'deco_coral_heliopora_0',   position: {x: 3, y:-2.8, z:2.0}, scaleFactor: 1 },
+          { itemId: 'deco_coral_distichopora',instanceId: 'deco_coral_distichopora_0',position: {x: 5, y:-2.8, z:2.0}, scaleFactor: 1 }
+        ]};
+        var testState = {
+          activeFish: [{speciesId: 'fish_banggai_cardinalfish', nickname: 'TestFish'}],
+          bgId: 'bg_kelp', subId: 'sub_moss', lightId: 'light_white',
+          ambientMode: 'day', fishSpeed: 1.0, selectedTankId: 'tank_l',
+          decoJson: JSON.stringify(testDecos)
+        };
+        var msg = JSON.stringify({ type: 'INIT', payload: JSON.stringify(testState) });
+        dbg('DEV MODE: sending INIT...');
+        window.unityInstance.SendMessage('CastReceiver', 'OnMessageReceived', msg);
+      }, 500);
+    })();
+
+    // ── Device input (Android TV remote + keyboard shortcuts) ────────────────
+    // Enter / OK button (Android TV remote center) → startle (fish scatter)
+    // F key / MediaPlayPause button                → feed (pellets drop, fish swim to eat)
+    // In devtest mode these are triggered by keyboard so you can test without a TV remote.
+    // Devtest-only UPDATE shortcuts (only active with ?devtest=1):
+    //   A → add_fish (moorish idol)   Z → remove_fish (moorish idol)
+    //   B → change_bg (cycle)         S → change_sub (cycle)
+    (function() {
+      function sendDeviceInput(action) {
+        if (!window.unityInstance) return;
+        dbg('Input: ' + action);
+        window.unityInstance.SendMessage('CastReceiver', 'OnDeviceInput', action);
+      }
+      function sendCastUpdate(type, value) {
+        if (!window.unityInstance) { dbg('Unity not ready for UPDATE'); return; }
+        var payload = JSON.stringify({ type: type, value: value });
+        var msg = JSON.stringify({ type: 'UPDATE', payload: payload });
+        dbg('DEV UPDATE: ' + type + ' = ' + value);
+        window.unityInstance.SendMessage('CastReceiver', 'OnMessageReceived', msg);
+      }
+      var _devBgIdx  = 0;
+      var _devSubIdx = 0;
+      var DEV_BGS  = ['bg_ocean','bg_reef','bg_cave','bg_abyss','bg_sunset','bg_tropical'];
+      var DEV_SUBS = ['sub_sand','sub_gravel','sub_black','sub_coral'];
+      var isDevTest = new URLSearchParams(window.location.search).get('devtest') === '1';
+
+      window.addEventListener('keydown', function(e) {
+        switch (e.keyCode) {
+          case 13:  // Enter → OK button on Android TV remote
+            e.preventDefault();
+            sendDeviceInput('startle');
+            break;
+          case 70:  // F key → feed (devtest convenience + MediaPlayPause fallback)
+          case 179: // MediaPlayPause (some Android TV remotes)
+            e.preventDefault();
+            sendDeviceInput('feed');
+            break;
+          // ── Devtest-only UPDATE shortcuts ─────────────────────────────────
+          case 65:  // A → add moorish idol
+            if (!isDevTest) break;
+            e.preventDefault();
+            sendCastUpdate('add_fish', JSON.stringify({ speciesId: 'fish_moorish_idol', nickname: 'Cast Test' }));
+            break;
+          case 90:  // Z → remove moorish idol
+            if (!isDevTest) break;
+            e.preventDefault();
+            sendCastUpdate('remove_fish', 'fish_moorish_idol');
+            break;
+          case 66:  // B → cycle background
+            if (!isDevTest) break;
+            e.preventDefault();
+            sendCastUpdate('change_bg', DEV_BGS[_devBgIdx++ % DEV_BGS.length]);
+            break;
+          case 83:  // S → cycle substrate
+            if (!isDevTest) break;
+            e.preventDefault();
+            sendCastUpdate('change_sub', DEV_SUBS[_devSubIdx++ % DEV_SUBS.length]);
+            break;
+        }
+      }, false);
+    })();
+    </script>
+
+    <!-- ════════════════════════════════════════════════════════════════════════
+         UNITY LOADER
+         Carga en background mientras la splash está visible.
+         Timeout de 120s — si no termina, muestra error de memoria/red.
+    ════════════════════════════════════════════════════════════════════════ -->
+    <script>
+    if (hasWebGL2 && (isDevTest || !window.__castSdkFailed)) {
+      setSplashStatus('Cargando…');
+      dbg('Starting Unity loader...');
+
+      var canvas    = document.querySelector('#unity-canvas');
+      var buildUrl  = 'Build';
+      var loaderUrl = buildUrl + '/webgl-output.loader.js';
+
+      // Timeout: si Unity no carga en 120s → error con pista de causa
+      var _loadTimeout = setTimeout(function() {
+        showSplashError(
+          '💾',
+          'Este dispositivo necesita más memoria',
+          'El acuario 3D no pudo cargarse.<br>' +
+          'El dispositivo no tiene suficiente memoria RAM o su procesador es demasiado lento ' +
+          'para compilar el motor 3D.',
+          true  // muestra recomendación de dispositivo
+        );
+      }, 120000);
+
+      var config = {
+        arguments:          [],
+        dataUrl:            buildUrl + '/webgl-output.data',
+        frameworkUrl:       buildUrl + '/webgl-output.framework.js',
+        codeUrl:            buildUrl + '/webgl-output.wasm',
+        streamingAssetsUrl: 'StreamingAssets',
+        companyName:        'Appquarium',
+        productName:        'Appquarium',
+        productVersion:     '1.2.1',
+        showBanner:         function(msg, type) {
+          if (type === 'error') dbg('Unity banner ERR: '+msg.substring(0,60));
+        },
+      };
+
+      canvas.style.width  = '100%';
+      canvas.style.height = '100%';
+
+      var script = document.createElement('script');
+      script.src     = loaderUrl;
+      script.onerror = function() {
+        clearTimeout(_loadTimeout);
+        showSplashError(
+          '🌐',
+          'Error de red',
+          'No se pudo descargar el motor 3D.<br>' +
+          'Verifica que el dispositivo tiene conexión a Internet y vuelve a intentarlo.',
+          false
+        );
+      };
+      script.onload = function() {
+        dbg('loader.js OK');
+        var lastPct = 0;
+        createUnityInstance(canvas, config, function(progress) {
+          document.querySelector('#unity-progress-bar-full').style.width = 100*progress+'%';
+          var pct = Math.round(progress * 100);
+          if (pct >= lastPct + 20) {
+            setSplashStatus('Cargando… '+pct+'%', pct);
+            dbg('Unity '+pct+'%');
+            lastPct = pct;
+          }
+        }).then(function(instance) {
+          clearTimeout(_loadTimeout);
+          dbg('Unity loaded ✅');
+          document.querySelector('#unity-fullscreen-button').onclick = function() {
+            instance.SetFullscreen(1);
+          };
+          window.unityInstance = instance;
+          if (window.__castOnUnityReady) window.__castOnUnityReady(instance);
+          else if (isDevTest) hideSplash();
+        }).catch(function(message) {
+          clearTimeout(_loadTimeout);
+          dbg('Unity catch: '+String(message).substring(0,100));
+          var msg  = String(message).toLowerCase();
+          var isOOM = msg.indexOf('memory') !== -1 || msg.indexOf('oom') !== -1
+                   || msg.indexOf('out of') !== -1 || msg.indexOf('range') !== -1;
+          showSplashError(
+            isOOM ? '💾' : '⚠️',
+            isOOM ? 'Memoria insuficiente' : 'Error al cargar',
+            isOOM
+              ? 'El dispositivo no tiene suficiente memoria RAM para el acuario 3D.'
+              : 'No se pudo iniciar el motor 3D.<br><small style="opacity:.6">'+
+                String(message).substring(0,120)+'</small>',
+            isOOM
+          );
+        });
+      };
+      document.body.appendChild(script);
+      dbg('loader.js fetch started');
+    }
+    </script>
+
+    <!-- ════════════════════════════════════════════════════════════════════════
+         FALLBACK WebGL 1 / No WebGL — usa la splash como pantalla de error
+         (La lógica ya está arriba en showSplashError, esto solo configura
+         el mensaje especial de "dispositivo no compatible".)
+    ════════════════════════════════════════════════════════════════════════ -->
+    <script>
+    if (!hasWebGL2) {
+      document.querySelector('#unity-container').style.display = 'none';
+      window.__liteOnMessage = function(){};
+    }
+    </script>
+
+  </body>
+</html>
