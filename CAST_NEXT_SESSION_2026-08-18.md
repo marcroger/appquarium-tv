@@ -90,17 +90,30 @@ el flag no está llegando.
 
 ## 2. Lo que queda
 
-### 2.1 Limpieza de R2 — lista, sin ejecutar
+### 2.1 ~~Limpieza de R2~~ — HECHA
 
-**115 bundles huérfanos = 540,1 MB** de los 642,1 MB del bucket. Vivos: 91 = 102,0 MB
-(25 fish + 54 decos + 11 envs + 1 audio, cuadra clavado con Addressables).
+**540,1 MB liberados.** El bucket pasa de 642,1 a **102,0 MB (−84 %)**, de 206 a **91 bundles**,
+0 huérfanos. Los 91 vivos verificados **uno a uno con HTTP 200** por la URL pública que usa el
+device, y `keepalive_black.mp4` / `silence.wav` / `index.html` / el player intactos.
+
+✅ **Y comprobado EN LA TELE después de borrar**: sesión de 131,7 s completa con 5 peces y 4 decos,
+**9/9 bundles OK**, 4/4 decos colocadas, 0 errores, WASM 64→92 MB, FPS avg 40.
+
+ℹ Control bonito de esa tanda: se metió a propósito una deco **sin optimizar** (`deco_rock_hq_1`) y
+el log dio **exactamente un `FixMat`, el suyo**. Las tres optimizadas no dan ninguno porque sus
+materiales ya son `DecoLit`. **La presencia de `FixMat` discrimina optimizada vs sin optimizar**, y
+la roca se ve igual de bien que las demás: el cambio de formato no se nota.
+
+⚠ Al verificar los 91 por HTTP, el primer intento dio `000` en los 91: era mi propio bucle
+descargando los cuerpos completos (~102 MB) a ráfaga y r2.dev cortando. Con `HEAD` y reintentos,
+91/91 limpios. **Para comprobar muchos objetos: `HEAD`, conexión reutilizada y reintentos.**
+⚠ Y cuidado al contar errores en un log: `grep -i fail` casca 7 falsos positivos porque las líneas
+de estadísticas llevan `fail=0`.
 
 ```bash
-python Tools/r2_huerfanos.py            # informe
+python Tools/r2_huerfanos.py            # informe (ahora da 0)
 python Tools/r2_huerfanos.py --borrar   # pide escribir SI
 ```
-
-Es irreversible (habría que reconstruir los bundles), así que estaba a la espera de decisión.
 
 ### 2.2 Dos decos que quedaron fuera
 
@@ -130,7 +143,9 @@ todas tienen ~100k.
       bundles remotos que ningún código pide.
 - [ ] **Hueco del protocolo (pide tocar el móvil):** editar una deco ya colocada (girar, escalar,
       voltear) no manda ningún UPDATE.
-- [ ] `origin/main` sigue en `4064e61`. **50+ commits locales sin push**, y lo de hoy sin comitear.
+- [ ] `origin/main` sigue en `4064e61`. **50 commits locales sin push** (lo de hoy es `9744ca4`,
+      249 ficheros). ⚠ La rama activa es **`main`**, no `feat/netflix-architecture` como decía la
+      memoria: se mergeó y desde entonces los commits van directos a main.
 - [ ] `supportPointLocal` está sin estrenar en los 54 SOs → si un coral se ve mal apoyado, esa es
       la perilla (el fallback coge el punto más bajo del AABB, que puede ser la punta de una rama).
 
@@ -146,7 +161,7 @@ Copia en git: `Tools/rcv-limpio-2026-08-17.html`.
 |---|---|
 | `.wasm` | 21.661.216 (+1.764 vs 16-ago) |
 | `.data` | 15.941.422 (+3.344) |
-| bundles en R2 | 206 |
+| bundles en R2 | **91** (tras limpiar 115 huérfanos) |
 | LTO / PreflightAudio | `DiskSizeLTO` ✅ / 3 de 3 ✅ |
 
 Marcha atrás en el scratchpad de la sesión: `player-backup-2026-08-16/` (`.wasm` md5
@@ -170,5 +185,9 @@ siguen en R2, así que devolver `StreamingAssets/aa/catalog.bin` revierte las 54
    `StreamingAssets`. Se puede aprovechar: subir bundles y player antes, y accionar al final.
 5. **El umbral de luminancia importa para comparar con el histórico.** El que reproduce las cifras
    de referencia de la estatua (47.426 px / 155,69) es **88**; no estaba anotado y hubo que barrerlo.
-6. **La caja se apaga sola** y el DHCP le mueve la IP (hoy `.34`). El ping no vale; descubrir por
-   8008 + `eureka_info`.
+6. **La caja se apaga sola** (tres veces hoy, pese a `stay_on_while_plugged_in 7`) y el DHCP le
+   mueve la IP. ⚠⚠ **Ni el ping ni el puerto 8008 bastan para identificarla**: el ping falla porque
+   otro cacharro coge la IP libre, y hoy apareció un `192.168.1.40` con el 8008 abierto que era
+   **otro Cast de la casa, «Comedor»**. Hay que leer el nombre:
+   `curl http://IP:8008/setup/eureka_info | grep -i xiaomi`. `cast-run.sh` ya lo hace bien; un
+   escaneo manual por puerto no, y te puede llevar a castear al dispositivo equivocado.
