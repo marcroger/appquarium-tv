@@ -133,7 +133,7 @@ riesgo de magenta, y no se quiso meter en el mismo build que cambiaba 18 decos.
 ### 2.4 💡 Llevar esto al repo MÓVIL (idea del user, 17-ago)
 
 Si el método quita la mitad del peso aquí, en el móvil reduciría el **tamaño de instalación de la
-app**. **El trabajo se haría desde `D:\devppquarium-unity\` con Claude — desde TV NO se toca
+app**. **El trabajo se haría desde `D:\dev\appquarium-unity\` con Claude — desde TV NO se toca
 el repo móvil.**
 
 Aplica porque **la causa es de GLTFast, no de WebGL**: su importador decodifica las texturas
