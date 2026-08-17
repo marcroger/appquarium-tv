@@ -130,14 +130,36 @@ Included** con el patrón de `TvShadowDiag.RegistrarShader()` (`SetDirty` + `Sav
 `SaveAssets` solo NO persiste ProjectSettings). Se aplazó a propósito: shader nuevo de runtime =
 riesgo de magenta, y no se quiso meter en el mismo build que cambiaba 18 decos.
 
-### 2.4 La segunda palanca: las mallas
+### 2.4 💡 Llevar esto al repo MÓVIL (idea del user, 17-ago)
+
+Si el método quita la mitad del peso aquí, en el móvil reduciría el **tamaño de instalación de la
+app**. **El trabajo se haría desde `D:\devppquarium-unity\` con Claude — desde TV NO se toca
+el repo móvil.**
+
+Aplica porque **la causa es de GLTFast, no de WebGL**: su importador decodifica las texturas
+embebidas a RGBA32 y no expone compresión, así que **se salta el override de plataforma sea WebGL
+o Android**. Y los **21 GLB son los mismos** (TV los sincroniza DESDE el móvil).
+
+⚠⚠ **El único cambio obligatorio es el formato: DXT1 es de escritorio/WebGL y NO vale en Android.**
+Hay que poner `SetPlatformTextureSettings(name = "Android")` con **ASTC 6x6/8x8** (recomendado) o
+**ETC2 RGB**. Frente a los 4 byte/píxel de RGBA32 dan un factor de 4,5× a 8×, o sea que **el orden
+de magnitud del ahorro se mantiene**, pero el número exacto hay que medirlo allí.
+
+Se reaprovechan tal cual `Tools/extract_glb_textures.py` (agnóstico de plataforma) y la lógica de
+`TvDecoOptimize`; hay que cambiarle el formato, el shader destino (allí será el URP del juego) y la
+lista de decos. Para medir, el equivalente de los bundles son los packs de **Play Asset Delivery**
+(`assetBundleName`, p. ej. `pack_decos_greek`) y el tamaño del AAB.
+
+Detalle completo, con las comprobaciones para no engañarse: memoria `deco_metodo_portable_a_movil`.
+
+### 2.5 La segunda palanca: las mallas
 
 Ahora hay dato para decidir. Los corales se quedaron en −45/−52 % porque **lo que les queda es
 malla** (fotogrametría). Bajarlas cuesta calidad → decisión del user. ℹ Las mallas de la estatua
 se llamaban `mesh_low_part_XX`, así que conviene **medir triángulos por deco** antes de asumir que
 todas tienen ~100k.
 
-### 2.5 Heredados
+### 2.6 Heredados
 
 - [ ] **Los 11 fondos viajan dos veces**: horneados en el `.data` vía `Resources/` **y** como
       bundles remotos que ningún código pide.
