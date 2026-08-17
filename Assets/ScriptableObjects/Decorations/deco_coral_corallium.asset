@@ -18,7 +18,7 @@ MonoBehaviour:
     joya del mar desde la Antig\xC3\xBCedad."
   category: 1
   placement: 0
-  prefab: {fileID: -6689036041284674117, guid: 18e823dc22024914f8b1ea9279f2efe8, type: 3}
+  prefab: {fileID: 8084512048742354402, guid: 1e019e2189950864aadd7461bd745bb4, type: 3}
   defaultScale: {x: 3, y: 3, z: 3}
   defaultRotationY: 0
   defaultRotationX: -90
@@ -38,8 +38,12 @@ MonoBehaviour:
   hasGlow: 0
   glowColor: {r: 1, g: 1, b: 1, a: 1}
   glowIntensity: 0.8
+  hasBioLuminescence: 0
+  bioGlowIntensity: 1.5
   isMountTarget: 0
   canMountOthers: 1
+  embedDepth: -0.03
+  supportPointLocal: {x: 0, y: 0, z: 0}
   stressReduction: 0.0002
   hungerRateBonus: 0
   generatesBubbles: 0

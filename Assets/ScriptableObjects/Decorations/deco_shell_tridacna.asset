@@ -18,7 +18,7 @@ MonoBehaviour:
     grandes del oc\xC3\xA9ano."
   category: 2
   placement: 0
-  prefab: {fileID: -6689036041284674117, guid: 6064c6c86d38a2f488d86b4b83a0d8ec, type: 3}
+  prefab: {fileID: 7778450272320790220, guid: 784f948a613e9b741bbacf2eb8760715, type: 3}
   defaultScale: {x: 5, y: 5, z: 5}
   defaultRotationY: 0
   defaultRotationX: 0
@@ -38,8 +38,12 @@ MonoBehaviour:
   hasGlow: 0
   glowColor: {r: 1, g: 1, b: 1, a: 1}
   glowIntensity: 0.8
+  hasBioLuminescence: 0
+  bioGlowIntensity: 1.5
   isMountTarget: 1
   canMountOthers: 0
+  embedDepth: -0.03
+  supportPointLocal: {x: 0, y: 0, z: 0}
   stressReduction: 0.0001
   hungerRateBonus: 0
   generatesBubbles: 0

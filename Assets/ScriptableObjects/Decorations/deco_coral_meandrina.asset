@@ -18,7 +18,7 @@ MonoBehaviour:
     de la complejidad de los arrecifes de coral."
   category: 1
   placement: 0
-  prefab: {fileID: -6689036041284674117, guid: 28b5b3c8d59895049a3d2da907a9b0c7, type: 3}
+  prefab: {fileID: 8014498507329164525, guid: f69913a0e6b73fe47a2ee996a7a20194, type: 3}
   defaultScale: {x: 3, y: 3, z: 3}
   defaultRotationY: 0
   defaultRotationX: -90
@@ -38,8 +38,12 @@ MonoBehaviour:
   hasGlow: 0
   glowColor: {r: 1, g: 1, b: 1, a: 1}
   glowIntensity: 0.8
+  hasBioLuminescence: 0
+  bioGlowIntensity: 1.5
   isMountTarget: 0
   canMountOthers: 1
+  embedDepth: -0.03
+  supportPointLocal: {x: 0, y: 0, z: 0}
   stressReduction: 0.00015
   hungerRateBonus: 0
   generatesBubbles: 0

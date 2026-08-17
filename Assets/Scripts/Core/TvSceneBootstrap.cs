@@ -265,6 +265,11 @@ public class TvSceneBootstrap : MonoBehaviour
             }
         }
 
+        // Trasvasar del catálogo JSON los campos que los SOs de los bundles no traen
+        // (`hasBioLuminescence`). Sin esto la bioluminiscencia es código muerto: ninguno de los
+        // 54 SOs tiene el flag. Ver `TvDecoCatalogPatch` y la memoria `pending_biolum`.
+        TvDecoCatalogPatch.Aplicar(decoData);
+
         int fishFailed = fishHandles.Count - fishData.Count;
         int decoFailed = decoHandles.Count - decoData.Count;
         Debug.Log($"[TvScene] Assets loaded — fish:{fishData.Count}/{fishHandles.Count} decos:{decoData.Count}/{decoHandles.Count}");
@@ -557,6 +562,8 @@ public class TvSceneBootstrap : MonoBehaviour
                 yield break;
             }
             data = h.Result;
+            // Los SOs de los bundles no traen `hasBioLuminescence` (ver TvDecoCatalogPatch).
+            TvDecoCatalogPatch.AplicarA(data);
             if (!_runtimeDecoHandles.ContainsKey(payload.itemId))
             {
                 _runtimeDecoHandles[payload.itemId] = h;

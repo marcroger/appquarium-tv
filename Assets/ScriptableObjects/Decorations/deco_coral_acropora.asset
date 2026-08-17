@@ -18,7 +18,7 @@ MonoBehaviour:
     Sus ramas finas crean un laberinto de refugios."
   category: 1
   placement: 0
-  prefab: {fileID: -6689036041284674117, guid: 01f5086213dd9254686ccbe742e97e49, type: 3}
+  prefab: {fileID: 6116734373916120209, guid: 11d421e76f0d37c479026ec56acc38ef, type: 3}
   defaultScale: {x: 10, y: 10, z: 10}
   defaultRotationY: -50
   defaultRotationX: -70
@@ -38,8 +38,12 @@ MonoBehaviour:
   hasGlow: 0
   glowColor: {r: 1, g: 1, b: 1, a: 1}
   glowIntensity: 0.8
+  hasBioLuminescence: 0
+  bioGlowIntensity: 1.5
   isMountTarget: 0
   canMountOthers: 1
+  embedDepth: -0.03
+  supportPointLocal: {x: 0, y: 0, z: 0}
   stressReduction: 0.0001
   hungerRateBonus: 0
   generatesBubbles: 0

@@ -18,7 +18,7 @@ MonoBehaviour:
     es \xC3\xBAnico entre los corales del arrecife."
   category: 1
   placement: 0
-  prefab: {fileID: -6689036041284674117, guid: e1d87e618bb42984fa03c7deffa1d44b, type: 3}
+  prefab: {fileID: 3327120290112626895, guid: cde058a972b92d349b34763207bff16b, type: 3}
   defaultScale: {x: 6, y: 6, z: 6}
   defaultRotationY: -20
   defaultRotationX: -90
@@ -38,8 +38,12 @@ MonoBehaviour:
   hasGlow: 0
   glowColor: {r: 1, g: 1, b: 1, a: 1}
   glowIntensity: 0.8
+  hasBioLuminescence: 0
+  bioGlowIntensity: 1.5
   isMountTarget: 0
   canMountOthers: 1
+  embedDepth: -0.03
+  supportPointLocal: {x: 0, y: 0, z: 0}
   stressReduction: 0.0002
   hungerRateBonus: 0
   generatesBubbles: 0

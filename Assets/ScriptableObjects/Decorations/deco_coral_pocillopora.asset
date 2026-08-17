@@ -18,7 +18,7 @@ MonoBehaviour:
     decenas de especies.
   category: 1
   placement: 0
-  prefab: {fileID: -6689036041284674117, guid: 447dabd1ab98bb24a9aabffbf4a0cfde, type: 3}
+  prefab: {fileID: 4162491848902030890, guid: 1d2c9f3fe8ef8864aa305a25435134f9, type: 3}
   defaultScale: {x: 7, y: 7, z: 7}
   defaultRotationY: 10
   defaultRotationX: -90
@@ -38,8 +38,12 @@ MonoBehaviour:
   hasGlow: 0
   glowColor: {r: 1, g: 1, b: 1, a: 1}
   glowIntensity: 0.8
+  hasBioLuminescence: 0
+  bioGlowIntensity: 1.5
   isMountTarget: 0
   canMountOthers: 1
+  embedDepth: -0.03
+  supportPointLocal: {x: 0, y: 0, z: 0}
   stressReduction: 0.0001
   hungerRateBonus: 0
   generatesBubbles: 0

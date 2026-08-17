@@ -18,7 +18,7 @@ MonoBehaviour:
     mundo. Una rareza viva del Pac\xC3\xADfico."
   category: 1
   placement: 0
-  prefab: {fileID: -6689036041284674117, guid: fad95cd9d1e1ab6438e77fca3dc54bed, type: 3}
+  prefab: {fileID: 7838752412849815759, guid: 36e7abbc86683264eb4724614ee48b59, type: 3}
   defaultScale: {x: 3, y: 3, z: 3}
   defaultRotationY: 0
   defaultRotationX: 0
@@ -38,8 +38,12 @@ MonoBehaviour:
   hasGlow: 0
   glowColor: {r: 1, g: 1, b: 1, a: 1}
   glowIntensity: 0.8
+  hasBioLuminescence: 0
+  bioGlowIntensity: 1.5
   isMountTarget: 0
   canMountOthers: 1
+  embedDepth: -0.03
+  supportPointLocal: {x: 0, y: 0, z: 0}
   stressReduction: 0.00015
   hungerRateBonus: 0
   generatesBubbles: 0

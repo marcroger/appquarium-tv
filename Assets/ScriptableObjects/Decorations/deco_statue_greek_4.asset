@@ -18,7 +18,7 @@ MonoBehaviour:
     piedra caliza.
   category: 4
   placement: 0
-  prefab: {fileID: -6689036041284674117, guid: 8c29a80c7191dc4408605a9cea493b6e, type: 3}
+  prefab: {fileID: 8171731079100724399, guid: 00171c6f82de9424381d61412049f024, type: 3}
   defaultScale: {x: 2.5, y: 2.5, z: 2.5}
   defaultRotationY: 180
   defaultRotationX: -90
@@ -38,8 +38,12 @@ MonoBehaviour:
   hasGlow: 0
   glowColor: {r: 1, g: 1, b: 1, a: 1}
   glowIntensity: 0.8
+  hasBioLuminescence: 0
+  bioGlowIntensity: 1.5
   isMountTarget: 1
   canMountOthers: 0
+  embedDepth: -0.03
+  supportPointLocal: {x: 0, y: 0, z: 0}
   stressReduction: 0.00005
   hungerRateBonus: 0
   generatesBubbles: 0

@@ -18,7 +18,7 @@ MonoBehaviour:
     y la est\xC3\xA9tica de la Atl\xC3\xA1ntida."
   category: 4
   placement: 0
-  prefab: {fileID: -6689036041284674117, guid: 9c890d95d52402447b36a09c5d4a9e93, type: 3}
+  prefab: {fileID: 1227958590601861428, guid: 6ca8460901280ef46a891281a6604e13, type: 3}
   defaultScale: {x: 0.007, y: 0.007, z: 0.007}
   defaultRotationY: 0
   defaultRotationX: -90
@@ -38,8 +38,12 @@ MonoBehaviour:
   hasGlow: 0
   glowColor: {r: 1, g: 1, b: 1, a: 1}
   glowIntensity: 0.8
+  hasBioLuminescence: 0
+  bioGlowIntensity: 1.5
   isMountTarget: 1
   canMountOthers: 0
+  embedDepth: -0.03
+  supportPointLocal: {x: 0, y: 0, z: 0}
   stressReduction: 0.0001
   hungerRateBonus: 0
   generatesBubbles: 0

@@ -18,7 +18,7 @@ MonoBehaviour:
     m\xC3\xA1s valoradas por coleccionistas."
   category: 2
   placement: 0
-  prefab: {fileID: -6689036041284674117, guid: fc9d61902ac07f645b9498ff5f5b58aa, type: 3}
+  prefab: {fileID: 2461540372976919793, guid: 8fc65fb25528db849adbe328a368ce42, type: 3}
   defaultScale: {x: 9, y: 9, z: 9}
   defaultRotationY: 0
   defaultRotationX: 0
@@ -38,8 +38,12 @@ MonoBehaviour:
   hasGlow: 0
   glowColor: {r: 1, g: 1, b: 1, a: 1}
   glowIntensity: 0.8
+  hasBioLuminescence: 0
+  bioGlowIntensity: 1.5
   isMountTarget: 0
   canMountOthers: 1
+  embedDepth: -0.03
+  supportPointLocal: {x: 0, y: 0, z: 0}
   stressReduction: 0.00005
   hungerRateBonus: 0
   generatesBubbles: 0

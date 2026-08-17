@@ -1,0 +1,3 @@
+part_03_SG=0
+part_02_SG=1
+part_01_SG=2

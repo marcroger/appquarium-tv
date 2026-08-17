@@ -1,0 +1,2 @@
+part_02SG=0
+part_01SG=1

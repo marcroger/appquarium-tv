@@ -18,7 +18,7 @@ MonoBehaviour:
     civilizaciones perdidas."
   category: 4
   placement: 0
-  prefab: {fileID: -6689036041284674117, guid: b6cdaa882cf2a544785c35d84716cf79, type: 3}
+  prefab: {fileID: 7435694284834935709, guid: 3277e33c26261e347ae1031e31a332cb, type: 3}
   defaultScale: {x: 0.054, y: 0.054, z: 0.054}
   defaultRotationY: 180
   defaultRotationX: -90
@@ -38,8 +38,12 @@ MonoBehaviour:
   hasGlow: 0
   glowColor: {r: 1, g: 1, b: 1, a: 1}
   glowIntensity: 0.8
+  hasBioLuminescence: 0
+  bioGlowIntensity: 1.5
   isMountTarget: 1
   canMountOthers: 0
+  embedDepth: -0.03
+  supportPointLocal: {x: 0, y: 0, z: 0}
   stressReduction: 0.00005
   hungerRateBonus: 0
   generatesBubbles: 0

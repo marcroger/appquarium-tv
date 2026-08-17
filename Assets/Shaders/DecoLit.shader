@@ -22,6 +22,15 @@ Shader "Appquarium/DecoLit"
         _Color     ("Color", Color)      = (1,1,1,1)
         _Brightness("Brightness", Float) = 1.0
         _Ambient   ("Ambient", Range(0,1)) = 0.32
+        // ⚠ 2026-08-17 — SIN ESTA PROPIEDAD LA BIOLUMINISCENCIA ERA CÓDIGO MUERTO.
+        // `DecorationPlacer` recoge los materiales de un coral filtrando por
+        // `mat.HasProperty("_EmissionColor")` (línea ~413) y, como ningún shader del proyecto
+        // la declaraba, la lista salía vacía. Y la luz puntual se crea DENTRO del
+        // `if (mats.Count > 0)`, así que tampoco se creaba: cero efecto por dos vías.
+        // Medido en la tele el 2026-08-17: el coral no variaba (−0,2 %) mientras el agua
+        // caía un 42 % al pasar a noche. Ver la memoria `pending_biolum`.
+        // Negro = sin cambio, así que es inocua para las 48 decos que no la usan.
+        [HDR] _EmissionColor ("Emission Color (HDR)", Color) = (0,0,0,0)
     }
     SubShader
     {
@@ -57,6 +66,9 @@ Shader "Appquarium/DecoLit"
             fixed4    _Color;
             float     _Brightness;
             float     _Ambient;
+            // float4, no fixed4: la emisión llega en HDR (tintColor × 1,125 con los valores
+            // por defecto), y fixed4 la recortaría a 1,0 justo donde empieza a notarse.
+            float4    _EmissionColor;
 
             v2f vert(appdata v)
             {
@@ -85,7 +97,14 @@ Shader "Appquarium/DecoLit"
                 float  hemi = saturate(N.y * 0.5 + 0.5);          // 1 arriba, 0 abajo
                 float  amb  = _Ambient * lerp(0.5, 1.3, hemi);
                 float  lite = saturate(amb + (1.0 - _Ambient) * ndl);
-                fixed3 col  = tex.rgb * lite * _Brightness;
+                float3 col  = tex.rgb * lite * _Brightness;
+
+                // Emisión aditiva: se suma DESPUÉS de la iluminación a propósito, para que el
+                // coral siga brillando aunque esté en la cara en sombra. `DecorationPlacer`
+                // pone aquí tintColor × bioGlowIntensity × BioLumEmissionScale × strength,
+                // con strength animado 0→1 por `FadeBioLum` al pasar a noche.
+                col += _EmissionColor.rgb;
+
                 return fixed4(col, 1.0); // forzar opaco
             }
             ENDCG

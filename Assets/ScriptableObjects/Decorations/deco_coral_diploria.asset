@@ -18,7 +18,7 @@ MonoBehaviour:
     siglos en el fondo marino.
   category: 1
   placement: 0
-  prefab: {fileID: -6689036041284674117, guid: 3678b65d671bf5243875479ab8195a64, type: 3}
+  prefab: {fileID: 7174407200237387304, guid: 78667b5e071f42d4f8b0c9b2130a7f86, type: 3}
   defaultScale: {x: 12, y: 12, z: 12}
   defaultRotationY: 0
   defaultRotationX: -90
@@ -38,8 +38,12 @@ MonoBehaviour:
   hasGlow: 0
   glowColor: {r: 1, g: 1, b: 1, a: 1}
   glowIntensity: 0.8
+  hasBioLuminescence: 0
+  bioGlowIntensity: 1.5
   isMountTarget: 0
   canMountOthers: 1
+  embedDepth: -0.03
+  supportPointLocal: {x: 0, y: 0, z: 0}
   stressReduction: 0.0001
   hungerRateBonus: 0
   generatesBubbles: 0
