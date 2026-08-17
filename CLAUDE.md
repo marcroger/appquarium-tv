@@ -32,6 +32,7 @@ El móvil envía el estado del tanque vía Google Cast SDK; este proyecto **rend
 
 | Doc | Cuándo |
 |---|---|
+| [`CAST_NEXT_SESSION_2026-08-18.md`](CAST_NEXT_SESSION_2026-08-18.md) | ⭐⭐ **EMPEZAR AQUÍ.** Estado al cierre del 17-ago, pendientes reales y las trampas de medición aprendidas. |
 | [`CAST_UPDATES.md`](CAST_UPDATES.md) | ⭐ Protocolo UPDATE en tiempo real — tipos, payloads, gestión memoria, calls mobile pendientes. |
 | [`CAST_NETFLIX_SPEC.md`](CAST_NETFLIX_SPEC.md) | Spec ejecutable para Fase A.1 — contrato del refactor Netflix. 10 secciones. |
 | [`BUILD_REPORT_2026-05-25.md`](BUILD_REPORT_2026-05-25.md) | Diagnóstico del build de 411MB + análisis duplicación. |
@@ -117,10 +118,22 @@ en TV va recortado a un bucle de 60 s en mono con crossfade (~0,8 MB en el build
 
 ## Build pipeline (resumen)
 
-### Estado actual — 2026-08-15 ⭐
+### Estado actual — 2026-08-17 ⭐
 
-En R2: `.data` = **16,9 MB** | `.wasm` = **25,4 MB** | receiver limpio (sello `rcv 2026-08-15 visual`).
-**Validado en el Xiaomi TV Box S el 2026-08-15**, con acuario real y sin reiniciar la caja:
+En R2: `.data` = **15,94 MB** | `.wasm` = **21,66 MB** | receiver limpio (sello `rcv 2026-08-17 decos`).
+Bundles: **91 en R2, 102,0 MB** (206 en local; los 115 huérfanos de builds viejos se borraron
+el 17-ago). Todo validado en el Xiaomi TV Box S ese mismo día.
+
+**Decos: 149,8 → 75,15 MB (−49,8 %)** tras pasar 18 de ellas a texturas DXT1 sueltas
+(ver `CAST_NEXT_SESSION_2026-08-18.md` §1.2). Estatuas y columnas bajan −70/−78 %; corales y
+conchas sólo −45/−52 %, porque **lo que les queda es malla** — ésa es la segunda palanca y cuesta
+calidad. **Bioluminiscencia arreglada y midiendo +20,7 %** de luminancia absoluta en el coral.
+
+Cómo optimizar una deco nueva: `python Tools/extract_glb_textures.py <glb>` y luego
+`Appquarium TV → 🗜 Optimizar deco seleccionada` (o el lote). ⚠ La señal de que el prefab
+optimizado se está usando es que **NO aparece ningún `FixMat`** sobre esa deco en el log.
+
+**Histórico — validado el 2026-08-15**, con acuario real y sin reiniciar la caja:
 
 | | 12 peces + 6 decos | 25 peces + 6 decos |
 |---|---|---|
@@ -129,10 +142,12 @@ En R2: `.data` = **16,9 MB** | `.wasm` = **25,4 MB** | receiver limpio (sello `r
 | Memoria libre del sistema | — | 19 % (banda estable validada: 22-24 %; peligro ~10 %) |
 | Sesión | 900 s, 0 cortes | 420 s, 0 cortes |
 
-Sale a **~4,5 MB y ~0,6 fps por pez**. El techo no son los peces: **una deco cuesta 8-13 MB**.
+Sale a **~4,5 MB y ~0,6 fps por pez**. ⚠ Ese cuadro decía «una deco cuesta 8-13 MB»: **ya no**.
+Tras la optimización del 17-ago una deco va de **1,3 a 4,5 MB** (media 1,4 MB en las 18 tocadas),
+así que **los peces y las decos ya pesan parecido** y el «techo son las decos» dejó de ser cierto.
 Sombras de decos y de peces **visibles y medidas** (ancla −106 de contraste, roca −130, pez −22).
 
-⚠ El `.wasm` de 25,4 MB depende de `Code Optimization = DiskSizeLTO`, que **no está en git**
+⚠ El `.wasm` depende de `Code Optimization = DiskSizeLTO`, que **no está en git**
 (vive en `Library/EditorUserBuildSettings.asset`). `TvProdBuild.BuildProd` lo fuerza por código;
 si construyes por GUI, comprobarlo antes con `Appquarium TV → 📏 Ver Code Optimization del WASM`.
 
@@ -184,19 +199,18 @@ Ver `BUILD_REPORT_2026-05-28.md` para histórico de la Fase A.1.
 | Maximum Memory Size | 512 MB |
 | Memory Growth Mode | Geometric (0.2 step, 96 MB cap) |
 | Strip Engine Code | ON |
-| Managed Stripping Level | **Minimal** (`WebGL: 4`) ⚠ el doc decía High — era falso |
+| Managed Stripping Level | **High** (`WebGL: 3`) — verificado en `ProjectSettings.asset:919` |
 | IL2CPP Code Generation | **OptimizeSize** |
 
-> **⚠ 2026-08-15 — CORREGIDO: el nivel real es `Minimal`, no High.** `ProjectSettings.asset:919`
-> → `managedStrippingLevel: { WebGL: 4 }`, y en el enum de Unity 4 = Minimal (High es 3).
-> Comprobado además en el output del linker del build del 12-ago: `Unity.Addressables.dll`
-> pesa lo mismo antes y después de strippear (0 % de reducción), que es exactamente lo que
-> hace Minimal — copiar los ensamblados sin tocarlos.
+> **✅ 2026-08-16 — HECHO Y VALIDADO: subido de `Minimal` a `High`.** El `.wasm` bajó de 25,4 a
+> **21,7 MB (−14,8 %)**, sin `TypeLoadException` y sin nada roto visualmente en la tele.
+> `Assets/link.xml` preserva los tipos de URP que High podría romper.
 >
-> **Oportunidad pendiente:** subirlo a High (`3`) reduciría el `.wasm`, y el tamaño del `.wasm`
-> es la causa raíz confirmada de los cortes de sesión. `Assets/link.xml` ya preserva los tipos
-> de URP que High podría romper. Requiere rebuild (~55 min) + revalidación en la tele, y el
-> riesgo clásico es `TypeLoadException` en runtime. No hacerlo a la ligera, pero está sobre la mesa.
+> ⚠ **Historia, para que no se repita:** este doc afirmó durante meses que era High cuando el
+> valor real era `Minimal` (`WebGL: 4`, y en el enum de Unity 4 = Minimal, High es 3). Se descubrió
+> el 15-ago mirando el output del linker: `Unity.Addressables.dll` pesaba lo mismo antes y después
+> de strippear. **Ahora está en `ProjectSettings` (versionado) Y forzado por código en
+> `TvProdBuild` antes de construir**, así que no depende de que nadie se acuerde.
 
 ### Comandos clave
 
@@ -309,14 +323,14 @@ print('OK index.html')
 
 | Carpeta | Contenido |
 |---|---|
-| `Assets/Scripts/Core/` | AquariumManager (slim), AmbientModeController, AquariumCameraController, AudioManager, CastReceiver, CastDataTypes, FishSpawner, FoodItem, PostProcessingSetup, **TvSceneBootstrap** ⭐, **TvFoodManager** |
+| `Assets/Scripts/Core/` | AquariumManager (slim), AmbientModeController, AquariumCameraController, AudioManager, CastReceiver, CastDataTypes, FishSpawner, FoodItem, PostProcessingSetup, **TvSceneBootstrap** ⭐, **TvFoodManager**, **TvDecoCatalogPatch** (trasvasa `hasBioLuminescence` del JSON a los SOs — sin esto la biolum es código muerto) |
 | `Assets/Scripts/Fish/` | FishAgent, FishBrain, SteeringController, NeedsModule, FishProceduralAnimator (sync mobile) |
 | `Assets/Scripts/Tank/` | TankController, DecorationPlacer, BubbleSystem, TankBackground, TankLightingController, WaterSurface (sync mobile) |
 | `Assets/Scripts/Data/` | FishData, DecorationData, TankData (sync mobile) |
 | `Assets/Scripts/Utils/` | AppFlags, AppVersion, CatalogLoader (sync mobile) |
 | `Assets/Scripts/Stubs/` | TvStubs (stubs para clases mobile-only referenciadas indirectamente) |
-| `Assets/Editor/` | TvAddressablesSetup, TvBuildTools, SyncFromMobileMenu, **TvBuildPostprocess** (parchea settings.json tras cada build), **TvProdBuild** ⭐ (build de producción en batchmode + preflight de audio), **TvWasmOptimize** ⭐ (fuerza `DiskSizeLTO` en cualquier build), TvEmptyTestBuild, TvShadowDiag |
-| `Tools/` | ~30 ficheros. Los que importan: **SyncFromMobile.ps1**, **cast-headless.js** (sender sin navegador), **cast-run.sh** (ciclo de medición completo), **restore-production-receiver.sh**, y los `rcv-*.html` (receivers de diagnóstico). ⚠ Varios escriben en R2 de producción. |
+| `Assets/Editor/` | TvAddressablesSetup, TvBuildTools, SyncFromMobileMenu, **TvBuildPostprocess** (parchea settings.json tras cada build), **TvProdBuild** ⭐ (build de producción en batchmode + preflight de audio), **TvWasmOptimize** ⭐ (fuerza `DiskSizeLTO` en cualquier build), TvEmptyTestBuild, TvShadowDiag, **TvDecoOptimize** ⭐ (pasa una deco a texturas DXT1 sueltas: −49,8 % de peso medido) |
+| `Tools/` | ~30 ficheros. Los que importan: **SyncFromMobile.ps1**, **cast-headless.js** (sender sin navegador), **cast-run.sh** (ciclo de medición completo), **restore-production-receiver.sh**, **extract_glb_textures.py** (saca las texturas embebidas de un GLB + `mapeo.txt`, paso previo a `TvDecoOptimize`), **r2_huerfanos.py** (lista/borra bundles huérfanos de R2), y los `rcv-*.html` (receivers de diagnóstico). ⚠ Varios escriben en R2 de producción. |
 
 ---
 
@@ -325,6 +339,14 @@ print('OK index.html')
 - **Receiver Published** App ID `8F6C873F` — funciona en cualquier device sin registrar Cast Console
 - **Cast SDK timeout = 30s** desde "Connecting…" hasta receiver READY. Sin esto la sesión aborta.
 - **Xiaomi TV Box S** como `MiTV-AFMU0` en LAN. Cast SDK 3.72.446070.
+  - ⚠⚠ **Para encontrarla: ni el ping ni el puerto 8008 bastan.** El DHCP le mueve la IP y **la
+    caja se apaga sola** (3 veces el 17-ago pese a `stay_on_while_plugged_in 7`). El ping falla
+    porque otro cacharro coge la IP libre; y el 8008 tampoco vale: hay **otro Cast en la casa**
+    («Comedor») con el puerto abierto. Hay que leer el nombre:
+    `curl http://IP:8008/setup/eureka_info | grep -i xiaomi`. `cast-run.sh` ya lo hace bien.
+  - ⚠ **El receiver sobrevive al sender:** si lanzas una tanda con el receiver aún vivo, hereda su
+    cuenta atrás y muere a los pocos segundos (se ve porque el reloj `RCV` arranca alto).
+    Hacer `node Tools/cast-headless.js --stop --ip <IP>` antes de cada tanda.
 - **`ctx.start()` — parámetros correctos:** `{ disableIdleTimeout: true, maxInactivity: 3600 }`
   - `disableIdleTimeout: true` — no shutdown cuando 0 senders conectados
   - `maxInactivity: 3600` — no desconectar sender "inactivo". ⚠ El SDK **rechaza valores ≤ 5** con error en runtime. Usar 3600 (1h) como "nunca".
@@ -352,8 +374,13 @@ print('OK index.html')
 | `Audio_Remote` | PackSeparately | 1 clip (`ambient_music`) | 1 |
 | `Default Local Group` | PackTogether | scaffolding | 1 |
 
-Total: **186 bundles en local, 188 claves en R2** (fish×25 + decos×54 + envs×11 + audio×1 +
-duplicados de builds anteriores que nadie ha limpiado). El catalog apunta siempre al correcto.
+Total vivo: **91 bundles = 25 fish + 54 decos + 11 envs + 1 audio**, y en R2 ocupan **102,0 MB**.
+Ese 91 cuadra clavado con la tabla, así que es la comprobación rápida de que no falta nada.
+⚠ En local hay **206** `.bundle`: los sobrantes son huérfanos de builds anteriores. **Para medir
+tamaños hay que filtrar por los hashes que aparecen dentro de `catalog.bin`** — `ls -S` coge el
+mayor por nombre, que suele ser un huérfano, y así salieron ya dos cifras falsas (los «375 MB de
+decos» y un «−83,8 %»). En R2 se limpian con `python Tools/r2_huerfanos.py --borrar` (informe por
+defecto; compara contra el catálogo bajado **de R2**, no el local).
 ⚠ Falta en esta tabla el grupo **`Shared_Local`** (7 entradas, PackTogether, rutas locales),
 que es el grupo local de verdad; `Default Local Group` tiene 0 entradas y no produce bundle.
 
