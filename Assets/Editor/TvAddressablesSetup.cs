@@ -29,7 +29,9 @@ public static class TvAddressablesSetup
         // ── Groups ────────────────────────────────────────────────────────────
         var fishGroup  = GetOrCreateRemoteGroup(settings, "Fish_Remote");
         var decoGroup  = GetOrCreateRemoteGroup(settings, "Decos_Remote");
-        var envGroup   = GetOrCreateRemoteGroup(settings, "Environments_Remote");
+        // El grupo se sigue creando aunque ya no reciba entradas: existe en disco, tiene sus
+        // schemas y un grupo vacio no produce bundle (igual que `Default Local Group`).
+        GetOrCreateRemoteGroup(settings, "Environments_Remote");
         var audioGroup = GetOrCreateRemoteGroup(settings, "Audio_Remote");
 
         // ── Fish SOs ──────────────────────────────────────────────────────────
@@ -59,16 +61,21 @@ public static class TvAddressablesSetup
         }
 
         // ── Background textures ───────────────────────────────────────────────
+        // NOTE (2026-08-18): los 11 fondos YA NO se hacen addressables. Viajaban DOS veces
+        // --horneados en el .data via Assets/Resources/Backgrounds/ y ademas como 11 bundles
+        // remotos-- y esos bundles no los pedia NADIE: la unica ruta de carga en runtime es
+        // Resources.Load<Texture2D>("Backgrounds/" + bgId), tanto en el arranque
+        // (TankBackground.cs:296) como en el UPDATE change_bg (TankBackground.cs:207).
+        // Verificado: TvSceneBootstrap solo hace LoadAssetAsync de FishData y DecorationData.
+        //
+        // Medido antes de quitarlos: los 11 bundles pesaban 0,52 MB en R2 (peso muerto puro,
+        // nunca descargado). La copia del .data son ~0,7 MB y SI se usa, asi que se queda.
+        //
+        // ⚠ Este bucle es el motivo por el que no bastaba con borrar las entradas del grupo:
+        // las volvia a crear en el siguiente `★ Setup Addressables`. Para deshacer el cambio
+        // hay que restaurar este bucle, no solo re-anadir las entradas a mano.
+        // Para limpiar las que ya existan: `★ Prune Environments_Remote (fondos muertos)`.
         int bgCount = 0;
-        var bgGuids = AssetDatabase.FindAssets("t:Texture2D",
-            new[] { "Assets/Resources/Backgrounds" });
-        foreach (var guid in bgGuids)
-        {
-            var path    = AssetDatabase.GUIDToAssetPath(guid);
-            var address = Path.GetFileNameWithoutExtension(path);
-            SetAddress(settings, guid, address, envGroup);
-            bgCount++;
-        }
 
         // ── Substrate textures ────────────────────────────────────────────────
         // NOTE: Substrate textures are intentionally NOT added as addressables.
@@ -98,7 +105,7 @@ public static class TvAddressablesSetup
         Debug.Log($"[TvAddressables] ✅ Setup complete:\n" +
                   $"  Fish:        {fishCount} SOs → Fish_Remote\n" +
                   $"  Decos:       {decoCount} SOs → Decos_Remote\n" +
-                  $"  Backgrounds: {bgCount} → Environments_Remote\n" +
+                  $"  Backgrounds: {bgCount} → Environments_Remote (0 a proposito: van por Resources)\n" +
                   $"  Substrates:  {subCount} → Environments_Remote\n" +
                   $"  Audio:       {audioCount} → Audio_Remote\n\n" +
                   $"Next: Window → Asset Management → Addressables → Groups → Build → New Build → Default Build Script");
@@ -132,7 +139,7 @@ public static class TvAddressablesSetup
         AssetDatabase.SaveAssets();
 
         Debug.Log($"[TvAddressables] ✅ Removed {toRemove.Count} substrate texture duplicates from Environments_Remote. " +
-                  $"Remaining entries: {envGroup.entries.Count} (should be 11 backgrounds).");
+                  $"Remaining entries: {envGroup.entries.Count} (desde el 2026-08-18 deberian ser 0: los fondos van por Resources).");
     }
 
     [MenuItem("Appquarium TV/★ Fix Bundle Mode (PackTogether)")]
@@ -417,6 +424,63 @@ public static class TvAddressablesSetup
         }
 
         return group;
+    }
+
+    // ── Fondos: quitar las entradas muertas ───────────────────────────────────
+
+    [MenuItem("Appquarium TV/★ Prune Environments_Remote (fondos muertos)")]
+    public static void PruneEnvironments() => PruneEnvironments(preguntar: true);
+
+    /// Entrada para batchmode (`-executeMethod TvAddressablesSetup.PruneEnvironmentsBatch`).
+    public static void PruneEnvironmentsBatch() => PruneEnvironments(preguntar: false);
+
+    /// <summary>
+    /// Borra del grupo `Environments_Remote` las entradas de Assets/Resources/Backgrounds/.
+    /// Esos 11 bundles (0,52 MB en R2, medido el 2026-08-18) no los descargaba nadie: los fondos
+    /// se cargan SIEMPRE por `Resources.Load` (ver la nota en `SetupAddressables`). Reversible:
+    /// restaurar el bucle de fondos en `SetupAddressables` y volver a ejecutarlo.
+    ///
+    /// ⚠ Deja el grupo VACIO a proposito en vez de borrarlo: un grupo sin entradas no produce
+    /// bundle, y asi el .asset y sus schemas siguen versionados por si hay que volver atras.
+    /// </summary>
+    private static void PruneEnvironments(bool preguntar)
+    {
+        var settings = AddressableAssetSettingsDefaultObject.Settings;
+        if (settings == null) { Debug.LogError("[TvAddressables] No hay settings de Addressables."); return; }
+
+        var envGroup = settings.FindGroup("Environments_Remote");
+        if (envGroup == null) { Debug.LogWarning("[TvAddressables] No existe Environments_Remote."); return; }
+
+        // Filtrar por RUTA, no por el grupo entero: si algun dia entra ahi otra cosa que si se
+        // pida por Addressables, este menu no debe llevarsela por delante.
+        var aBorrar = new List<AddressableAssetEntry>();
+        foreach (var entry in envGroup.entries)
+        {
+            var ruta = AssetDatabase.GUIDToAssetPath(entry.guid);
+            if (!string.IsNullOrEmpty(ruta) && ruta.StartsWith("Assets/Resources/Backgrounds/"))
+                aBorrar.Add(entry);
+        }
+
+        if (aBorrar.Count == 0)
+        { Debug.Log("[TvAddressables] Environments_Remote ya no tiene fondos. Nada que hacer."); return; }
+
+        if (preguntar && !EditorUtility.DisplayDialog("Quitar fondos de Addressables",
+                $"Se van a quitar {aBorrar.Count} fondos de Environments_Remote.\n\n" +
+                "Se cargan por Resources.Load, asi que sus bundles son peso muerto en R2.\n" +
+                "Requiere ★ New Build + deploy del catalogo para que R2 lo refleje.\n\n¿Seguir?",
+                "Quitar", "Cancelar")) return;
+
+        foreach (var entry in aBorrar)
+            settings.RemoveAssetEntry(entry.guid, false);
+
+        EditorUtility.SetDirty(envGroup);
+        EditorUtility.SetDirty(settings);
+        AssetDatabase.SaveAssets();
+
+        Debug.Log($"[TvAddressables] ✅ Quitados {aBorrar.Count} fondos de Environments_Remote. " +
+                  $"Quedan {envGroup.entries.Count} entradas (deberian ser 0).\n" +
+                  "Siguiente: ★ New Build y subir bundles + catalog. Los .bundle viejos de los " +
+                  "fondos quedan huerfanos en R2: limpiarlos con `python Tools/r2_huerfanos.py --borrar`.");
     }
 
     private static void SetAddress(

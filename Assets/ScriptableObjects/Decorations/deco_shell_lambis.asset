@@ -18,7 +18,7 @@ MonoBehaviour:
     del fondo marino tropical."
   category: 2
   placement: 0
-  prefab: {fileID: -6689036041284674117, guid: 1e9d2b8dae2112d45bd5cdb67f26319f, type: 3}
+  prefab: {fileID: 9198509488267753358, guid: 1ff79458fc51ab64d8d1361c5655dfcd, type: 3}
   defaultScale: {x: 13, y: 13, z: 13}
   defaultRotationY: 0
   defaultRotationX: 0
@@ -38,8 +38,12 @@ MonoBehaviour:
   hasGlow: 0
   glowColor: {r: 1, g: 1, b: 1, a: 1}
   glowIntensity: 0.8
+  hasBioLuminescence: 0
+  bioGlowIntensity: 1.5
   isMountTarget: 0
   canMountOthers: 1
+  embedDepth: -0.03
+  supportPointLocal: {x: 0, y: 0, z: 0}
   stressReduction: 0.00005
   hungerRateBonus: 0
   generatesBubbles: 0

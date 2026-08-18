@@ -118,16 +118,25 @@ en TV va recortado a un bucle de 60 s en mono con crossfade (~0,8 MB en el build
 
 ## Build pipeline (resumen)
 
-### Estado actual — 2026-08-17 ⭐
+### Estado actual — 2026-08-18 ⭐
 
-En R2: `.data` = **15,94 MB** | `.wasm` = **21,66 MB** | receiver limpio (sello `rcv 2026-08-17 decos`).
-Bundles: **91 en R2, 102,0 MB** (206 en local; los 115 huérfanos de builds viejos se borraron
-el 17-ago). Todo validado en el Xiaomi TV Box S ese mismo día.
+En R2: `.data` = **15,94 MB** | `.wasm` = **21,66 MB** | receiver limpio (sello `rcv 2026-08-17 decos`;
+el player NO se ha rebuildeado desde el 17-ago, sólo bundles).
+Bundles: **80 en R2, 96,5 MB, 0 huérfanos**. Todo validado en el Xiaomi TV Box S.
 
-**Decos: 149,8 → 75,15 MB (−49,8 %)** tras pasar 18 de ellas a texturas DXT1 sueltas
+**Decos: 149,8 → 70,20 MB (−53,1 %)** tras pasar 20 de ellas a texturas DXT1 sueltas
 (ver `CAST_NEXT_SESSION_2026-08-18.md` §1.2). Estatuas y columnas bajan −70/−78 %; corales y
 conchas sólo −45/−52 %, porque **lo que les queda es malla** — ésa es la segunda palanca y cuesta
 calidad. **Bioluminiscencia arreglada y midiendo +20,7 %** de luminancia absoluta en el coral.
+
+⚠ **Las cifras de tamaño de este doc son MB DECIMALES (10^6)**, que es lo que informa
+`Tools/r2_huerfanos.py`. Si mides con MiB (2^20) sale un ~4,9 % menos y parece que R2 y el disco
+local no cuadran; el 18-ago se persiguió esa falsa discrepancia hasta comprobar, fichero a fichero,
+que eran idénticos.
+
+🧭 **El % que rinde el paso a DXT1 lo predice la proporción textura/malla**, así que conviene
+contar triángulos del GLB antes de estimar. Medido el 18-ago con texturas idénticas (1024² RGBA32):
+`lambis_shell` 12.498 triángulos → **−76,9 %**; `linckia_laevigata` 100.000 → **−36,8 %**.
 
 Cómo optimizar una deco nueva: `python Tools/extract_glb_textures.py <glb>` y luego
 `Appquarium TV → 🗜 Optimizar deco seleccionada` (o el lote). ⚠ La señal de que el prefab
@@ -370,13 +379,22 @@ print('OK index.html')
 |---|---|---|---|
 | `Fish_Remote` | PackSeparately | 25 FishData SOs | 25 |
 | `Decos_Remote` | PackSeparately | 54 DecorationData SOs | 54 |
-| `Environments_Remote` | PackSeparately | 11 backgrounds | 11 |
+| `Environments_Remote` | PackSeparately | **vacío desde el 2026-08-18** | 0 |
 | `Audio_Remote` | PackSeparately | 1 clip (`ambient_music`) | 1 |
 | `Default Local Group` | PackTogether | scaffolding | 1 |
 
-Total vivo: **91 bundles = 25 fish + 54 decos + 11 envs + 1 audio**, y en R2 ocupan **102,0 MB**.
-Ese 91 cuadra clavado con la tabla, así que es la comprobación rápida de que no falta nada.
-⚠ En local hay **206** `.bundle`: los sobrantes son huérfanos de builds anteriores. **Para medir
+Total vivo: **80 bundles = 25 fish + 54 decos + 1 audio**, y en R2 ocupan **96,5 MB**.
+Ese 80 cuadra clavado con la tabla, así que es la comprobación rápida de que no falta nada.
+
+⚠ **Los 11 fondos salieron de Addressables el 2026-08-18.** Se cargan SIEMPRE por
+`Resources.Load` (`TankBackground.cs:207` y `:296`) — en todo el proyecto no hay ni un
+`LoadAssetAsync<Texture2D>` — así que sus 11 bundles no los descargaba nadie. **No bastaba con
+borrar las entradas del grupo: `★ Setup Addressables` las recreaba en cada ejecución**; hubo que
+quitar también ese bucle. Para revertir: restaurar el bucle y ejecutarlo. El grupo se deja vacío
+a propósito (un grupo sin entradas no produce bundle) en vez de borrarlo.
+ℹ La copia de los fondos horneada en el `.data` (~0,7 MiB) **sí se usa y se queda**: sacarla
+exigiría convertir carga síncrona en asíncrona y rebuild de player.
+⚠ En local hay **208** `.bundle`: los sobrantes son huérfanos de builds anteriores (en R2 hay 0). **Para medir
 tamaños hay que filtrar por los hashes que aparecen dentro de `catalog.bin`** — `ls -S` coge el
 mayor por nombre, que suele ser un huérfano, y así salieron ya dos cifras falsas (los «375 MB de
 decos» y un «−83,8 %»). En R2 se limpian con `python Tools/r2_huerfanos.py --borrar` (informe por

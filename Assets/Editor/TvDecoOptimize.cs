@@ -35,10 +35,15 @@ public static class TvDecoOptimize
     /// (⚠ NO con `ls -S`: coge el mayor por nombre, que suele ser un huérfano de un build
     /// viejo — así salió la cifra falsa de «375 MB de decos»).
     ///
-    /// Real: 54 decos vivas = 149,8 MB. Las 17 de ≥5 MB son el 78 % (117,5 MB); aquí van esas
-    /// 17 más `deco_statue_greek_1` (4,75 MB, justo por debajo del corte) = **18 entradas**.
-    /// `deco_statue_greek_2` ya está hecha (9,89 → 2,05 MB) y por eso no está en la lista.
-    /// Fuera quedan `lambis_shell` (4,30) y `linckia_laevigata` (4,45): mismo método si hace falta.
+    /// Real: 54 decos vivas = 149,8 MB. Las 17 de ≥5 MB eran el 78 % (117,5 MB); a ésas se les
+    /// sumó `deco_statue_greek_1` (4,75 MB, justo por debajo del corte) = 18 entradas, y el
+    /// 2026-08-18 las dos que habían quedado fuera, que tras aquel lote pasaron a ser **las dos
+    /// más gordas del catálogo**: `deco_shell_lambis` (4,11 MB) y `deco_starfish_blue` (4,24 MB).
+    /// Total: **20 entradas**. `deco_statue_greek_2` ya estaba hecha (9,89 → 2,05 MB) aparte.
+    ///
+    /// ⚠ Las dos nuevas NO rendirán igual: sus texturas son idénticas (1024×1024 RGBA32 = 4,00 MB
+    /// → 0,50 MB en DXT1), pero `linckia_laevigata` tiene **100.000 triángulos** frente a los
+    /// 12.498 de `lambis_shell`. En la estrella lo que queda es malla, igual que en los corales.
     ///
     /// La correspondencia SO → GLB se verificó resolviendo el guid del campo `prefab` de
     /// cada `DecorationData`, no por parecido de nombre.
@@ -63,6 +68,11 @@ public static class TvDecoOptimize
         ("deco_column_greek_4",     "Assets/ThirdParty/GreekColumns/greek_underwater_column_4.glb"),
         ("deco_column_greek_5",     "Assets/ThirdParty/GreekColumns/greek_underwater_column_5.glb"),
         ("deco_statue_greek_1",     "Assets/ThirdParty/GreekStatues/greek_underwater_broken_statue_1.glb"),
+        // Añadidas el 2026-08-18. El `mapeo.txt` de la estrella usa la clave `default`, que es la
+        // misma que ya emplean los 9 corales y conchas optimizados y validados el 17-ago — o sea
+        // que GLTFast conserva ese nombre de material y el mapeo encaja.
+        ("deco_shell_lambis",       "Assets/ThirdParty/Shells/lambis_shell.glb"),
+        ("deco_starfish_blue",      "Assets/ThirdParty/Shells/linckia_laevigata.glb"),
     };
 
     // La carpeta de trabajo de cada deco es Assets/Content/Decos/<nombre del glb>/, la misma
@@ -87,14 +97,26 @@ public static class TvDecoOptimize
         Optimizar(ruta, CarpetaDe(ruta), SoDe(entrada.so));
     }
 
-    [MenuItem("Appquarium TV/🗜 Optimizar TODAS las decos pesadas (18)", priority = 3)]
-    public static void OptimizarTodasLasPesadas() => OptimizarLote(preguntar: true);
+    [MenuItem("Appquarium TV/🗜 Optimizar TODAS las decos pesadas (20)", priority = 3)]
+    public static void OptimizarTodasLasPesadas() => OptimizarLote(preguntar: true, rehacerHechas: false);
 
     /// Entrada para batchmode (`-executeMethod TvDecoOptimize.OptimizarLoteBatch`): igual pero
     /// sin diálogo ni barra de progreso, que en batchmode no existen.
-    public static void OptimizarLoteBatch() => OptimizarLote(preguntar: false);
+    public static void OptimizarLoteBatch() => OptimizarLote(preguntar: false, rehacerHechas: false);
 
-    private static void OptimizarLote(bool preguntar)
+    /// Rehace TODAS, incluidas las que ya apuntan a un `_opt.prefab`.
+    /// ⚠ Regenera sus prefabs → sus bundles pueden cambiar de hash → resubir ~75 MB a R2 y
+    /// dejar huérfanos allí. Sólo si de verdad ha cambiado el método de optimización.
+    public static void OptimizarLoteBatchRehacer() => OptimizarLote(preguntar: false, rehacerHechas: true);
+
+    /// <param name="rehacerHechas">
+    /// Si es false (lo normal), salta las decos cuyo SO ya apunta a un prefab `_opt`. Optimizar
+    /// una deco ya optimizada no aporta nada y sí arriesga: al regenerar el prefab su bundle
+    /// puede cambiar de hash, obligando a resubir decos ya validadas en la tele y dejando
+    /// huérfanos en R2. Que el lote sea idempotente permite añadir decos nuevas a `DecosPesadas`
+    /// y volver a ejecutarlo sin tocar las anteriores.
+    /// </param>
+    private static void OptimizarLote(bool preguntar, bool rehacerHechas)
     {
         // Preflight: sin tex_N + mapeo.txt no hay nada que hacer, y `Optimizar` abortaría una a
         // una dejando el lote a medias. Mejor listar lo que falta y no empezar.
@@ -113,28 +135,68 @@ public static class TvDecoOptimize
             return;
         }
 
+        // Reparto: qué toca hacer y qué ya estaba hecho.
+        var pendientes = new List<(string so, string glb)>();
+        var yaHechas   = new List<string>();
+        foreach (var (so, glb) in DecosPesadas)
+        {
+            if (!rehacerHechas && YaOptimizada(SoDe(so), glb)) yaHechas.Add(so);
+            else pendientes.Add((so, glb));
+        }
+
+        if (yaHechas.Count > 0)
+            Debug.Log($"[DecoOpt] Salto {yaHechas.Count} deco(s) ya optimizadas: " +
+                      string.Join(", ", yaHechas) + "\n(su SO ya apunta a un prefab _opt; " +
+                      "para rehacerlas de todas formas: OptimizarLoteBatchRehacer)");
+
+        if (pendientes.Count == 0)
+        { Debug.Log("[DecoOpt] No hay nada pendiente. Las 20 ya están optimizadas."); return; }
+
         if (preguntar && !EditorUtility.DisplayDialog("Optimizar decos pesadas",
-                $"Se van a reapuntar {DecosPesadas.Length} DecorationData a prefabs nuevos con " +
-                "texturas DXT1.\n\nDespués hace falta ★ New Build y comparar el tamaño de los " +
-                "bundles.\n\n¿Seguir?", "Optimizar", "Cancelar")) return;
+                $"Pendientes: {pendientes.Count} de {DecosPesadas.Length}.\n\n" +
+                "Se reapuntan sus DecorationData a prefabs nuevos con texturas DXT1.\n\n" +
+                "Después hace falta ★ New Build y comparar el tamaño de los bundles.\n\n¿Seguir?",
+                "Optimizar", "Cancelar")) return;
 
         int ok = 0;
         try
         {
-            for (int i = 0; i < DecosPesadas.Length; i++)
+            for (int i = 0; i < pendientes.Count; i++)
             {
-                var (so, glb) = DecosPesadas[i];
+                var (so, glb) = pendientes[i];
                 if (preguntar)
                     EditorUtility.DisplayProgressBar("Optimizando decos",
-                        Path.GetFileName(glb), (float)i / DecosPesadas.Length);
+                        Path.GetFileName(glb), (float)i / pendientes.Count);
                 if (Optimizar(glb, CarpetaDe(glb), SoDe(so))) ok++;
             }
         }
         finally { if (preguntar) EditorUtility.ClearProgressBar(); }
 
         AssetDatabase.SaveAssets();
-        Debug.Log($"[DecoOpt] LOTE: {ok}/{DecosPesadas.Length} decos optimizadas. " +
-                  "Siguiente: ★ New Build y comparar contra los 117,5 MB de hoy.");
+        Debug.Log($"[DecoOpt] LOTE: {ok}/{pendientes.Count} pendientes optimizadas " +
+                  $"({yaHechas.Count} ya lo estaban, {DecosPesadas.Length} en total). " +
+                  "Siguiente: ★ New Build y comparar contra los 75,15 MB de las 54 decos.");
+    }
+
+
+    /// ¿El SO ya apunta al prefab optimizado de ese GLB? Se comprueba contra la RUTA del prefab
+    /// y no por el nombre: un SO puede apuntar a un prefab llamado igual que otra cosa.
+    ///
+    /// ⚠ El nombre se calcula EXACTAMENTE como en `Optimizar` (sin `TrimEnd('.')`), porque hay un
+    /// GLB con doble punto: `corallium_sp..glb` → su prefab es `corallium_sp._opt.prefab`. La
+    /// carpeta sí lleva el `TrimEnd`, así que las dos reglas no coinciden. Con `TrimEnd` aquí,
+    /// esa deco daba falso negativo y se reoptimizaba en cada lote. (Comprobado el 2026-08-18:
+    /// el resultado salió byte a byte idéntico, así que no rompía nada — sólo trabajo de más.)
+    private static bool YaOptimizada(string rutaSo, string rutaGlb)
+    {
+        var so = AssetDatabase.LoadAssetAtPath<ScriptableObject>(rutaSo);
+        if (so == null) return false;
+        var prop = new SerializedObject(so).FindProperty("prefab");
+        var actual = prop?.objectReferenceValue;
+        if (actual == null) return false;
+
+        var esperado = $"{CarpetaDe(rutaGlb)}/{Path.GetFileNameWithoutExtension(rutaGlb)}_opt.prefab";
+        return AssetDatabase.GetAssetPath(actual) == esperado;
     }
 
     public static bool Optimizar(string rutaGlb, string carpeta, string rutaSo)

@@ -14,62 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Unity.Addressables.Editor::UnityEditor.AddressableAssets.Settings.AddressableAssetGroup
   m_GroupName: Environments_Remote
   m_GUID: 084af3749f00d6e4a8056d05657aacd0
-  m_SerializeEntries:
-  - m_GUID: 0e55565f5b29ca748903f4a6c324060d
-    m_Address: bg_deep
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 112b6400002dea94292f43b46c731d2b
-    m_Address: bg_tropical
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 27955583e62c30f4fb7c21aaf0c57da0
-    m_Address: bg_kelp
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 2ccd921a0d41d8d49be4815768493a37
-    m_Address: bg_classic
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 37ed05e42d1e0224881751e5e494ead7
-    m_Address: bg_jungle
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 3931f880a6fc29a42996dfb8ce12f2d8
-    m_Address: bg_cave
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 3db9abfaba7523d44b2b2c31147350a4
-    m_Address: bg_night
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: 6e55a905f3706ea4389db9820f623d37
-    m_Address: bg_wreck
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: c15dbaa538dcf2d4cbd641d267479c47
-    m_Address: bg_arctic
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: de882ac622af4ad4487eba0ae494b173
-    m_Address: bg_abyss
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
-  - m_GUID: ff2f6a7c9809846498315a2f3e1eb043
-    m_Address: bg_volcanic
-    m_ReadOnly: 0
-    m_SerializedLabels: []
-    FlaggedDuringContentUpdateRestriction: 0
+  m_SerializeEntries: []
   m_ReadOnly: 0
   m_Settings: {fileID: 11400000, guid: 2f31239b37f6e9c4ca5b0602e3c82057, type: 2}
   m_SchemaSet:
