@@ -1,0 +1,57 @@
+material;shader;estado;mapas_muertos;cuales;decos;lista;ruta
+Cliff_fancy;Universal Render Pipeline/Lit;PENDIENTE;3;BumpMap+MetallicGlossMap+EmissionMap;1;deco_cliff_stylized_fancy;Assets/ThirdParty/Stylized Rock Pack/Materials/cliff_mats/Cliff_fancy.mat
+Cliff_ice;Universal Render Pipeline/Lit;PENDIENTE;3;BumpMap+MetallicGlossMap+EmissionMap;1;deco_cliff_stylized_ice;Assets/ThirdParty/Stylized Rock Pack/Materials/cliff_mats/Cliff_ice.mat
+Cliff_infernal;Universal Render Pipeline/Lit;PENDIENTE;3;BumpMap+MetallicGlossMap+EmissionMap;1;deco_cliff_stylized_infernal;Assets/ThirdParty/Stylized Rock Pack/Materials/cliff_mats/Cliff_infernal.mat
+Cliff_white;Universal Render Pipeline/Lit;PENDIENTE;2;BumpMap+MetallicGlossMap;1;deco_cliff_stylized_white;Assets/ThirdParty/Stylized Rock Pack/Materials/cliff_mats/Cliff_white.mat
+default_opt;Appquarium/DecoLit;OK;0;;1;deco_coral_acropora;Assets/Content/Decos/acropora_valenciennesi/default_opt.mat
+default_opt;Appquarium/DecoLit;OK;0;;1;deco_coral_corallium;Assets/Content/Decos/corallium_sp/default_opt.mat
+default_opt;Appquarium/DecoLit;OK;0;;1;deco_coral_diploria;Assets/Content/Decos/diploria_labyrinthiformis/default_opt.mat
+default_opt;Appquarium/DecoLit;OK;0;;1;deco_coral_distichopora;Assets/Content/Decos/distichopora_violacea/default_opt.mat
+default_opt;Appquarium/DecoLit;OK;0;;1;deco_coral_heliopora;Assets/Content/Decos/heliopora_coerulea/default_opt.mat
+default_opt;Appquarium/DecoLit;OK;0;;1;deco_coral_meandrina;Assets/Content/Decos/meandrina_meandrites/default_opt.mat
+default_opt;Appquarium/DecoLit;OK;0;;1;deco_coral_pocillopora;Assets/Content/Decos/pocillopora_damicornis/default_opt.mat
+default_opt;Appquarium/DecoLit;OK;0;;1;deco_coral_stylaster;Assets/Content/Decos/stylaster_sanguineus/default_opt.mat
+default_opt;Appquarium/DecoLit;OK;0;;1;deco_shell_helmet;Assets/Content/Decos/cypraecassis_rufa/default_opt.mat
+default_opt;Appquarium/DecoLit;OK;0;;1;deco_shell_tridacna;Assets/Content/Decos/tridacna_squamosa/default_opt.mat
+default_opt;Appquarium/DecoLit;OK;0;;1;deco_starfish_blue;Assets/Content/Decos/linckia_laevigata/default_opt.mat
+HallAnchor_new_mat;Appquarium/FishUnlit;PENDIENTE;0;;3;deco_anchor+deco_anchor_oldrust+deco_anchor_rust;Assets/ThirdParty/Props/HallAnchor/Materials/HallAnchor_new_mat.mat
+HallAnchor_oldrust_mat;Universal Render Pipeline/Lit;PENDIENTE;3;BumpMap+MetallicGlossMap+OcclusionMap;1;deco_anchor_oldrust;Assets/ThirdParty/Props/HallAnchor/Materials/HallAnchor_oldrust_mat.mat
+HallAnchor_rust_mat;Universal Render Pipeline/Lit;PENDIENTE;3;BumpMap+MetallicGlossMap+OcclusionMap;1;deco_anchor_rust;Assets/ThirdParty/Props/HallAnchor/Materials/HallAnchor_rust_mat.mat
+lambis_shell_opt;Appquarium/DecoLit;OK;0;;1;deco_shell_lambis;Assets/Content/Decos/lambis_shell/lambis_shell_opt.mat
+LP_cannonMat;Universal Render Pipeline/Lit;PENDIENTE;4;BumpMap+MetallicGlossMap+OcclusionMap+SpecGlossMap;1;deco_cannon;Assets/ThirdParty/Cannon/Materials/LP_cannonMat.mat
+part_01_opt;Appquarium/DecoLit;OK;0;;1;deco_column_greek_4;Assets/Content/Decos/greek_underwater_column_4/part_01_opt.mat
+part_01_opt;Appquarium/DecoLit;OK;0;;1;deco_statue_greek_2;Assets/Content/Decos/greek_underwater_broken_statue_2/part_01_opt.mat
+part_01_opt;Appquarium/DecoLit;OK;0;;1;deco_statue_greek_4;Assets/Content/Decos/greek_underwater_broken_statue_4/part_01_opt.mat
+Part_01_opt;Appquarium/DecoLit;OK;0;;1;deco_column_greek_2;Assets/Content/Decos/greek_underwater_column_2/Part_01_opt.mat
+Part_01_opt;Appquarium/DecoLit;OK;0;;1;deco_column_greek_5;Assets/Content/Decos/greek_underwater_column_5/Part_01_opt.mat
+part_01_SG_opt;Appquarium/DecoLit;OK;0;;1;deco_column_greek_1;Assets/Content/Decos/greek_underwater_column_1/part_01_SG_opt.mat
+part_01SG_opt;Appquarium/DecoLit;OK;0;;1;deco_statue_greek_1;Assets/Content/Decos/greek_underwater_broken_statue_1/part_01SG_opt.mat
+part_02_opt;Appquarium/DecoLit;OK;0;;1;deco_column_greek_4;Assets/Content/Decos/greek_underwater_column_4/part_02_opt.mat
+part_02_opt;Appquarium/DecoLit;OK;0;;1;deco_statue_greek_2;Assets/Content/Decos/greek_underwater_broken_statue_2/part_02_opt.mat
+part_02_opt;Appquarium/DecoLit;OK;0;;1;deco_statue_greek_3;Assets/Content/Decos/greek_underwater_broken_statue_3/part_02_opt.mat
+part_02_opt;Appquarium/DecoLit;OK;0;;1;deco_statue_greek_4;Assets/Content/Decos/greek_underwater_broken_statue_4/part_02_opt.mat
+Part_02_opt;Appquarium/DecoLit;OK;0;;1;deco_column_greek_2;Assets/Content/Decos/greek_underwater_column_2/Part_02_opt.mat
+Part_02_opt;Appquarium/DecoLit;OK;0;;1;deco_column_greek_5;Assets/Content/Decos/greek_underwater_column_5/Part_02_opt.mat
+part_02_SG_opt;Appquarium/DecoLit;OK;0;;1;deco_column_greek_1;Assets/Content/Decos/greek_underwater_column_1/part_02_SG_opt.mat
+part_02SG_opt;Appquarium/DecoLit;OK;0;;1;deco_statue_greek_1;Assets/Content/Decos/greek_underwater_broken_statue_1/part_02SG_opt.mat
+part_03_opt;Appquarium/DecoLit;OK;0;;1;deco_statue_greek_2;Assets/Content/Decos/greek_underwater_broken_statue_2/part_03_opt.mat
+part_03_opt;Appquarium/DecoLit;OK;0;;1;deco_statue_greek_3;Assets/Content/Decos/greek_underwater_broken_statue_3/part_03_opt.mat
+part_03_opt;Appquarium/DecoLit;OK;0;;1;deco_statue_greek_4;Assets/Content/Decos/greek_underwater_broken_statue_4/part_03_opt.mat
+part_03_SG_opt;Appquarium/DecoLit;OK;0;;1;deco_column_greek_1;Assets/Content/Decos/greek_underwater_column_1/part_03_SG_opt.mat
+part01_opt;Appquarium/DecoLit;OK;0;;1;deco_statue_greek_3;Assets/Content/Decos/greek_underwater_broken_statue_3/part01_opt.mat
+pasted__Bottom_opt;Appquarium/DecoLit;OK;0;;1;deco_column_greek_3;Assets/Content/Decos/greek_underwater_column_3/pasted__Bottom_opt.mat
+pasted__mid_opt;Appquarium/DecoLit;OK;0;;1;deco_column_greek_3;Assets/Content/Decos/greek_underwater_column_3/pasted__mid_opt.mat
+pasted__top1_opt;Appquarium/DecoLit;OK;0;;1;deco_column_greek_3;Assets/Content/Decos/greek_underwater_column_3/pasted__top1_opt.mat
+Plate_basic;Universal Render Pipeline/Lit;PENDIENTE;2;BumpMap+MetallicGlossMap;1;deco_rock_plate_flat;Assets/ThirdParty/Stylized Rock Pack/Materials/plate_mats/Plate_basic.mat
+Plate_fancy;Universal Render Pipeline/Lit;PENDIENTE;3;BumpMap+MetallicGlossMap+EmissionMap;1;deco_rock_plate_fancy;Assets/ThirdParty/Stylized Rock Pack/Materials/plate_mats/Plate_fancy.mat
+Plate_infernal;Universal Render Pipeline/Lit;PENDIENTE;3;BumpMap+MetallicGlossMap+EmissionMap;1;deco_rock_plate_infernal;Assets/ThirdParty/Stylized Rock Pack/Materials/plate_mats/Plate_infernal.mat
+Rock_1_v1;Universal Render Pipeline/Lit;PENDIENTE;3;BumpMap+MetallicGlossMap+DetailNormalMap;1;deco_rock_hq_1;Assets/ThirdParty/HQ Rocks/Materials/Rock_1_v1.mat
+Rock_4_v1;Universal Render Pipeline/Lit;PENDIENTE;3;BumpMap+MetallicGlossMap+DetailNormalMap;1;deco_rock_hq_2;Assets/ThirdParty/HQ Rocks/Materials/Rock_4_v1.mat
+Rock_7_v1;Universal Render Pipeline/Lit;PENDIENTE;3;BumpMap+MetallicGlossMap+DetailNormalMap;1;deco_rock_hq_3;Assets/ThirdParty/HQ Rocks/Materials/Rock_7_v1.mat
+Rock_basic;Universal Render Pipeline/Lit;PENDIENTE;2;BumpMap+MetallicGlossMap;1;deco_rock_stylized_basic;Assets/ThirdParty/Stylized Rock Pack/Materials/rock_mats/Rock_basic.mat
+Rock_fancy;Universal Render Pipeline/Lit;PENDIENTE;3;BumpMap+MetallicGlossMap+EmissionMap;1;deco_rock_stylized_fancy;Assets/ThirdParty/Stylized Rock Pack/Materials/rock_mats/Rock_fancy.mat
+Rock_forest;Universal Render Pipeline/Lit;PENDIENTE;2;BumpMap+MetallicGlossMap;1;deco_rock_stylized_forest;Assets/ThirdParty/Stylized Rock Pack/Materials/rock_mats/Rock_forest.mat
+Rock_ice;Universal Render Pipeline/Lit;PENDIENTE;3;BumpMap+MetallicGlossMap+EmissionMap;1;deco_rock_stylized_ice;Assets/ThirdParty/Stylized Rock Pack/Materials/rock_mats/Rock_ice.mat
+Rock_infernal;Universal Render Pipeline/Lit;PENDIENTE;3;BumpMap+MetallicGlossMap+EmissionMap;1;deco_rock_stylized_volcanic;Assets/ThirdParty/Stylized Rock Pack/Materials/rock_mats/Rock_infernal.mat
+Rock_white;Universal Render Pipeline/Lit;PENDIENTE;2;BumpMap+MetallicGlossMap;1;deco_rock_stylized_white;Assets/ThirdParty/Stylized Rock Pack/Materials/rock_mats/Rock_white.mat
+WoodChest;Universal Render Pipeline/Lit;PENDIENTE;3;BumpMap+MetallicGlossMap+EmissionMap;1;deco_toy_chest;Assets/ThirdParty/Animated PBR Chest Demo/Materials/WoodChest.mat
