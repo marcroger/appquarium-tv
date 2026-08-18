@@ -1,0 +1,55 @@
+deco;triangulos;vertices;mallas;renderers;prefab
+deco_coral_acropora;100000;63118;1;1;Assets/Content/Decos/acropora_valenciennesi/acropora_valenciennesi_opt.prefab
+deco_coral_corallium;100000;73351;2;2;Assets/Content/Decos/corallium_sp/corallium_sp._opt.prefab
+deco_coral_diploria;100000;62646;1;1;Assets/Content/Decos/diploria_labyrinthiformis/diploria_labyrinthiformis_opt.prefab
+deco_coral_distichopora;100000;69883;2;2;Assets/Content/Decos/distichopora_violacea/distichopora_violacea_opt.prefab
+deco_coral_pocillopora;100000;67851;2;2;Assets/Content/Decos/pocillopora_damicornis/pocillopora_damicornis_opt.prefab
+deco_coral_stylaster;100000;70168;2;2;Assets/Content/Decos/stylaster_sanguineus/stylaster_sanguineus_opt.prefab
+deco_starfish_blue;100000;56044;1;1;Assets/Content/Decos/linckia_laevigata/linckia_laevigata_opt.prefab
+deco_coral_meandrina;99996;97396;2;2;Assets/Content/Decos/meandrina_meandrites/meandrina_meandrites_opt.prefab
+deco_shell_helmet;99996;55373;1;1;Assets/Content/Decos/cypraecassis_rufa/cypraecassis_rufa_opt.prefab
+deco_shell_tridacna;99994;60420;1;1;Assets/Content/Decos/tridacna_squamosa/tridacna_squamosa_opt.prefab
+deco_coral_heliopora;99940;84491;2;2;Assets/Content/Decos/heliopora_coerulea/heliopora_coerulea_opt.prefab
+deco_statue_greek_1;19828;10452;2;2;Assets/Content/Decos/greek_underwater_broken_statue_1/greek_underwater_broken_statue_1_opt.prefab
+deco_column_greek_1;19402;11750;3;3;Assets/Content/Decos/greek_underwater_column_1/greek_underwater_column_1_opt.prefab
+deco_statue_greek_3;19282;10756;3;3;Assets/Content/Decos/greek_underwater_broken_statue_3/greek_underwater_broken_statue_3_opt.prefab
+deco_statue_greek_4;19152;10711;3;3;Assets/Content/Decos/greek_underwater_broken_statue_4/greek_underwater_broken_statue_4_opt.prefab
+deco_column_greek_2;18095;10620;2;2;Assets/Content/Decos/greek_underwater_column_2/greek_underwater_column_2_opt.prefab
+deco_cliff_stylized_fancy;16886;8885;5;5;Assets/ThirdParty/Stylized Rock Pack/Prefabs/Cliff_fancy.prefab
+deco_cliff_stylized_ice;16886;8885;5;5;Assets/ThirdParty/Stylized Rock Pack/Prefabs/Cliff_ice.prefab
+deco_cliff_stylized_infernal;16886;8885;5;5;Assets/ThirdParty/Stylized Rock Pack/Prefabs/Cliff_infernal.prefab
+deco_cliff_stylized_white;16886;8885;5;5;Assets/ThirdParty/Stylized Rock Pack/Prefabs/Cliff_white.prefab
+deco_statue_greek_2;16878;9476;3;3;Assets/Content/Decos/greek_underwater_broken_statue_2/greek_underwater_broken_statue_2_opt.prefab
+deco_column_greek_5;13536;7981;2;2;Assets/Content/Decos/greek_underwater_column_5/greek_underwater_column_5_opt.prefab
+deco_column_greek_3;12890;9401;3;3;Assets/Content/Decos/greek_underwater_column_3/greek_underwater_column_3_opt.prefab
+deco_shell_lambis;12498;7361;1;1;Assets/Content/Decos/lambis_shell/lambis_shell_opt.prefab
+deco_cannon;11298;11723;1;1;Assets/ThirdParty/Cannon/Cannon.prefab
+deco_rock_stylized_basic;9278;4991;5;5;Assets/ThirdParty/Stylized Rock Pack/Prefabs/Rock_basic.prefab
+deco_rock_stylized_fancy;9278;4991;5;5;Assets/ThirdParty/Stylized Rock Pack/Prefabs/Rock_fancy.prefab
+deco_rock_stylized_forest;9278;4991;5;5;Assets/ThirdParty/Stylized Rock Pack/Prefabs/Rock_forest.prefab
+deco_rock_stylized_ice;9278;4991;5;5;Assets/ThirdParty/Stylized Rock Pack/Prefabs/Rock_ice.prefab
+deco_rock_stylized_volcanic;9278;4991;5;5;Assets/ThirdParty/Stylized Rock Pack/Prefabs/Rock_infernal.prefab
+deco_rock_stylized_white;9278;4991;5;5;Assets/ThirdParty/Stylized Rock Pack/Prefabs/Rock_white.prefab
+deco_rock_plate_fancy;8416;4516;5;5;Assets/ThirdParty/Stylized Rock Pack/Prefabs/Plate_fancy.prefab
+deco_rock_plate_flat;8416;4516;5;5;Assets/ThirdParty/Stylized Rock Pack/Prefabs/Plate_basic.prefab
+deco_rock_plate_infernal;8416;4516;5;5;Assets/ThirdParty/Stylized Rock Pack/Prefabs/Plate_infernal.prefab
+deco_column_greek_4;5576;3324;2;2;Assets/Content/Decos/greek_underwater_column_4/greek_underwater_column_4_opt.prefab
+deco_toy_chest;4018;3028;1;3;Assets/ThirdParty/Animated PBR Chest Demo/Prefabs/Animated PBR Chest _Wood_Demo.prefab
+deco_anchor;2512;2043;5;19;Assets/ThirdParty/Props/HallAnchor/Prefabs/hall_anchor_prefab.prefab
+deco_anchor_oldrust;2512;2043;5;19;Assets/ThirdParty/Props/HallAnchor/Prefabs/hall_anchor_prefab.prefab
+deco_anchor_rust;2512;2043;5;19;Assets/ThirdParty/Props/HallAnchor/Prefabs/hall_anchor_prefab.prefab
+deco_rock_hq_1;300;216;1;1;Assets/ThirdParty/HQ Rocks/Prefabs/Rock_1_v1.prefab
+deco_rock_hq_2;300;216;1;1;Assets/ThirdParty/HQ Rocks/Prefabs/Rock_4_v1.prefab
+deco_rock_hq_3;300;216;1;1;Assets/ThirdParty/HQ Rocks/Prefabs/Rock_7_v1.prefab
+sub_coral_rubble;0;0;0;0;(sin prefab — sustrato)
+sub_gold;0;0;0;0;(sin prefab — sustrato)
+sub_gravel;0;0;0;0;(sin prefab — sustrato)
+sub_ice;0;0;0;0;(sin prefab — sustrato)
+sub_lava;0;0;0;0;(sin prefab — sustrato)
+sub_moss;0;0;0;0;(sin prefab — sustrato)
+sub_mud;0;0;0;0;(sin prefab — sustrato)
+sub_pebbles;0;0;0;0;(sin prefab — sustrato)
+sub_sand;0;0;0;0;(sin prefab — sustrato)
+sub_slate;0;0;0;0;(sin prefab — sustrato)
+sub_volcanic;0;0;0;0;(sin prefab — sustrato)
+sub_white;0;0;0;0;(sin prefab — sustrato)
