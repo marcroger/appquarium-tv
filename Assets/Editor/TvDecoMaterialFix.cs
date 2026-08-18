@@ -159,10 +159,33 @@ public static class TvDecoMaterialFix
                     Debug.LogWarning($"[MatFix] {m.name}: sin textura base — quedará de color plano " +
                                      "(el runtime hacía lo mismo, pero conviene mirarlo).");
 
-                m.shader = decoLit;
-                if (baseTex != null) m.SetTexture("_MainTex", baseTex);
-                m.SetColor("_Color", color);
-                m.SetFloat("_Brightness", 1f);
+                // ⚠⚠ NO basta con `m.shader = decoLit`. Al cambiar de shader, Unity CONSERVA las
+                // propiedades cuyo nombre coincide, y `_EmissionColor` existe en URP/Lit **y** en
+                // DecoLit (se le añadió el 2026-08-17 para la bioluminiscencia). Los materiales con
+                // emisión lo traían en BLANCO → DecoLit lo suma → la deco sale como un bloque
+                // blanco reventado. Paso exactamente eso el 2026-08-18 con 9 decos.
+                //
+                // El runtime no tiene el problema porque hace `new Material(litTarget)`: parte de
+                // los valores POR DEFECTO de DecoLit. Aquí se replica construyendo una plantilla
+                // nueva y copiándola encima, en vez de enumerar defaults a mano (que es justo lo
+                // que se olvidaría al añadir la siguiente propiedad al shader).
+                var plantilla = new Material(decoLit);
+                if (baseTex != null) plantilla.SetTexture("_MainTex", baseTex);
+                plantilla.SetColor("_Color", color);
+                plantilla.SetFloat("_Brightness", 1f);
+                m.CopyPropertiesFromMaterial(plantilla);
+                Object.DestroyImmediate(plantilla);
+
+                // Guarda: una emisión que no sea negra en una deco normal es el sintoma exacto
+                // del bloque blanco. Que falle aqui, ruidosamente, y no en la tele.
+                var em = m.HasProperty("_EmissionColor") ? m.GetColor("_EmissionColor") : Color.black;
+                if (em.maxColorComponent > 0.001f)
+                {
+                    Debug.LogError($"[MatFix] {m.name}: _EmissionColor quedo en {em} y deberia ser " +
+                                   "negro. Asi es como salieron 9 decos como bloques blancos el " +
+                                   "2026-08-18. ABORTO sin guardar este material.");
+                    continue;
+                }
                 EditorUtility.SetDirty(m);
                 AssetDatabase.SaveAssetIfDirty(m);
                 convertidos++;
