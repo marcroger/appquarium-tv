@@ -155,9 +155,26 @@ public static class TvDecoMaterialFix
                 else if (m.HasProperty("baseColorFactor")) color = m.GetColor("baseColorFactor");
                 else if (m.HasProperty("_Color"))          color = m.GetColor("_Color");
 
+                // ⚠⚠ ABORTA, no avisa. Esto era un LogWarning y el 2026-08-19 saltó en 20 de 21
+                // materiales sin que nadie lo mirara: el resultado fueron 21 decos blancas en la
+                // tele, porque un material de estos SIEMPRE tiene textura y si sale nula es que se
+                // está leyendo un material ya dañado.
+                //
+                // Cómo se dañaron: una pasada anterior hizo `CopyPropertiesFromMaterial` con el
+                // material aún en URP/Lit, lo que vació `_BaseMap` (la propiedad VIVA de URP/Lit)
+                // y escribió `_MainTex`, que en URP/Lit es una propiedad HUÉRFANA. En la pasada
+                // siguiente `_BaseMap` daba null y el fallback a `_MainTex` no se ejecutaba nunca,
+                // porque `HasProperty("_MainTex")` es **false** en URP/Lit.
+                //
+                // 🧭 Si esto salta: restaurar los materiales desde git y volver a ejecutar sobre
+                // material limpio. NO insistir sobre el dañado.
                 if (baseTex == null)
-                    Debug.LogWarning($"[MatFix] {m.name}: sin textura base — quedará de color plano " +
-                                     "(el runtime hacía lo mismo, pero conviene mirarlo).");
+                {
+                    Debug.LogError($"[MatFix] {m.name} [{sh}]: SIN TEXTURA BASE. El material está " +
+                                   "dañado (probablemente por una pasada anterior a medias). " +
+                                   "Restaura los .mat desde git y repite. ABORTO sin tocarlo.");
+                    continue;
+                }
 
                 // ⚠⚠ NO basta con `m.shader = decoLit`. Al cambiar de shader, Unity CONSERVA las
                 // propiedades cuyo nombre coincide, y `_EmissionColor` existe en URP/Lit **y** en
