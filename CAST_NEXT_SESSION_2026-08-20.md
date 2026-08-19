@@ -45,9 +45,50 @@ Validado en la tele: **`FixMat` 127 → 0** en los 6 grupos y **las 21 decos pix
 huérfanos. `Tools/r2_huerfanos.py` ahora revisa **también** `StreamingAssets/aa/WebGL/` — era su
 punto ciego y costó 6 decos rotas en producción.
 
+### 1.5 R2 de producción limpio y techo remedido
+
+Borrados **56,72 MB** de artefactos de diagnóstico que estaban servidos en producción:
+`webgl-output-empty.*`, `webgl-min.*` e `index_test.html`. Son reproducibles con
+`TvEmptyTestBuild.cs`. **R2 queda en 97 objetos / 126,07 MB** (eran 106 / 182,79).
+
+⚠⚠ Se borraron con **lista explícita, NUNCA con `--delete`**: en la raíz está
+`keepalive_black.mp4`, que es lo que mantiene viva la sesión.
+
+**Techo de carga remedido** con el protocolo del 15-ago (25 peces + 6 decos, 420 s), que de paso
+verifica que la limpieza no rompió nada:
+
+| | 15-ago | 19-ago |
+|---|---|---|
+| WASM heap | 191 MB | **159 MB (−16,8 %)** |
+| FPS medio | 37 | **37** |
+| Sesión | 420 s | **421 s, 0 errores, 0 `FixMat`** |
+
+Los 32 MB de heap ganados son exactamente el peso que perdieron las decos.
+
 ---
 
 ## 2. Lo que queda
+
+### 2.0 🔴 LO ÚNICO BLOQUEANTE: el bucket de R2 está abierto
+
+```
+curl https://pub-…r2.dev/StreamingAssets/aa/catalog.hash   ->  HTTP 200, sin auth
+```
+
+Cualquiera con la URL se baja el catálogo y **todos los assets**. El riesgo es **doble**: fuga de
+ingresos (el Premium de 25 € deja de tener sentido) y **fuga de licencias** — el Pack 24 y los
+modelos de Sketchfab no-CC0 **prohíben redistribuir los assets crudos**.
+
+📄 **Spec completo y ejecutable: [`CAST_R2_AUTH_SPEC.md`](CAST_R2_AUTH_SPEC.md)** (13 secciones).
+Worker de Cloudflare como portero + JWT HS256 con claims de propiedad.
+
+| | |
+|---|---|
+| Coste | **0 €/mes** hasta ~3.000 usuarios/día · 5 $/mes después · <20 $/mes a 10.000 |
+| Esfuerzo | ~3 días (1 TV + 1 móvil + 1 pruebas) |
+| ⚠ Requisitos | Toca **los dos repos**, y **el Worker lo tiene que crear el user** en su cuenta de Cloudflare (login propio) |
+
+**Mientras el proyecto sea privado no corre prisa. En cuanto se promocione, sí.**
 
 ### 2.1 🎯 Las MALLAS — la palanca grande que queda
 
@@ -96,9 +137,11 @@ y seguramente **sí se usan** → allí es «bajar calidad a cambio de MB», no 
 |---|---|
 | Catálogo | md5 `7f3d9ee5…` · hash `52cfa262…` |
 | Bundles | **80 vivos = 87,3 MB**, 0 huérfanos |
+| R2 completo | **97 objetos / 126,07 MB** (limpiado el 19-ago) |
 | Locales | 3 en `StreamingAssets/aa/WebGL/` (0,5 MB) |
 | `.wasm` / `.data` | 21,66 / 15,94 MB (player del 17-ago, sin rebuild) |
 | Sello receiver | `rcv 2026-08-17 decos` |
+| Rendimiento | 25 peces: WASM 159 MB, FPS 37, 421 s sin errores |
 
 ---
 
