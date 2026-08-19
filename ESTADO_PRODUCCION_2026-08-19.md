@@ -5,20 +5,23 @@
 >
 > **Resumen:** el receiver está **funcionalmente listo y validado**. Lo que falta para una subida
 > «a pro» de verdad **no es el motor, es la infraestructura**: el bucket está abierto al mundo y
-> hay artefactos de diagnóstico servidos en producción. Detalle en §4.
+> es que **el bucket está abierto al mundo**. Todo lo demás de la lista quedó cerrado el 19-ago. Detalle en §4.
 
 ---
 
 ## 1. Qué hay desplegado ahora mismo
 
-### R2 — `appquarium-tv` · 106 objetos · 182,79 MB
+### R2 — `appquarium-tv` · 97 objetos · 126,07 MB
 
 | Ruta | Objetos | Peso | Qué es |
 |---|---|---|---|
 | `bundles/` | 82 | **87,37 MB** | 80 bundles vivos + catálogo. **0 huérfanos** |
-| `Build/` | 12 | 94,75 MB | ⚠ El player (38,0 MB) **+ 56,7 MB de rigs de diagnóstico** |
+| `Build/` | 4 | **38,03 MB** | Sólo el player de producción |
 | `StreamingAssets/` | 8 | 0,57 MB | Catálogo + 3 bundles locales |
-| raíz | 4 | 0,10 MB | `index.html`, `keepalive_black.mp4`, `silence.wav`, ⚠ `index_test.html` |
+| raíz | 3 | 0,10 MB | `index.html`, `keepalive_black.mp4`, `silence.wav` |
+
+✅ **Limpiado el 19-ago: 56,72 MB de rigs de diagnóstico e `index_test.html` fuera.** Verificado
+después con 25 peces + 6 decos cargando sin un error.
 
 ### El contenido
 
@@ -54,6 +57,7 @@
 | Bioluminiscencia | 17-ago | Coral **+20,7 %** de luminancia absoluta |
 | 21 materiales a DecoLit | **19-ago** | **`FixMat` 127 → 0** y las 21 decos **pixel-idénticas** |
 | Acuario realista final | **19-ago** | 8 peces + 6 decos, 240,7 s, 0 errores, WASM 92 MB, FPS 39 |
+| **Techo de carga remedido** | **19-ago** | 25 peces + 6 decos, **421 s**, 0 errores, **WASM 159 MB** (eran 191), FPS avg 37 |
 
 **La causa raíz de los cortes de sesión está resuelta** y era presión de memoria del sistema por el
 tamaño del `.wasm` — no Android Doze, ni un cap duro del device, ni el vídeo keepalive.
@@ -69,7 +73,7 @@ tamaño del `.wasm` — no Android Doze, ni un cap duro del device, ni el vídeo
   malo; el LTO y el stripping se fuerzan por código; el script de huérfanos revisa los dos frentes
   de R2 y avisa si falta una dependencia local.
 - **El HUD de diagnóstico sale apagado** en producción; sólo se enciende con el mensaje `DIAG`.
-- **El repo está sincronizado** con GitHub (`origin/main` = `a191eaf`).
+- **El repo está sincronizado** con GitHub.
 
 ---
 
@@ -90,24 +94,23 @@ no.**
 
 🧭 **Este es el único punto que yo consideraría bloqueante** para una subida con difusión.
 
-### 4.2 🟡 Artefactos de diagnóstico servidos en producción
+### 4.2 ✅ Artefactos de diagnóstico — RESUELTO el 19-ago
 
-En `Build/` hay **56,7 MB de rigs** que no usa nadie:
+Borrados **56,72 MB**: `webgl-output-empty.*` (42,75) y `webgl-min.*` (13,94) de `Build/`, más
+`index_test.html` de la raíz. Son **reproducibles** (`TvEmptyTestBuild.cs` los reconstruye).
 
-- `webgl-output-empty.*` — 42,75 MB
-- `webgl-min.*` — 13,94 MB
-
-Y en la raíz, `index_test.html`. No hacen daño (el receiver no los pide) pero están públicos y
-ensucian. ⚠⚠ **Al limpiarlos, NO usar `--delete`**: en la raíz están `keepalive_black.mp4` —que es
-lo que mantiene viva la sesión— y `silence.wav`. Borrar el primero revienta las sesiones largas,
-que es justo lo que costó meses arreglar.
+⚠⚠ Se borraron con **lista explícita, nunca con `--delete`**: en la raíz están
+`keepalive_black.mp4` —que es lo que mantiene viva la sesión— y `silence.wav`. Borrar el primero
+revienta las sesiones largas, que es justo lo que costó meses arreglar. Antes de borrar se comprobó
+que el `index.html` de producción sólo referencia `webgl-output.data` y `.wasm`, y después se
+verificaron los 7 ficheros críticos uno a uno.
 
 ### 4.3 🟡 Cosas validadas «de oído» o sin medir
 
 - **El audio** se dio por bueno escuchándolo, no midiendo. Las burbujas van a 0,08 de volumen.
-- **La carga máxima real** (25 peces) se midió el 15-ago con 6 decos, **antes** de las
-  optimizaciones. Hoy las decos pesan la mitad, así que el margen es mayor — pero **no se ha vuelto
-  a medir el techo**.
+- ✅ ~~La carga máxima real~~ **REMEDIDA el 19-ago** con el mismo protocolo del 15-ago (25 peces +
+  6 decos, 420 s): **WASM 159 MB frente a los 191 MB de entonces — 32 MB menos de heap (−16,8 %)**,
+  FPS avg 37 (igual), 421 s sin un solo error. El margen mejoró justo lo que pesaban las decos.
 
 ### 4.4 🟡 Huecos que dependen del móvil
 
@@ -125,11 +128,14 @@ es la configuración con la que se han validado las sesiones de 900 s. **No toca
 ## 5. Si mañana hubiera que publicar
 
 **Mínimo imprescindible:**
-1. Cerrar el bucket (Worker + JWT) — §4.1.
-2. Borrar los rigs de diagnóstico e `index_test.html` — §4.2, **sin `--delete`**.
+1. 🔴 **Cerrar el bucket** (Worker + JWT) — §4.1. **Es lo único bloqueante que queda.**
+   Spec completo en [`CAST_R2_AUTH_SPEC.md`](CAST_R2_AUTH_SPEC.md) (13 secciones). **0 €/mes** hasta
+   ~3.000 usuarios/día; ~3 días de trabajo; toca **los dos repos** y el Worker lo tiene que crear el
+   user en su cuenta de Cloudflare.
+2. ✅ ~~Borrar los rigs de diagnóstico~~ **HECHO el 19-ago** (56,72 MB).
 
 **Recomendable antes de difundir:**
-3. Volver a medir el techo de carga (25 peces) con las decos ya optimizadas.
+3. ✅ ~~Volver a medir el techo de carga~~ **HECHO el 19-ago**: mejor que antes (−32 MB de heap).
 4. Cerrar el hueco de editar decos colocadas (requiere el repo móvil).
 
 **Opcional, mejora de producto:**

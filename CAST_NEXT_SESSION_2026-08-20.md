@@ -85,7 +85,7 @@ y seguramente **sí se usan** → allí es «bajar calidad a cambio de MB», no 
 - [ ] **Contradicción `maxInactivity`**: el research de julio dice que fijarlo es contraproducente;
       en disco está 3600 y es con lo que están validadas las sesiones largas. No tocar sin A/B.
 - [ ] `supportPointLocal` sin estrenar en los 54 SOs — la perilla si una deco se ve mal apoyada.
-- [ ] **61 commits locales sin push**; `origin/main` sigue en `4064e61`.
+- [x] ~~commits locales sin push~~ **empujados el 2026-08-19**: `origin/main` = `2b528e9`.
 - [ ] 🎯 **Cast Connect** — salida arquitectónica (app nativa Android TV reaprovechando Unity).
 
 ---
@@ -158,7 +158,15 @@ radio de acción de una deco. Fue lo que cortó horas de teoría.
 Un build largo lanzado con la herramienta de tareas se corta. Lanzarlo **desacoplado** con
 `Start-Process` de PowerShell y vigilar el log aparte.
 
-### 4.6 ⚠ La caja se sigue apagando sola
+### 4.6 ✅ La caja NO se apaga sola — la apaga el user
 
-Pasó dos veces más. Y tras encenderla, el primer intento de castear da `LAUNCH_ERROR: NOT_FOUND`
-durante ~1-2 min: hay que esperar a que el registro de apps Cast esté listo.
+⚠ **Creencia falsa corregida el 2026-08-19.** Estaba documentado desde el 17-ago como un fallo del
+device («se apaga sola 3 veces pese a `stay_on_while_plugged_in 7`») y se perdió tiempo
+diagnosticándolo. **La apaga el user cuando no la usa.**
+
+🧭 Si no responde: lo más probable es que esté apagada. **Pedirle que la encienda** en vez de barrer
+la subred buscando un fallo. ⚠ El ping NO sirve para descartarlo: otro cacharro coge la IP libre y
+responde (pasó el 19-ago). Lo que vale es `curl http://IP:8008/setup/eureka_info | grep -i xiaomi`.
+
+ℹ Tras encenderla, el primer intento de castear da `LAUNCH_ERROR: NOT_FOUND` durante ~1-2 min: hay
+que esperar a que el registro de apps Cast esté listo.

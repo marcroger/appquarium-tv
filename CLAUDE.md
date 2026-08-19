@@ -157,6 +157,17 @@ Cómo optimizar una deco nueva: `python Tools/extract_glb_textures.py <glb>` y l
 `Appquarium TV → 🗜 Optimizar deco seleccionada` (o el lote). ⚠ La señal de que el prefab
 optimizado se está usando es que **NO aparece ningún `FixMat`** sobre esa deco en el log.
 
+**Rendimiento — remedido el 2026-08-19** con el mismo protocolo del 15-ago, ya con las decos
+optimizadas (25 peces + 6 decos, 420 s):
+
+| | 15-ago | 19-ago |
+|---|---|---|
+| WASM heap | 191 MB | **159 MB (−16,8 %)** |
+| FPS medio | 37 | **37** |
+| Sesión | 420 s, 0 cortes | **421 s, 0 errores** |
+
+Los 32 MB de heap que se ganan son exactamente el peso que perdieron las decos.
+
 **Histórico — validado el 2026-08-15**, con acuario real y sin reiniciar la caja:
 
 | | 12 peces + 6 decos | 25 peces + 6 decos |
@@ -363,8 +374,9 @@ print('OK index.html')
 - **Receiver Published** App ID `8F6C873F` — funciona en cualquier device sin registrar Cast Console
 - **Cast SDK timeout = 30s** desde "Connecting…" hasta receiver READY. Sin esto la sesión aborta.
 - **Xiaomi TV Box S** como `MiTV-AFMU0` en LAN. Cast SDK 3.72.446070.
-  - ⚠⚠ **Para encontrarla: ni el ping ni el puerto 8008 bastan.** El DHCP le mueve la IP y **la
-    caja se apaga sola** (3 veces el 17-ago pese a `stay_on_while_plugged_in 7`). El ping falla
+  - ⚠⚠ **Para encontrarla: ni el ping ni el puerto 8008 bastan.** El DHCP le mueve la IP y **el user
+    la apaga cuando no la usa** (aclarado por él el 2026-08-19: NO es un fallo del device, y
+    `stay_on_while_plugged_in 7` no tiene nada que ver). El ping falla
     porque otro cacharro coge la IP libre; y el 8008 tampoco vale: hay **otro Cast en la casa**
     («Comedor») con el puerto abierto. Hay que leer el nombre:
     `curl http://IP:8008/setup/eureka_info | grep -i xiaomi`. `cast-run.sh` ya lo hace bien.
