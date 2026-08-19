@@ -169,6 +169,19 @@ public static class TvDecoMaterialFix
                 // los valores POR DEFECTO de DecoLit. Aquí se replica construyendo una plantilla
                 // nueva y copiándola encima, en vez de enumerar defaults a mano (que es justo lo
                 // que se olvidaría al añadir la siguiente propiedad al shader).
+                // ⚠⚠ EL ORDEN IMPORTA, y equivocarse aqui NO da error.
+                // `CopyPropertiesFromMaterial` **NO cambia el shader**: solo copia valores de
+                // propiedades. Si se llama con el material aun en URP/Lit, el resultado es un
+                // material que PARECE convertido (emision en negro, slots muertos vacios, el
+                // bundle hasta adelgaza) pero **sigue en URP/Lit**, asi que el runtime lo
+                // convierte igual y el `FixMat` no desaparece. Paso el 2026-08-19 y solo se vio
+                // leyendo el shader de entrada que imprime la propia linea de `FixMat`.
+                //
+                // Con el shader ya asignado, la plantilla comparte shader con el material y la
+                // copia arrastra TODAS las propiedades de DecoLit, incluida `_EmissionColor` en
+                // negro — que es lo que evita el bloque blanco del 2026-08-18.
+                m.shader = decoLit;
+
                 var plantilla = new Material(decoLit);
                 if (baseTex != null) plantilla.SetTexture("_MainTex", baseTex);
                 plantilla.SetColor("_Color", color);
@@ -176,14 +189,26 @@ public static class TvDecoMaterialFix
                 m.CopyPropertiesFromMaterial(plantilla);
                 Object.DestroyImmediate(plantilla);
 
-                // Guarda: una emisión que no sea negra en una deco normal es el sintoma exacto
-                // del bloque blanco. Que falle aqui, ruidosamente, y no en la tele.
+                // Guardas. La primera version de esto solo miraba `_EmissionColor` y dio el visto
+                // bueno a 21 materiales que seguian en URP/Lit: comprobaba justo la parte que SI
+                // habia funcionado. Comprobar el shader es lo que de verdad decide.
+                if (m.shader != decoLit)
+                {
+                    Debug.LogError($"[MatFix] {m.name}: el shader quedo en '{m.shader?.name}' y no " +
+                                   "en Appquarium/DecoLit. ABORTO sin guardar este material.");
+                    continue;
+                }
                 var em = m.HasProperty("_EmissionColor") ? m.GetColor("_EmissionColor") : Color.black;
                 if (em.maxColorComponent > 0.001f)
                 {
                     Debug.LogError($"[MatFix] {m.name}: _EmissionColor quedo en {em} y deberia ser " +
                                    "negro. Asi es como salieron 9 decos como bloques blancos el " +
                                    "2026-08-18. ABORTO sin guardar este material.");
+                    continue;
+                }
+                if (baseTex != null && m.GetTexture("_MainTex") != baseTex)
+                {
+                    Debug.LogError($"[MatFix] {m.name}: perdio la textura base. ABORTO.");
                     continue;
                 }
                 EditorUtility.SetDirty(m);
