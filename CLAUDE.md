@@ -32,7 +32,8 @@ El móvil envía el estado del tanque vía Google Cast SDK; este proyecto **rend
 
 | Doc | Cuándo |
 |---|---|
-| [`CAST_NEXT_SESSION_2026-08-18.md`](CAST_NEXT_SESSION_2026-08-18.md) | ⭐⭐ **EMPEZAR AQUÍ.** Estado al cierre del 17-ago, pendientes reales y las trampas de medición aprendidas. |
+| [`CAST_NEXT_SESSION_2026-08-20.md`](CAST_NEXT_SESSION_2026-08-20.md) | ⭐⭐ **EMPEZAR AQUÍ.** Estado al cierre del 19-ago, pendientes reales y las trampas caras (bundle local que cambia de hash, y los 3 fallos de la conversión de materiales). |
+| [`DECOS_PESO_PARA_MOVIL.md`](DECOS_PESO_PARA_MOVIL.md) | 📄 **Para leer en el repo MÓVIL.** Las 3 palancas de peso de decos, qué se reutiliza, qué cambiar (DXT1→ASTC/ETC2) y las 7 trampas ya pagadas. |
 | [`CAST_UPDATES.md`](CAST_UPDATES.md) | ⭐ Protocolo UPDATE en tiempo real — tipos, payloads, gestión memoria, calls mobile pendientes. |
 | [`CAST_NETFLIX_SPEC.md`](CAST_NETFLIX_SPEC.md) | Spec ejecutable para Fase A.1 — contrato del refactor Netflix. 10 secciones. |
 | [`BUILD_REPORT_2026-05-25.md`](BUILD_REPORT_2026-05-25.md) | Diagnóstico del build de 411MB + análisis duplicación. |
@@ -118,25 +119,38 @@ en TV va recortado a un bucle de 60 s en mono con crossfade (~0,8 MB en el build
 
 ## Build pipeline (resumen)
 
-### Estado actual — 2026-08-18 ⭐
+### Estado actual — 2026-08-19 ⭐
 
 En R2: `.data` = **15,94 MB** | `.wasm` = **21,66 MB** | receiver limpio (sello `rcv 2026-08-17 decos`;
-el player NO se ha rebuildeado desde el 17-ago, sólo bundles).
-Bundles: **80 en R2, 96,5 MB, 0 huérfanos**. Todo validado en el Xiaomi TV Box S.
+el player NO se rebuildea desde el 17-ago, sólo bundles).
+Bundles: **80 vivos = 87,3 MB**, 0 huérfanos · **3 bundles locales** (0,5 MB) en
+`StreamingAssets/aa/WebGL/`. Todo validado en el Xiaomi TV Box S.
 
-**Decos: 149,8 → 70,20 MB (−53,1 %)** tras pasar 20 de ellas a texturas DXT1 sueltas
-(ver `CAST_NEXT_SESSION_2026-08-18.md` §1.2). Estatuas y columnas bajan −70/−78 %; corales y
-conchas sólo −45/−52 %, porque **lo que les queda es malla** — ésa es la segunda palanca y cuesta
-calidad. **Bioluminiscencia arreglada y midiendo +20,7 %** de luminancia absoluta en el coral.
+**Decos: 149,8 → 61,03 MB (−59,3 %)** en dos palancas:
+1. **Texturas embebidas en GLB** → DXT1 sueltas (20 decos). Problema de GLTFast, que decodifica a
+   RGBA32 y se salta el override de plataforma.
+2. **Shader del material** (21 decos, 2026-08-19): Unity sólo empaqueta las texturas de propiedades
+   que **declara el shader activo**. Pasar los materiales de URP/Lit a `Appquarium/DecoLit` deja
+   fuera normal/metallic/AO/emission — que el runtime **ya descartaba** en
+   `DecorationPlacer.FixNonURPMaterials()`. Efecto extra: esas decos dejan de generar `FixMat`.
 
 ⚠ **Las cifras de tamaño de este doc son MB DECIMALES (10^6)**, que es lo que informa
-`Tools/r2_huerfanos.py`. Si mides con MiB (2^20) sale un ~4,9 % menos y parece que R2 y el disco
-local no cuadran; el 18-ago se persiguió esa falsa discrepancia hasta comprobar, fichero a fichero,
-que eran idénticos.
+`Tools/r2_huerfanos.py`. Medir en MiB (2^20) da un ~4,9 % menos y parece que R2 y el disco local no
+cuadran; el 18-ago se persiguió esa falsa discrepancia hasta comprobar, fichero a fichero, que eran
+idénticos.
 
-🧭 **El % que rinde el paso a DXT1 lo predice la proporción textura/malla**, así que conviene
-contar triángulos del GLB antes de estimar. Medido el 18-ago con texturas idénticas (1024² RGBA32):
-`lambis_shell` 12.498 triángulos → **−76,9 %**; `linckia_laevigata` 100.000 → **−36,8 %**.
+🧭 **El % que rinde el paso a DXT1 lo predice la proporción textura/malla**, así que conviene contar
+triángulos antes de estimar (`Appquarium TV → 📐 Informe de mallas por deco`). Medido con texturas
+idénticas: `lambis_shell` 12.498 triángulos → −76,9 %; `linckia_laevigata` 100.000 → −36,8 %.
+
+🎯 **La palanca que queda son las MALLAS.** 11 decos están clavadas en ~100.000 triángulos (tope de
+decimación del proveedor): son el 77 % de los triángulos y el 52 % del peso, y en ellas la malla es
+~79 % de su bundle. Decimarlas a 50k/25k daría −14/−21 MB. Cuesta calidad → decisión del user.
+
+⚠⚠ **Al desplegar sólo bundles, comprobar los bundles LOCALES.** El `shared_local_assets_all_<hash>`
+cambia de hash en casi cada build; vive en `StreamingAssets/aa/WebGL/` (se sirve por HTTP, **no hace
+falta rebuild de player**) y si el catálogo pide uno que no está, las decos que dependan de él
+fallan con **Dependency Exception**. `Tools/r2_huerfanos.py` ya revisa esa ruta y avisa.
 
 Cómo optimizar una deco nueva: `python Tools/extract_glb_textures.py <glb>` y luego
 `Appquarium TV → 🗜 Optimizar deco seleccionada` (o el lote). ⚠ La señal de que el prefab
@@ -383,7 +397,7 @@ print('OK index.html')
 | `Audio_Remote` | PackSeparately | 1 clip (`ambient_music`) | 1 |
 | `Default Local Group` | PackTogether | scaffolding | 1 |
 
-Total vivo: **80 bundles = 25 fish + 54 decos + 1 audio**, y en R2 ocupan **96,5 MB**.
+Total vivo: **80 bundles = 25 fish + 54 decos + 1 audio**, y en R2 ocupan **87,3 MB**.
 Ese 80 cuadra clavado con la tabla, así que es la comprobación rápida de que no falta nada.
 
 ⚠ **Los 11 fondos salieron de Addressables el 2026-08-18.** Se cargan SIEMPRE por

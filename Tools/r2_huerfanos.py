@@ -75,6 +75,64 @@ def hashes_locales():
     return vivos
 
 
+
+# ── bundles LOCALES (StreamingAssets/aa/WebGL/) ──────────────────────────────────
+# Punto ciego historico de este script, y costo 6 decos rotas en produccion el
+# 2026-08-18: los bundles del grupo `Shared_Local` viven FUERA de `bundles/`, se
+# sirven por HTTP desde ahi, y cambian de hash en casi cada build. Como no estaban
+# en el prefijo que miraba el script, ni se detectaban cuando faltaban ni se
+# limpiaban cuando sobraban.
+PREFIJO_LOCAL = 'StreamingAssets/aa/WebGL/'
+
+
+def revisar_locales(cl, cat_bytes):
+    """Compara los bundles locales de R2 contra los que referencia el catalogo servido.
+
+    Devuelve la lista de objetos huerfanos. Aqui NO se filtra por hash de 32 chars como
+    en `bundles/`: el nombre lleva el hash pero tambien un prefijo de build, asi que se
+    busca la aparicion literal del nombre dentro del catalogo.
+    """
+    txt = cat_bytes.decode('utf-8', 'ignore')
+    objetos, token = [], None
+    while True:
+        kw = {'Bucket': BUCKET, 'Prefix': PREFIJO_LOCAL}
+        if token:
+            kw['ContinuationToken'] = token
+        r = cl.list_objects_v2(**kw)
+        objetos.extend(r.get('Contents', []))
+        if not r.get('IsTruncated'):
+            break
+        token = r.get('NextContinuationToken')
+
+    bundles = [o for o in objetos if o['Key'].endswith('.bundle')]
+    vivos, huerfanos = [], []
+    for o in bundles:
+        n = os.path.basename(o['Key'])
+        # el catalogo puede citarlo sin el prefijo de build
+        cita = n in txt or any(n.endswith(x) for x in re.findall(
+            r'[0-9a-z_]*(?:shared_local|unitybuiltinassets|monoscripts)[0-9a-z_]*_[0-9a-f]{32}\.bundle', txt))
+        (vivos if cita else huerfanos).append(o)
+
+    print('\nen R2 %s: %d bundles locales' % (PREFIJO_LOCAL, len(bundles)))
+    print('  vivos      %3d  %8.1f MB' % (len(vivos), sum(o['Size'] for o in vivos) / 1e6))
+    print('  HUERFANOS  %3d  %8.1f MB' % (len(huerfanos), sum(o['Size'] for o in huerfanos) / 1e6))
+    for o in sorted(huerfanos, key=lambda x: -x['Size']):
+        print('     %6.2f MB  %s' % (o['Size'] / 1e6, os.path.basename(o['Key'])))
+
+    # ⚠ Si el catalogo referencia un local que NO esta en R2, el device falla al cargar
+    # las decos que dependan de el con "Dependency Exception". Avisar es lo importante.
+    faltan = [n for n in set(re.findall(
+        r'[0-9a-z_]*(?:shared_local|unitybuiltinassets|monoscripts)[0-9a-z_]*_[0-9a-f]{32}\.bundle', txt))
+        if not any(os.path.basename(o['Key']).endswith(n) for o in bundles)]
+    if faltan:
+        print('\n  ❌ EL CATALOGO PIDE LOCALES QUE NO ESTAN EN R2 -> las decos que dependan')
+        print('     de ellos fallaran con Dependency Exception. Subelos desde')
+        print('     Library/com.unity.addressables/aa/WebGL/WebGL/ a ' + PREFIJO_LOCAL)
+        for n in faltan:
+            print('       ' + n)
+    return huerfanos
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--borrar', action='store_true', help='borrar de verdad (pide confirmacion)')
@@ -119,7 +177,11 @@ def main():
     print('  vivos      %3d  %8.1f MB' % (len(vivas), mb(vivas)))
     print('  HUERFANOS  %3d  %8.1f MB' % (len(huerfanos), mb(huerfanos)))
 
-    if not huerfanos:
+    # Los bundles LOCALES van por su cuenta: otro prefijo y otro criterio.
+    cuerpo_cat = cl.get_object(Bucket=BUCKET, Key=cats_r2[0])['Body'].read()
+    huerfanos_locales = revisar_locales(cl, cuerpo_cat)
+
+    if not huerfanos and not huerfanos_locales:
         print('\nnada que limpiar.')
         return
 
@@ -138,17 +200,21 @@ def main():
         print('\n(informe solo — pasa --borrar para eliminarlos)')
         return
 
-    resp = input('\nBorrar %d objetos (%.1f MB) de R2? escribe SI: ' % (len(huerfanos), mb(huerfanos)))
+    todos = huerfanos + huerfanos_locales
+    print()
+    resp = input('Borrar %d objetos (%.1f MB) de R2? escribe SI: '
+                 % (len(todos), mb(todos)))
     if resp.strip() != 'SI':
         print('cancelado.')
         return
 
-    for i in range(0, len(huerfanos), 1000):
-        lote = huerfanos[i:i + 1000]
+    for i in range(0, len(todos), 1000):
+        lote = todos[i:i + 1000]
         cl.delete_objects(Bucket=BUCKET,
                           Delete={'Objects': [{'Key': o['Key']} for o in lote]})
-        print('borrados %d/%d' % (min(i + 1000, len(huerfanos)), len(huerfanos)))
-    print('listo: %.1f MB liberados.' % mb(huerfanos))
+        print('borrados %d/%d' % (min(i + 1000, len(todos)), len(todos)))
+    print('listo: %.1f MB liberados (%d de bundles/, %d locales).'
+          % (mb(todos), len(huerfanos), len(huerfanos_locales)))
 
 
 if __name__ == '__main__':
