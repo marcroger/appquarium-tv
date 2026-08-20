@@ -90,8 +90,11 @@ aws s3 sync ServerData/WebGL/ s3://appquarium-tv/bundles/ --profile r2 ...
 
 ## 3. Marcha atrás
 
-- Backup verificado por md5 en el scratchpad de la sesión: `catalog.bin` (`7f3d9ee5…`),
+- Backup verificado por md5 en **`D:\dev\_backupsppquarium-tvackup-antes-auth-2026-08-20\`**
+  (fuera del scratchpad de sesión a propósito, que ése se borra): `catalog.bin` (`7f3d9ee5…`),
   `catalog.hash`, `settings.json`, `index.html` y los 4 ficheros del player del 17-ago.
+  Se comprueba con `md5sum -c MD5SUMS.txt` — 8/8 OK el 20-ago.
+  ⚠ Sin él **no hay vuelta atrás del player**: `webgl-output/` no está en git y rehacerlo son 55 min.
 - ⚠ **El interruptor sigue siendo `StreamingAssets/aa/catalog.bin`**: subir el viejo devuelve el
   sistema a pedir los bundles a `r2.dev/bundles/`.
 - ⚠ **Pero desde el borrado del 20-ago eso ya no basta**: los 80 bundles públicos están

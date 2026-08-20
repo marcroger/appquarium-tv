@@ -150,8 +150,9 @@ https://appquarium-assets.appquarium.workers.dev/bundle/<fichero>.bundle
 
 ### Estado actual — 2026-08-19 ⭐
 
-En R2: `.data` = **15,94 MB** | `.wasm` = **21,66 MB** | receiver limpio (sello `rcv 2026-08-17 decos`;
-el player NO se rebuildea desde el 17-ago, sólo bundles).
+⚠ **Cifras del 19-ago. El 20-ago se rebuildeó el player** (hook de auth): `.data` = **15.942.355** ·
+`.wasm` = **21.664.370** · sello **`rcv 2026-08-20 auth`**. Y los bundles ya **no** están en R2
+público: ver la sección de arriba.
 Bundles: **80 vivos = 87,3 MB**, 0 huérfanos · **3 bundles locales** (0,5 MB) en
 `StreamingAssets/aa/WebGL/`. Todo validado en el Xiaomi TV Box S.
 
@@ -389,14 +390,14 @@ print('OK index.html')
 
 | Carpeta | Contenido |
 |---|---|
-| `Assets/Scripts/Core/` | AquariumManager (slim), AmbientModeController, AquariumCameraController, AudioManager, CastReceiver, CastDataTypes, FishSpawner, FoodItem, PostProcessingSetup, **TvSceneBootstrap** ⭐, **TvFoodManager**, **TvDecoCatalogPatch** (trasvasa `hasBioLuminescence` del JSON a los SOs — sin esto la biolum es código muerto) |
+| `Assets/Scripts/Core/` | **TvBundleAuth** ⭐ (firma cada descarga de bundle contra el Worker), AquariumManager (slim), AmbientModeController, AquariumCameraController, AudioManager, CastReceiver, CastDataTypes, FishSpawner, FoodItem, PostProcessingSetup, **TvSceneBootstrap** ⭐, **TvFoodManager**, **TvDecoCatalogPatch** (trasvasa `hasBioLuminescence` del JSON a los SOs — sin esto la biolum es código muerto) |
 | `Assets/Scripts/Fish/` | FishAgent, FishBrain, SteeringController, NeedsModule, FishProceduralAnimator (sync mobile) |
 | `Assets/Scripts/Tank/` | TankController, DecorationPlacer, BubbleSystem, TankBackground, TankLightingController, WaterSurface (sync mobile) |
 | `Assets/Scripts/Data/` | FishData, DecorationData, TankData (sync mobile) |
 | `Assets/Scripts/Utils/` | AppFlags, AppVersion, CatalogLoader (sync mobile) |
 | `Assets/Scripts/Stubs/` | TvStubs (stubs para clases mobile-only referenciadas indirectamente) |
 | `Assets/Editor/` | TvAddressablesSetup, TvBuildTools, SyncFromMobileMenu, **TvBuildPostprocess** (parchea settings.json tras cada build), **TvProdBuild** ⭐ (build de producción en batchmode + preflight de audio), **TvWasmOptimize** ⭐ (fuerza `DiskSizeLTO` en cualquier build), TvEmptyTestBuild, TvShadowDiag, **TvDecoOptimize** ⭐ (pasa una deco a texturas DXT1 sueltas: −49,8 % de peso medido) |
-| `Tools/` | ~30 ficheros. Los que importan: **SyncFromMobile.ps1**, **cast-headless.js** (sender sin navegador), **cast-run.sh** (ciclo de medición completo), **restore-production-receiver.sh**, **extract_glb_textures.py** (saca las texturas embebidas de un GLB + `mapeo.txt`, paso previo a `TvDecoOptimize`), **r2_huerfanos.py** (lista/borra bundles huérfanos de R2), y los `rcv-*.html` (receivers de diagnóstico). ⚠ Varios escriben en R2 de producción. |
+| `Tools/` | ~30 ficheros. Los que importan: **r2-auth-worker/** ⭐ (el Worker portero de los bundles + sus dos baterías de pruebas), **SyncFromMobile.ps1**, **cast-headless.js** (sender sin navegador), **cast-run.sh** (ciclo de medición completo), **restore-production-receiver.sh**, **extract_glb_textures.py** (saca las texturas embebidas de un GLB + `mapeo.txt`, paso previo a `TvDecoOptimize`), **r2_huerfanos.py** (lista/borra bundles huérfanos de R2), y los `rcv-*.html` (receivers de diagnóstico). ⚠ Varios escriben en R2 de producción. |
 
 ---
 

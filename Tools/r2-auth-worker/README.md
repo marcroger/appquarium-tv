@@ -58,6 +58,7 @@ Cada paso es reversible por separado y **no se borra nada del bucket público ha
 | El Worker (paso 1-3) | No se ha tocado producción. Nada que revertir. |
 | El catálogo nuevo (paso 5) | Subir de nuevo `StreamingAssets/aa/catalog.bin` + `.hash` del backup. Los bundles del bucket público **siguen ahí**, así que el catálogo viejo vuelve a funcionar tal cual. |
 | El player nuevo (paso 5) | Subir de nuevo `Build/webgl-output.*` del backup. |
+| Falta el backup | Está en `D:\dev\_backupsppquarium-tvackup-antes-auth-2026-08-20\` (catálogo, settings, index y los 4 del player del 17-ago; `md5sum -c MD5SUMS.txt`). |
 | Se detecta días después | Mientras no se haya ejecutado el paso 7, el bucket público conserva los 82 objetos: revertir catálogo + player devuelve el sistema al estado del 19-ago. |
 | Ya se ejecutó el paso 7 | Volver a copiar los bundles del bucket privado al público (`aws s3 sync` entre buckets) y luego revertir catálogo + player. |
 
