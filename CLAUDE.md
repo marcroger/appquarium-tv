@@ -32,7 +32,9 @@ El móvil envía el estado del tanque vía Google Cast SDK; este proyecto **rend
 
 | Doc | Cuándo |
 |---|---|
-| [`CAST_NEXT_SESSION_2026-08-20.md`](CAST_NEXT_SESSION_2026-08-20.md) | ⭐⭐ **EMPEZAR AQUÍ.** Estado al cierre del 19-ago, pendientes reales y las trampas caras (bundle local que cambia de hash, y los 3 fallos de la conversión de materiales). |
+| [`CAST_NEXT_SESSION_2026-08-21.md`](CAST_NEXT_SESSION_2026-08-21.md) | ⭐⭐ **EMPEZAR AQUÍ.** Cierre del 20-ago: los bundles ya están detrás del Worker. Qué cambió en el deploy y qué queda. |
+| [`CAST_R2_AUTH_MOVIL.md`](CAST_R2_AUTH_MOVIL.md) | 📄 **Para la sesión del repo MÓVIL.** Contrato de la Fase 2 (JWT por usuario): campo del JSON, claims, orden de migración. |
+| [`CAST_NEXT_SESSION_2026-08-20.md`](CAST_NEXT_SESSION_2026-08-20.md) | Estado al cierre del 19-ago, Estado al cierre del 19-ago, pendientes reales y las trampas caras (bundle local que cambia de hash, y los 3 fallos de la conversión de materiales). |
 | [`ESTADO_PRODUCCION_2026-08-19.md`](ESTADO_PRODUCCION_2026-08-19.md) | 📊 **Foto de estado y valoración para producción.** Qué está validado, y los 2 puntos que faltan antes de difundir (bucket abierto + rigs de diagnóstico servidos). |
 | [`DECOS_PESO_PARA_MOVIL.md`](DECOS_PESO_PARA_MOVIL.md) | 📄 **Para leer en el repo MÓVIL.** Las 3 palancas de peso de decos, qué se reutiliza, qué cambiar (DXT1→ASTC/ETC2) y las 7 trampas ya pagadas. |
 | [`CAST_UPDATES.md`](CAST_UPDATES.md) | ⭐ Protocolo UPDATE en tiempo real — tipos, payloads, gestión memoria, calls mobile pendientes. |
@@ -119,6 +121,32 @@ en TV va recortado a un bucle de 60 s en mono con crossfade (~0,8 MB en el build
 ---
 
 ## Build pipeline (resumen)
+
+### ⚠⚠ Los bundles ya NO son públicos (2026-08-20)
+
+Los 80 bundles remotos viven en el bucket **privado** `appquarium-tv-assets` (raíz, sin prefijo,
+sin dominio público) y los sirve un Worker de Cloudflare que exige `Authorization: Bearer`:
+
+```
+https://appquarium-assets.appquarium.workers.dev/bundle/<fichero>.bundle
+```
+
+- Código y despliegue del Worker: **`Tools/r2-auth-worker/`** (README con el rollback).
+- El receiver pone la cabecera en `TvBundleAuth.cs` (hook `Addressables.WebRequestOverride`,
+  instalado en `Awake` de `TvSceneBootstrap`). Busca por **ruta** (`/bundle/`), no por host.
+- **Fase 1 = token constante** dentro del `.wasm`. No es DRM: es lo que convierte «cualquiera
+  con la URL se lo baja» en «hay que atacar el producto», que es lo que las licencias esperan.
+- **Fase 2** (JWT por usuario) **no necesitará rebuild de player**: `TvAquariumState.castJwt` ya
+  existe y el hook lo prefiere. Contrato en `CAST_R2_AUTH_MOVIL.md`.
+- ⚠ **Rotar el token constante cuesta un rebuild de player.** El Worker acepta varios a la vez
+  (`BUNDLE_TOKENS` separados por coma) para poder solapar el viejo y el nuevo.
+- ⚠ **Lo que sigue público y tiene que seguirlo:** `index.html` y el player. El device de Cast
+  pide la URL del receiver con el navegador y **sin credenciales**; no hay forma de autenticar
+  ese primer fetch. `catalog.bin` también: permite enumerar nombres, no descargar bytes.
+- ⚠ Cloudflare tiene **protección anti-bot delante del Worker**: un `curl` con User-Agent de
+  `python-urllib` recibe `error code 1010` **antes** de llegar al código. El Chromium del
+  Chromecast pasa (validado). Si algún día no pasara, no hay regla de WAF que tocar —
+  `workers.dev` no es una zona propia; la salida sería ponerle un dominio propio.
 
 ### Estado actual — 2026-08-19 ⭐
 
@@ -250,8 +278,8 @@ Ver `BUILD_REPORT_2026-05-28.md` para histórico de la Fase A.1.
 ### Comandos clave
 
 ```powershell
-# Verificar CORS R2 (pre-req crítico)
-curl -I -H "Origin: https://anything" https://pub-2b11cc17bdef4f75bd4d34eeabbd6042.r2.dev/bundles/<bundle>.bundle
+# Verificar el Worker (pre-req crítico) — los bundles YA NO están en el bucket público
+Tools/r2-auth-worker/smoke-test.sh https://appquarium-assets.appquarium.workers.dev <TOKEN> <bundle>.bundle
 
 # Build bundles: Window → Asset Management → Addressables → Groups → Build → New Build → Default Build Script
 # ❌ NO usar "Update a Previous Build" — es para workflows CCD (Unity Cloud), no para R2 self-hosted.
@@ -283,13 +311,16 @@ $env:AWS_RESPONSE_CHECKSUM_VALIDATION = "when_supported"
 
 # — Caso normal: solo New Build (bundles + catalog, sin tocar player) —
 # Los bundles usan sync SIN --delete para no borrar los que no se rebuildearon
-aws s3 sync ServerData/WebGL/ s3://appquarium-tv/bundles/ `
-  --profile r2 `
+# ⚠⚠ AL BUCKET PRIVADO `appquarium-tv-assets`, EN LA RAÍZ (sin prefijo `bundles/`) y con el
+# perfil `r2assets`. Subirlos a `appquarium-tv/bundles/` los volvería a dejar PÚBLICOS, que es
+# exactamente el agujero que se cerró el 2026-08-20.
+aws s3 sync ServerData/WebGL/ s3://appquarium-tv-assets/ `
+  --profile r2assets `
   --endpoint-url https://2aa2b7914f4ce7ce81e38d694b6219dc.r2.cloudflarestorage.com `
   --cache-control "public, max-age=604800"
 # El catalog.hash suele fallar con sync → subir por separado:
-aws s3 cp ServerData/WebGL/catalog_1.2.1.hash s3://appquarium-tv/bundles/catalog_1.2.1.hash `
-  --profile r2 `
+aws s3 cp ServerData/WebGL/catalog_1.2.1.hash s3://appquarium-tv-assets/catalog_1.2.1.hash `
+  --profile r2assets `
   --endpoint-url https://2aa2b7914f4ce7ce81e38d694b6219dc.r2.cloudflarestorage.com `
   --cache-control "public, max-age=60" --content-type "text/plain"
 
@@ -327,12 +358,12 @@ for local, key, ct, cc in [
 
 # — Rebuild completo (player + todos los bundles, caso raro) —
 # 1. Limpiar bundles viejos
-aws s3 rm s3://appquarium-tv/bundles/ --recursive `
-  --profile r2 `
+aws s3 rm s3://appquarium-tv-assets/ --recursive `
+  --profile r2assets `
   --endpoint-url https://2aa2b7914f4ce7ce81e38d694b6219dc.r2.cloudflarestorage.com
 # 2. Subir bundles nuevos
-aws s3 sync ServerData/WebGL/ s3://appquarium-tv/bundles/ `
-  --profile r2 `
+aws s3 sync ServerData/WebGL/ s3://appquarium-tv-assets/ `
+  --profile r2assets `
   --endpoint-url https://2aa2b7914f4ce7ce81e38d694b6219dc.r2.cloudflarestorage.com `
   --cache-control "public, max-age=604800"
 # 3. Subir player — mismo comando acotado a Build/ del bloque anterior. SIN --delete.

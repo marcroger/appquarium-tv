@@ -37,9 +37,17 @@ import os
 import re
 import sys
 
+# ⚠ 2026-08-20 — DOS buckets desde que los bundles estan detras del Worker:
+#   · appquarium-tv         PUBLICO  -> index.html, Build/, StreamingAssets/ (y los bundles
+#                                       LOCALES, que se sirven por HTTP desde ahi)
+#   · appquarium-tv-assets  PRIVADO  -> los 80 bundles remotos, en la RAIZ (sin prefijo).
+#                                       Sin dominio publico: solo salen por el Worker.
+# Antes todo vivia en appquarium-tv/bundles/. Si este script sigue mirando ahi, informa de
+# 0 bundles y da la falsa sensacion de que no hay nada que limpiar.
 BUCKET = 'appquarium-tv'
+BUCKET_BUNDLES = 'appquarium-tv-assets'
 ENDPOINT = 'https://2aa2b7914f4ce7ce81e38d694b6219dc.r2.cloudflarestorage.com'
-PREFIJO = 'bundles/'
+PREFIJO = ''  # en el bucket privado los bundles cuelgan de la raiz
 
 
 def cliente():
@@ -48,8 +56,9 @@ def cliente():
     c.read([os.path.expanduser('~/.aws/credentials')])
     return boto3.client(
         's3', endpoint_url=ENDPOINT,
-        aws_access_key_id=c.get('r2', 'aws_access_key_id'),
-        aws_secret_access_key=c.get('r2', 'aws_secret_access_key'),
+        # perfil con acceso a los DOS buckets; el viejo 'r2' solo ve el publico
+        aws_access_key_id=c.get('r2assets', 'aws_access_key_id'),
+        aws_secret_access_key=c.get('r2assets', 'aws_secret_access_key'),
         region_name='auto')
 
 
@@ -62,7 +71,7 @@ def hashes_vivos(cl, claves_catalogo):
         sys.exit('ERROR: no hay ningun catalog_*.bin en R2 — nada con lo que comparar.')
     vivos = set()
     for k in claves_catalogo:
-        cuerpo = cl.get_object(Bucket=BUCKET, Key=k)['Body'].read()
+        cuerpo = cl.get_object(Bucket=BUCKET_BUNDLES, Key=k)['Body'].read()
         vivos |= set(re.findall(r'[a-f0-9]{32}', cuerpo.decode('latin-1')))
     return vivos
 
@@ -142,7 +151,7 @@ def main():
     objetos = []
     token = None
     while True:
-        kw = {'Bucket': BUCKET, 'Prefix': PREFIJO}
+        kw = {'Bucket': BUCKET_BUNDLES, 'Prefix': PREFIJO}
         if token:
             kw['ContinuationToken'] = token
         r = cl.list_objects_v2(**kw)
@@ -173,12 +182,12 @@ def main():
     def mb(lista):
         return sum(o['Size'] for o in lista) / 1e6
 
-    print('\nen R2 %s: %d bundles, %.1f MB' % (PREFIJO, len(bundles), mb(bundles)))
+    print('\nen R2 %s (raiz): %d bundles, %.1f MB' % (BUCKET_BUNDLES, len(bundles), mb(bundles)))
     print('  vivos      %3d  %8.1f MB' % (len(vivas), mb(vivas)))
     print('  HUERFANOS  %3d  %8.1f MB' % (len(huerfanos), mb(huerfanos)))
 
     # Los bundles LOCALES van por su cuenta: otro prefijo y otro criterio.
-    cuerpo_cat = cl.get_object(Bucket=BUCKET, Key=cats_r2[0])['Body'].read()
+    cuerpo_cat = cl.get_object(Bucket=BUCKET_BUNDLES, Key=cats_r2[0])['Body'].read()
     huerfanos_locales = revisar_locales(cl, cuerpo_cat)
 
     if not huerfanos and not huerfanos_locales:
@@ -208,12 +217,16 @@ def main():
         print('cancelado.')
         return
 
-    for i in range(0, len(todos), 1000):
-        lote = todos[i:i + 1000]
-        cl.delete_objects(Bucket=BUCKET,
-                          Delete={'Objects': [{'Key': o['Key']} for o in lote]})
-        print('borrados %d/%d' % (min(i + 1000, len(todos)), len(todos)))
-    print('listo: %.1f MB liberados (%d de bundles/, %d locales).'
+    # ⚠ cada lista va a SU bucket: los remotos al privado, los locales al publico.
+    # Mezclarlos borraria la clave equivocada (o ninguna) sin dar error.
+    for etiqueta, bucket, lista in (('remotos', BUCKET_BUNDLES, huerfanos),
+                                    ('locales', BUCKET, huerfanos_locales)):
+        for i in range(0, len(lista), 1000):
+            lote = lista[i:i + 1000]
+            cl.delete_objects(Bucket=bucket,
+                              Delete={'Objects': [{'Key': o['Key']} for o in lote]})
+            print('borrados %s %d/%d' % (etiqueta, min(i + 1000, len(lista)), len(lista)))
+    print('listo: %.1f MB liberados (%d remotos, %d locales).'
           % (mb(todos), len(huerfanos), len(huerfanos_locales)))
 
 
