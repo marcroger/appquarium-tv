@@ -65,6 +65,11 @@ public class TvSceneBootstrap : MonoBehaviour
         if (Instance != null && Instance != this) { Destroy(gameObject); return; }
         Instance = this;
 
+        // Los bundles ya no salen de un bucket público: los sirve el Worker desde uno
+        // privado y sin cabecera devuelve 401. Va aquí, en Awake, porque tiene que estar
+        // puesto antes del primer LoadAssetAsync (que ocurre al llegar el INIT de Cast).
+        TvBundleAuth.Install();
+
         // ⚠ 2026-08-11 — el overlay amarillo (PostFX/CAM/Lighting/BG) tapaba la esquina
         // superior izquierda del acuario EN PRODUCCIÓN: se añadía siempre, sin condición.
         // Las llamadas a TvLayerDebug.Set() repartidas por el código son inofensivas si el
@@ -135,6 +140,10 @@ public class TvSceneBootstrap : MonoBehaviour
         if (state == null) { Debug.LogWarning("[TvScene] INIT received null state."); JsBridge.Log("ERR: INIT state is null — JSON parse failed!"); return; }
         Debug.Log($"[TvScene] INIT — fish:{state.activeFish?.Count ?? 0} bg:{state.bgId}");
         JsBridge.Log($"INIT: fish={state.activeFish?.Count ?? 0} bg={state.bgId} tank={state.selectedTankId}");
+
+        // Fase 2: si el sender manda su JWT, manda ese. Si no viene -- que es el caso hoy, y
+        // el de cualquier app ya instalada -- sigue valiendo el token constante del receiver.
+        TvBundleAuth.SetSessionToken(state.castJwt);
 
         // ⚠ 2026-08-15 — parar la carga anterior antes de arrancar otra.
         // Si el sender caía y reconectaba MIENTRAS se bajaban bundles (carga fría ~40 s,
