@@ -84,7 +84,13 @@ export default {
       return new Response('ok\n', { headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
     }
 
-    const match = BUNDLE_RE.exec(url.pathname);
+    // Barras repetidas colapsadas antes de casar. Motivo real: Addressables genera la URL
+    // del remote hash como ".../bundle//catalog_1.2.1.hash". Hoy esa URL no se pide nunca
+    // (m_DisableCatalogUpdateOnStart = true), pero si alguien cambia ese flag el 404 seria
+    // dificil de diagnosticar. El regex de la clave sigue prohibiendo barras, asi que
+    // colapsarlas no abre ningun camino nuevo.
+    const path = url.pathname.replace(/\/{2,}/g, '/');
+    const match = BUNDLE_RE.exec(path);
     if (!match) return deny(404, 'Not found', req, env);
     const key = match[1];
 

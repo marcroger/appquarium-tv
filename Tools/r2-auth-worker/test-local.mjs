@@ -43,6 +43,7 @@ r.post     = await call(`/bundle/${KEY}`, { method: 'POST', headers: bearer('tok
 r.head     = await call(`/bundle/${KEY}`, { method: 'HEAD', headers: bearer('token-bueno') });
 r.pre      = await call(`/bundle/${KEY}`, { method: 'OPTIONS', headers: { Origin: ORIGIN } });
 r.preMal   = await call(`/bundle/${KEY}`, { method: 'OPTIONS', headers: { Origin: 'https://evil.example' } });
+r.doble    = await call(`/bundle//${KEY}`, { headers: bearer('token-bueno') });
 r.sinTok   = await worker.fetch(new Request(`${BASE}/bundle/${KEY}`, { headers: bearer('token-bueno') }),
                                 { ...env, BUNDLE_TOKENS: '' }, ctx);
 
@@ -59,6 +60,7 @@ chk('HEAD con token',               200, r.head.status);
 chk('preflight origen permitido',   204, r.pre.status);
 chk('preflight origen ajeno',       403, r.preMal.status);
 chk('Worker sin BUNDLE_TOKENS',     503, r.sinTok.status);
+chk('doble barra (remote hash)',    200, r.doble.status);
 
 chk('preflight permite Authorization', true,
     /authorization/i.test(r.pre.headers.get('access-control-allow-headers') || ''));
