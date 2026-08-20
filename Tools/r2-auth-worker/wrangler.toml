@@ -1,0 +1,18 @@
+# Worker portero de los bundles. Ver README.md para desplegar y para revertir.
+name = "appquarium-assets"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+
+# El bucket es PRIVADO (sin dominio publico). El Worker es la unica puerta.
+[[r2_buckets]]
+binding     = "ASSETS"
+bucket_name = "appquarium-tv-assets"
+
+[vars]
+# Origenes a los que se conceden headers CORS. El primero es el receiver en produccion;
+# los localhost son el rig de pruebas local. No es una medida de seguridad (curl puede
+# falsear Origin): el que manda es el token.
+ALLOWED_ORIGINS = "https://pub-2b11cc17bdef4f75bd4d34eeabbd6042.r2.dev,http://localhost:3001,http://localhost:3005"
+
+# BUNDLE_TOKENS NO va aqui: es un secret.
+#   npx wrangler secret put BUNDLE_TOKENS
