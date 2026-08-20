@@ -90,7 +90,7 @@ aws s3 sync ServerData/WebGL/ s3://appquarium-tv/bundles/ --profile r2 ...
 
 ## 3. Marcha atrás
 
-- Backup verificado por md5 en **`D:\dev\_backupsppquarium-tvackup-antes-auth-2026-08-20\`**
+- Backup verificado por md5 en **`D:/dev/_backups/appquarium-tv/backup-antes-auth-2026-08-20/`**
   (fuera del scratchpad de sesión a propósito, que ése se borra): `catalog.bin` (`7f3d9ee5…`),
   `catalog.hash`, `settings.json`, `index.html` y los 4 ficheros del player del 17-ago.
   Se comprueba con `md5sum -c MD5SUMS.txt` — 8/8 OK el 20-ago.
