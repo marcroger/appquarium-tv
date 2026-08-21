@@ -116,9 +116,21 @@ public class TvSceneBootstrap : MonoBehaviour
             var camData = cam.GetComponent<UnityEngine.Rendering.Universal.UniversalAdditionalCameraData>();
             if (camData != null)
             {
+                // ⚠⚠ 2026-08-21: SIN esta línea no hay post-proceso, aunque exista el pipeline y
+                // aunque PostProcessingSetup construya su Volume. En URP `renderPostProcessing`
+                // viene en FALSE por defecto, y aquí nadie lo encendía: este mismo bloque llevaba
+                // meses tocando la componente para poner SMAA y se dejaba lo importante.
+                // El síntoma es el peor de todos: no falla nada, simplemente la tele se ve plana.
+                camData.renderPostProcessing = true;
+
                 camData.antialiasing        = UnityEngine.Rendering.Universal.AntialiasingMode.SubpixelMorphologicalAntiAliasing;
                 camData.antialiasingQuality = UnityEngine.Rendering.Universal.AntialiasingQuality.Low;
-                Debug.Log("[TvScene] SMAA Low enabled");
+                Debug.Log("[TvScene] postFX ON + SMAA Low enabled");
+                JsBridge.Log("POSTFX: activado en la cámara (renderPostProcessing=true)");
+            }
+            else
+            {
+                JsBridge.Log("ERR: la cámara no tiene UniversalAdditionalCameraData → sin post-proceso");
             }
         }
 
