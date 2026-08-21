@@ -3,9 +3,13 @@
 > Foto completa del proyecto al cierre del 19-ago, y una valoración honesta de qué está listo para
 > una subida a producción y qué no.
 >
-> **Resumen:** el receiver está **funcionalmente listo y validado**. Lo que falta para una subida
-> «a pro» de verdad **no es el motor, es la infraestructura**: el bucket está abierto al mundo y
-> es que **el bucket está abierto al mundo**. Todo lo demás de la lista quedó cerrado el 19-ago. Detalle en §4.
+> **Resumen (tal como se escribió el 19-ago):** el receiver está **funcionalmente listo y
+> validado**; lo único que faltaba para una subida «a pro» no era el motor sino la
+> infraestructura — **el bucket estaba abierto al mundo**.
+>
+> ✅ **Eso se cerró el 2026-08-20** (bundles en bucket privado detrás de un Worker). Este doc se
+> mantiene como **foto del 19-ago**: sus cifras de R2 y del player son de ese día. El estado
+> vigente está en [`CAST_NEXT_SESSION_2026-08-21.md`](CAST_NEXT_SESSION_2026-08-21.md).
 
 ---
 
@@ -79,7 +83,14 @@ tamaño del `.wasm` — no Android Doze, ni un cap duro del device, ni el vídeo
 
 ## 4. ⚠ Lo que NO está listo para una subida «a pro»
 
-### 4.1 🔴 El bucket de R2 está abierto al mundo
+### 4.1 ✅ El bucket de R2 estaba abierto al mundo — **RESUELTO el 2026-08-20**
+
+> Los 80 bundles se movieron a un bucket **privado** servido por un Worker con `Authorization:
+> Bearer`. `curl` a la URL pública de siempre → **404**. Validado en la tele: 421 s, 31/31
+> bundles, 0 errores. Detalle en [`CAST_NEXT_SESSION_2026-08-21.md`](CAST_NEXT_SESSION_2026-08-21.md).
+> Queda la **Fase 2** (JWT por usuario), que es trabajo del repo móvil.
+
+Lo que decía este apartado, y por qué era bloqueante:
 
 ```
 curl https://pub-…r2.dev/StreamingAssets/aa/catalog.hash   ->  HTTP 200, sin auth
@@ -128,10 +139,9 @@ es la configuración con la que se han validado las sesiones de 900 s. **No toca
 ## 5. Si mañana hubiera que publicar
 
 **Mínimo imprescindible:**
-1. 🔴 **Cerrar el bucket** (Worker + JWT) — §4.1. **Es lo único bloqueante que queda.**
-   Spec completo en [`CAST_R2_AUTH_SPEC.md`](CAST_R2_AUTH_SPEC.md) (13 secciones). **0 €/mes** hasta
-   ~3.000 usuarios/día; ~3 días de trabajo; toca **los dos repos** y el Worker lo tiene que crear el
-   user en su cuenta de Cloudflare.
+1. ✅ ~~**Cerrar el bucket**~~ **HECHO el 2026-08-20** (Fase 1) — §4.1. Coste real: **0 €/mes** y
+   una tarde, no los 3 días estimados, porque la Fase 1 **no necesitó tocar el móvil**. Queda la
+   Fase 2 (JWT por usuario), que sí es de los dos repos: [`CAST_R2_AUTH_MOVIL.md`](CAST_R2_AUTH_MOVIL.md).
 2. ✅ ~~Borrar los rigs de diagnóstico~~ **HECHO el 19-ago** (56,72 MB).
 
 **Recomendable antes de difundir:**
@@ -148,7 +158,8 @@ es la configuración con la que se han validado las sesiones de 900 s. **No toca
 
 | Doc | Para qué |
 |---|---|
-| [`CAST_NEXT_SESSION_2026-08-20.md`](CAST_NEXT_SESSION_2026-08-20.md) | ⭐ Empezar aquí la próxima sesión: pendientes y trampas |
+| [`CAST_NEXT_SESSION_2026-08-21.md`](CAST_NEXT_SESSION_2026-08-21.md) | ⭐ Empezar aquí: cierre del 20-ago (bundles detrás del Worker), pendientes y trampas |
+| [`CAST_R2_AUTH_MOVIL.md`](CAST_R2_AUTH_MOVIL.md) | Contrato de la Fase 2 para el repo móvil |
 | [`DECOS_PESO_PARA_MOVIL.md`](DECOS_PESO_PARA_MOVIL.md) | 📄 Para leer en `D:\dev\appquarium-unity\` |
 | [`CLAUDE.md`](CLAUDE.md) | Contexto permanente, pipeline de build y comandos de deploy |
 | [`CAST_UPDATES.md`](CAST_UPDATES.md) | Protocolo UPDATE en tiempo real |

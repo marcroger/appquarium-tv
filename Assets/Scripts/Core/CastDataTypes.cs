@@ -29,6 +29,7 @@ public class TvAquariumState
     public float             fishSpeed      = 1f;
     public string            selectedTankId = "";
     public float             tankHalfWidth  = 0f;  // mobile camera half-width in world units; 0 = old client (no remap)
+    public string            castJwt        = "";  // Fase 2: JWT por usuario que emite el Worker. Vacío = el receiver usa su token constante.
 }
 
 [Serializable]

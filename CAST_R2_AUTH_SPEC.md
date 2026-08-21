@@ -1,6 +1,24 @@
 # Cast R2 Auth — Spec ejecutable
 
-**Estado:** 2026-05-26 — diseño aprobado, implementación post Fase A.1 Netflix.
+> ## ⚠⚠ LEER ESTO ANTES QUE NADA (2026-08-20)
+>
+> **La Fase 1 YA ESTÁ IMPLEMENTADA Y DESPLEGADA**, pero **NO como dice este documento**: dos de
+> sus decisiones de diseño son erróneas y se descubrió al construirlo.
+>
+> 1. **El `302` a R2 (§3, §5) NO PUEDE FUNCIONAR.** El receiver pide los bundles cross-origin y
+>    con header `Authorization` → request **con preflight**, y el spec de Fetch **prohíbe seguir
+>    un redirect cross-origin** en ese caso. El Worker **sirve los bytes** (binding R2). Efecto
+>    secundario bueno: así el bucket puede ser **privado**, en vez de «público pero oculto».
+> 2. **«R2 sigue público» (§3) era innecesario y peor.** Los bundles están hoy en un bucket
+>    **privado sin dominio público**.
+>
+> Lo que SÍ sigue siendo válido de este doc: el threat model (§2), la estructura del JWT (§4),
+> el trabajo del móvil (§6), el coste (§9) y los riesgos (§10).
+>
+> 📄 **Lo realmente construido:** `Tools/r2-auth-worker/README.md` ·
+> **contrato de la Fase 2:** `CAST_R2_AUTH_MOVIL.md` · **cierre:** `CAST_NEXT_SESSION_2026-08-21.md`
+
+**Estado:** 2026-05-26 — diseño aprobado. **Fase 1 ejecutada el 2026-08-20 con las correcciones de arriba.**
 **Pre-requisito:** Cast Fase A.1 funcional (bundles cargando desde R2 vía TvSceneBootstrap).
 **Doc relacionada:** [`CAST_NETFLIX_SPEC.md`](CAST_NETFLIX_SPEC.md) — la arquitectura base.
 

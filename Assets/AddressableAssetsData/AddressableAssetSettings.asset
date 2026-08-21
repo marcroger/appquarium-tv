@@ -86,7 +86,7 @@ MonoBehaviour:
       - m_Id: 2f3f4ccd10ef23c43aed427a4dd5727c
         m_Value: '{UnityEngine.AddressableAssets.Addressables.RuntimePath}/[BuildTarget]'
       - m_Id: e5548e2a6982a1c4aafbbb06acb7c6b8
-        m_Value: https://pub-2b11cc17bdef4f75bd4d34eeabbd6042.r2.dev/bundles
+        m_Value: https://appquarium-assets.appquarium.workers.dev/bundle
       - m_Id: ed1a74cfa5d9cca48b0b5d8e38559f6b
         m_Value: '[UnityEngine.AddressableAssets.Addressables.BuildPath]/[BuildTarget]'
     m_ProfileEntryNames:
