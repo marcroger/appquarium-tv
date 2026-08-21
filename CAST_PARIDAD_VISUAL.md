@@ -50,12 +50,17 @@ pero no está comprobado en pantalla. Ver §4 antes de tocar un solo valor.
 El PNG de origen es **el mismo fichero** en los dos repos (`bg_abyss.png`, 1.935.615 bytes en
 ambos). Lo que cambia es el import:
 
-| | maxTextureSize | override |
-|---|---|---|
-| Móvil (Android) | **2048** | `overridden: 0` |
-| TV (WebGL) | **512** | `overridden: 1` |
+| | maxTextureSize | resolución real en el device | override |
+|---|---|---|---|
+| Móvil (Android) | **2048** | **1536×1024** (el PNG entero) | `overridden: 0` |
+| TV (WebGL) | **512** | **512×341** | `overridden: 1` |
 
-512 frente a 2048 es **4× por eje = 16× menos téxeles**. Encima:
+⚠ **Corregido el 21-ago:** los PNG de origen miden **1536×1024**, no 2048². El `maxTextureSize`
+recorta el lado mayor, así que el móvil no escala nada — se queda el original — y la TV baja a
+512×341. La diferencia es de **9× en píxeles** (1,57 Mpx contra 0,175), no de 16× como decía la
+primera versión de este doc. Sigue siendo el factor grande de nitidez, pero conviene tenerlo bien.
+
+Encima:
 
 - `textureCompression: 1` + `compressionQuality: 50` → DXT en WebGL. Sobre un degradado suave,
   DXT1 hace **banding** y desplaza tonos: es justo el peor caso para un fondo de agua.
@@ -126,8 +131,38 @@ sólo subiendo un fichero a R2.
 | **Bloom ON** (móvil: 1,2) | Es lo que hace que el móvil se vea «vivo» | FPS. Se apagó por eso; la Xiaomi va a 37 fps medios con 25 peces |
 | **Tonemapping Neutral OFF** | Altos sin comprimir, como el móvil | Riesgo de highlights quemados (por eso se puso Neutral, no ACES) |
 | **Saturación +18 → −15** | Igualar el grado del móvil | Sólo tiene sentido **junto** al bloom; sola, apaga el resultado |
-| **Fondos 512 → 1024** | Nitidez del fondo (4× téxeles) | ~+2-3 MB en el `.data` (hoy 15,94 MB) y más tiempo de build |
+| **Fondos 512 → 1024** | 4× téxeles (de 9× que faltan) | **+3,8 MB** en el `.data` (hoy 15,94 MB) |
+| **Fondos a 1536 (paridad)** | Lo mismo que ve el móvil | **+10,2 MB** en el `.data`: lo dejaría en ~26 MB, un **+64 %** |
+| 🎯 **Fondos a Addressables** | Paridad **sin** engordar el `.data`: sólo se descarga el que se usa (~1 MB) y los otros 10 dejan de viajar | Convertir `Resources.Load` síncrono en asíncrono + volver a meterlos en un grupo. Riesgo: el primer frame sin fondo si no se cubre |
 | **renderScale 0,7 → 0,8** | Poco: el móvil está en **0,8**, o sea un 12 % de diferencia | Fill-rate: la palanca más cara en FPS de las tres del 19-jun. **Mala relación coste/beneficio** |
+
+---
+
+### 3.1 🎯 Por qué P2 debería ir por Addressables y no por subir el import
+
+Medido el 21-ago (DXT1 + mipmaps, 11 fondos):
+
+| | resolución | peso de los 11 en el `.data` |
+|---|---|---|
+| Hoy (max 512) | 512×341 | ~1,3 MB |
+| max 1024 | 1024×683 | ~5,1 MB (**+3,8**) |
+| max 1536 = paridad con el móvil | 1536×1024 | ~11,5 MB (**+10,2**) |
+
+Subir el import es la vía fácil, pero **paga los 11 fondos para usar 1**: todos viajan horneados
+en el `.data`, que hoy son 15,94 MB y que el device descarga entero antes de arrancar.
+
+Sacarlos a un bundle remoto invierte la cuenta: el `.data` **adelgaza** ~1,3 MB y el fondo activo
+se baja aparte (~1 MB a resolución completa). Encima ya está la infraestructura hecha — bucket
+privado, Worker y `TvBundleAuth` — así que el fondo iría autenticado como los demás bundles.
+
+⚠ Esto es exactamente el pendiente que ya estaba en la lista («sacar los fondos del `.data`») y
+que se dejó porque **pide convertir carga síncrona en asíncrona**. Ahora tiene una razón de peso
+para hacerse: no es sólo ahorrar 0,7 MB, es la única forma de tener el fondo nítido sin inflar el
+player.
+⚠⚠ Y ojo con el historial: los 11 fondos **se sacaron** de Addressables el 18-ago porque nadie
+los descargaba (`TankBackground` los pide por `Resources.Load`). Volver a meterlos **sin**
+convertir el loader repetiría exactamente aquel bundle muerto. El orden correcto es: primero el
+loader asíncrono, después el grupo.
 
 ---
 
