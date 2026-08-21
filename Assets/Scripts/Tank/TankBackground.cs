@@ -64,6 +64,16 @@ public class TankBackground : MonoBehaviour
 
     // Referencias internas
     private Material     _bgMaterial;
+    private Mesh         _bgMesh;
+    // Fracción de la altura del quad que queda TAPADA por el suelo. Con 0 el fondo se mapea a
+    // todo el quad y la parte baja de la imagen no se ve nunca (medido en la tele el 21-ago:
+    // sólo llegaba a verse el 62 % de la foto). Con f>0 la imagen se comprime hacia arriba para
+    // que entre entera en la banda visible, que es como se ve en la app.
+    // 0,25 elegido comparando en la tele el 2026-08-21 (capturas en _tvshots/fit):
+    //   0     → la foto se mapea a todo el quad y sólo llega a verse ~el 62 %: plana.
+    //   0,25  → entra la superficie arriba Y la zona profunda tocando la arena. Es la que gana.
+    //   0,38  → cabe la foto entera, pero su borde inferior se ve como una banda rayada.
+    private float        _fitOculto = 0.25f;
     private MeshRenderer _dirtyOverlay;
     private MeshRenderer _nightOverlay;
     private Coroutine    _bgTransition;
@@ -255,9 +265,80 @@ public class TankBackground : MonoBehaviour
         JsBridge.Log($"BGSHADER: fondo pintado con '{sh.name}' (textura {(tex == null ? "NULL" : tex.name)})");
     }
 
+    /// <summary>
+    /// Ajusta qué parte de la imagen de fondo se ve. `fraccionOculta` es la porción de la altura
+    /// del quad que el suelo tapa: con 0 se mapea la foto a todo el quad (y su parte baja no
+    /// llega a verse), con 0,3 la foto se comprime para caber entera por encima del suelo.
+    ///
+    /// Medido en la tele el 2026-08-21: con el valor de siempre (0) sólo se veía **el 62 %** de
+    /// la imagen — se perdía justo la franja con más textura y profundidad. Idea del user.
+    /// </summary>
+    /// <summary>
+    /// Encaja la imagen entre el borde superior del suelo y el borde de arriba del quad,
+    /// calculándolo de la geometría REAL del suelo en vez de con una fracción a ojo.
+    ///
+    /// ⚠ Por qué importa: por debajo de v=0 la textura está en Clamp y **repite su última fila
+    /// hacia abajo**, lo que produce un rayado vertical (cada columna arrastra su píxel). Con la
+    /// fracción calculada, esa zona cae EXACTAMENTE bajo el suelo y no se ve nunca. Con un valor
+    /// a ojo asomaba — lo cazó el user en la tele el 2026-08-21.
+    /// </summary>
+    private void AjustarAlSuelo()
+    {
+        var placer = GetComponent<DecorationPlacer>();
+        if (placer == null || _bgMesh == null) return;
+
+        float sueloY = placer.FloorTopY;
+        if (Mathf.Approximately(sueloY, 0f)) return;   // el suelo aún no existe
+
+        // El quad está centrado en el objeto y mide bounds.size.y * 1.05
+        float alto   = _bgMesh.bounds.size.y;
+        float abajoY = transform.position.y - alto * 0.5f;
+        float f      = Mathf.Clamp((sueloY - abajoY) / alto, 0f, 0.6f);
+
+        _fitOculto = f;
+        AplicarUV();
+        _fitHecho = true;
+        JsBridge.Log($"BGFIT auto: suelo en y={sueloY:F2} → fraccion oculta={f:F3} (calculada del suelo real)");
+    }
+
+    private bool _fitHecho;
+
+    void LateUpdate()
+    {
+        // El suelo lo construye DecorationPlacer y no hay garantía de orden entre componentes,
+        // así que se encaja en cuanto exista, una sola vez.
+        if (!_fitHecho) AjustarAlSuelo();
+    }
+
+    public void SetBackgroundFit(float fraccionOculta)
+    {
+        _fitOculto = Mathf.Clamp(fraccionOculta, 0f, 0.6f);
+        _fitHecho  = true;      // un valor puesto a mano manda sobre el automático
+        AplicarUV();
+        JsBridge.Log($"BGFIT: fraccion oculta={_fitOculto:F2} → se ve el {(1f - _fitOculto) * 100f:F0} % del quad con la imagen ENTERA");
+    }
+
+    /// <summary>
+    /// Coloca la imagen entre el borde superior del quad y la línea del suelo.
+    /// La parte del quad que queda por debajo muestrea v<0; con wrapMode Clamp eso repite la
+    /// primera fila y da igual, porque el suelo la tapa. ⚠ Con wrapMode Repeat (el default de
+    /// Unity) se vería el TOPE de la foto asomando por abajo.
+    /// </summary>
+    private void AplicarUV()
+    {
+        if (_bgMesh == null) return;
+        float v0 = (_fitOculto <= 0f) ? 0f : -_fitOculto / (1f - _fitOculto);
+        _bgMesh.uv = new Vector2[] {
+            new Vector2(0, v0), new Vector2(1, v0),
+            new Vector2(0, 1),  new Vector2(1, 1),
+        };
+    }
+
     private void ApplyImageTexture(Texture2D tex)
     {
         if (_bgMaterial == null) return;
+        // Clamp obligatorio: AplicarUV puede mandar v<0 y con Repeat asomaría el tope de la foto.
+        if (tex != null) tex.wrapMode = TextureWrapMode.Clamp;
         if (_bgMaterial.HasProperty("_BaseMap")) _bgMaterial.SetTexture("_BaseMap", tex);
         else if (_bgMaterial.HasProperty("_MainTex")) _bgMaterial.SetTexture("_MainTex", tex);
         // Limpiar tinte de color para que la imagen se vea sin tint
@@ -308,6 +389,8 @@ public class TankBackground : MonoBehaviour
         mesh.RecalculateNormals();
 
         go.AddComponent<MeshFilter>().mesh = mesh;
+        _bgMesh = mesh;
+        AplicarUV();
 
         var mr = go.AddComponent<MeshRenderer>();
         mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;

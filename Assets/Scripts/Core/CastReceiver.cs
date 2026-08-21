@@ -139,6 +139,7 @@ public class CastReceiver : MonoBehaviour
             contrast       = pp.contrast,
             exposure       = pp.postExposure,
             vignette       = pp.vignetteIntensity,
+            bgFit          = -1f,     // centinela: si el JSON no lo trae, no se toca el encuadre
         };
         try   { JsonUtility.FromJsonOverwrite(payload, g); }
         catch (System.Exception e) { JsBridge.Log("GRADE: payload ilegible — " + e.Message); return; }
@@ -160,6 +161,14 @@ public class CastReceiver : MonoBehaviour
             else            bg.SwapBackgroundShader(g.bgShader);
         }
 
+        // Encuadre del fondo: qué fracción tapa el suelo. Se barre en caliente para elegirlo.
+        if (g.bgFit >= 0f)
+        {
+            var bg2 = FindFirstObjectByType<TankBackground>();
+            if (bg2 == null) JsBridge.Log("BGFIT: no hay TankBackground en la escena");
+            else             bg2.SetBackgroundFit(g.bgFit);
+        }
+
         JsBridge.Log($"GRADE: bloom={(g.bloom ? g.bloomIntensity.ToString("F2") : "OFF")} " +
                      $"tm={(g.tonemapping ? "Neutral" : "OFF")} sat={g.saturation:F0} " +
                      $"con={g.contrast:F0} exp={g.exposure:F2} vig={g.vignette:F2}");
@@ -176,5 +185,6 @@ public class CastReceiver : MonoBehaviour
         public float exposure;
         public float vignette;
         public string bgShader;   // "urp" | "sprites"; vacío = no tocar
+        public float  bgFit;      // fracción tapada por el suelo; negativo = no tocar
     }
 }

@@ -136,6 +136,50 @@ del código.
 
 ---
 
+## 0.3 ✅ ARREGLADO Y DESPLEGADO (2026-08-21)
+
+Cinco causas, todas silenciosas. Las tres primeras dejaban la TV **sin grado de color**; las dos
+últimas son las del fondo «grisáceo», y son un problema distinto.
+
+| # | Causa | Arreglo |
+|---|---|---|
+| 1 | **No había render pipeline**: `GraphicsSettings` apuntaba a un URP asset inexistente | `Assets/Settings/TvRenderPipeline.asset` (valores del móvil) + `TvUrpSetup` para encender/apagar y comparar |
+| 2 | **`renderPostProcessing` de la cámara en `false`** (default de URP) y nadie lo encendía | Una línea en `TvSceneBootstrap`, con `JsBridge.Log` para que se vea por el canal Cast |
+| 3 | 🎯 **El Volume de la barra LED machacaba el grado entero**: `Add<ColorAdjustments>(true)` marca TODOS los parámetros como override, y va a prioridad 11 | `Add<ColorAdjustments>(false)`: sólo manda en los dos que declara |
+| 4 | **Sólo se veía el 62 % del fondo** | `TankBackground` encaja la imagen entre el suelo y el borde superior |
+| 5 | **Fondos a 512 px** con 2,6× de ampliación | Override de WebGL a **1024** |
+
+⚠⚠ **Y una trampa que salió del propio arreglo 4, cazada por el user en la tele:** por debajo de
+v=0 la textura está en Clamp y **repite su última fila hacia abajo**, lo que dibuja un rayado
+vertical (cada columna arrastra su píxel). Con la fracción puesta a ojo (0,25) esa zona asomaba
+por encima del suelo. Ahora se calcula de la **geometría real del suelo**
+(`DecorationPlacer.FloorTopY`), así que cae exactamente debajo — y sigue cayendo ahí aunque la
+cámara se mueva, porque el cálculo es en coordenadas de mundo.
+
+🧭 Regla que deja esto: **un valor de encuadre «a ojo» es un bug esperando su momento.** Si hay
+una geometría real de la que derivarlo, se deriva.
+
+### Coste medido
+
+| | antes de hoy | ahora | Δ |
+|---|---|---|---|
+| `.data` | 15.942.355 | **19.503.971** | +3,56 MB (2,0 de shaders URP + 1,56 de fondos a 1024) |
+| `.wasm` | 21.664.370 | 21.668.206 | +3,8 KB |
+| FPS (12 peces, sesión asentada) | 45 (15-ago) | **32-41** | ⚠ pendiente de tanda A/B propia |
+
+⚠ El FPS **no está medido en serio todavía**: las primeras lecturas (`avg 29`) estaban
+contaminadas por el pico de carga de bundles, y con la sesión asentada sube a 32-41. La
+comparación con el histórico no es limpia porque aquél se tomó con otro build y otro protocolo.
+
+### Lo que queda por validar
+
+- [ ] **El arreglo del rayado (causa 4b) está DESPLEGADO pero NO visto en la tele**: la caja se
+      apagó justo antes. Es lo primero que hay que mirar en la próxima sesión.
+- [ ] Tanda A/B de FPS con el protocolo del 15-ago para saber qué cuesta URP de verdad.
+- [ ] Las 54 decos: la comprobación de que URP no rompe nada se hizo con 6.
+
+---
+
 ## 1. Lo que se ve (reportado por el user)
 
 1. **Los colores no se ven tan nítidos ni tan bonitos como en la app.** El fondo en concreto se
