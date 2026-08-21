@@ -97,3 +97,8 @@ Assets/AddressableAssetsData/link.xml.meta
 # burbujas 5,5 MB (recortado de los 110 MB originales a un bucle de 60 s mono).
 # El original íntegro de burbujas sigue en el repo móvil, en Assets/Audio/.
 /scratchpad/
+
+# ⚠ El token de los bundles (Fase 1). El repo es PÚBLICO: el token NO va a git.
+# Plantilla: Tools/r2-auth-worker/TvBundleAuthSecret.cs.sample
+Assets/Scripts/Core/TvBundleAuthSecret.cs
+Assets/Scripts/Core/TvBundleAuthSecret.cs.meta

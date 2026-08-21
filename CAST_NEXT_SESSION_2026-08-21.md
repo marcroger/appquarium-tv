@@ -49,7 +49,37 @@ móvil y del Worker.
 ⚠ **Rotar el token constante SÍ cuesta un rebuild** (55 min). Por eso el Worker acepta varios a
 la vez (`BUNDLE_TOKENS` separados por coma): permite solapar el viejo y el nuevo.
 
-### 1.4 Validación
+### 1.4 ⚠⚠ El token no está en git — y el repo es público (2026-08-21)
+
+Al ir a publicar la rama saltó esto: `github.com/marcroger/appquarium-tv` tiene
+`"private": false`, y `TvBundleAuth.cs` llevaba el token como `const` en claro, con la URL del
+Worker documentada en los `.md` de al lado. El push habría deshecho la Fase 1 entera — y sin
+vuelta atrás, porque un secreto publicado queda en forks, cachés y escáneres aunque se borre
+después. GitHub push protection tampoco lo habría frenado: `aqtv_` es formato propio.
+
+🧭 Que el token viaje dentro del `.wasm` público **no es lo mismo** y sigue estando asumido: ahí
+hay que ir a buscarlo con `strings`. En GitHub es grepeable y sale en una búsqueda de código.
+
+Cómo quedó:
+
+| | |
+|---|---|
+| `Assets/Scripts/Core/TvBundleAuthSecret.cs` | El token real. **En `.gitignore`.** Un `partial method`. |
+| `Tools/r2-auth-worker/TvBundleAuthSecret.cs.sample` | La plantilla (ésta sí en git). |
+| `Assets/Editor/TvAuthPreflight.cs` | Aborta **cualquier** build de WebGL que salga sin token. |
+
+- **No costó rebuild**: el `.wasm` desplegado ya lleva el token y sigue siendo válido. El cambio
+  sólo afecta al próximo build.
+- **El historial de la rama se reescribió** (`git filter-branch`) para que el literal no quede en
+  ninguno de los 8 commits. La rama era local, así que reescribirla no rompía nada de nadie.
+- ⚠ **En un clon limpio hay que copiar la plantilla y poner el token**, o el player sale mudo de
+  credencial: compila, arranca, y se queda sin un solo bundle. Es un `partial method` justamente
+  para que la ausencia no rompa la compilación — el que tiene que fallar es el **build**.
+- ⚠ El token real ya no está en ningún fichero versionado. Si se pierde la copia local, hay que
+  rotarlo (token nuevo en `BUNDLE_TOKENS` sin quitar el viejo → rebuild → validar → retirar el
+  viejo).
+
+### 1.5 Validación
 
 | Prueba | Resultado |
 |---|---|
@@ -171,4 +201,4 @@ de un nombre de bundle, sacarlo del catálogo o del bucket, nunca de `ls`.**
 | Player | `.wasm` **21.664.370** · `.data` **15.942.355** (build del 20-ago) |
 | Sello receiver | **`rcv 2026-08-20 auth`** |
 | Worker | `appquarium-assets.appquarium.workers.dev` · secret `BUNDLE_TOKENS` |
-| Rama | `feat/r2-auth-worker` — **sin push ni merge** |
+| Rama | `feat/r2-auth-worker` — mergeada a `main` y pusheada el **2026-08-21**, ya sin el token dentro |

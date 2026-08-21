@@ -49,6 +49,41 @@ python -c "import secrets; print('aqtv_' + secrets.token_urlsafe(32))"
 
 ---
 
+## ⚠⚠ El token del receiver NO está en git (desde 2026-08-21)
+
+`github.com/marcroger/appquarium-tv` es un repo **público**. El token vivía como `const` en
+`Assets/Scripts/Core/TvBundleAuth.cs`, y con la URL del Worker documentada en los `.md` de al
+lado eso es un `curl` de dos líneas: publicar la rama habría deshecho la Fase 1 entera. Que el
+token viaje dentro del `.wasm` público es otra cosa y está asumido — ahí hay que ir a buscarlo,
+no lo indexa un escáner de secretos ni sale en una búsqueda de GitHub.
+
+Cómo queda:
+
+| | |
+|---|---|
+| `Assets/Scripts/Core/TvBundleAuthSecret.cs` | El token real. **En `.gitignore`.** |
+| `Tools/r2-auth-worker/TvBundleAuthSecret.cs.sample` | La plantilla, ésta sí en git. |
+| `Assets/Editor/TvAuthPreflight.cs` | Aborta **cualquier** build de WebGL que salga sin token. |
+
+En un clon limpio, por tanto:
+
+```bash
+cp Tools/r2-auth-worker/TvBundleAuthSecret.cs.sample Assets/Scripts/Core/TvBundleAuthSecret.cs
+# y poner dentro el token real (el mismo que está en el secret BUNDLE_TOKENS)
+```
+
+⚠ Sin ese fichero el proyecto **compila igual** (es un `partial method`: si no está, la llamada
+desaparece) y el player resultante arranca sin un solo error… y sin un solo bundle, porque el
+Worker le devuelve 401 a todo. Por eso el preflight aborta el build en vez de dejarlo pasar: es
+el mismo fallo silencioso que costó dos meses de audio mudo, y la respuesta es la misma.
+
+⚠ El token real no está en ningún sitio del repo. Si se pierde el fichero local, se saca del
+secret del Worker (`npx wrangler secret list` sólo da nombres — hay que tenerlo apuntado) o se
+rota: token nuevo en `BUNDLE_TOKENS` **sin quitar el viejo**, rebuild de player (55 min),
+validar en la tele, y entonces retirar el viejo.
+
+---
+
 ## Marcha atrás
 
 Cada paso es reversible por separado y **no se borra nada del bucket público hasta el final**.
@@ -79,3 +114,4 @@ que mantiene viva la sesión. Borrar por **lista explícita**.
 | `wrangler.toml` | Binding R2 + `ALLOWED_ORIGINS`. El token va como *secret*, no aquí. |
 | `test-local.mjs` | 20 comprobaciones de la lógica con mocks. `node test-local.mjs`. |
 | `smoke-test.sh` | Matriz contra el Worker ya desplegado, incluido md5 de los bytes contra el bundle local. |
+| `TvBundleAuthSecret.cs.sample` | Plantilla del fichero con el token que **no** va a git. |

@@ -38,6 +38,18 @@ public static class TvProdBuild
             return;
         }
 
+        // El token de los bundles no está en git (repo público). Sin él, el player compila
+        // y arranca, pero el Worker le devuelve 401 a cada bundle: acuario vacío y ni un
+        // error. Se comprueba aquí para no gastar 55 minutos antes de enterarse; la red
+        // definitiva es TvBundleAuthPreflight, que cubre también la ruta por GUI.
+        if (!TvBundleAuthPreflight.Ok())
+        {
+            Debug.LogError("[ProdBuild] Build abortado: falta Assets/Scripts/Core/TvBundleAuthSecret.cs " +
+                           "(plantilla en Tools/r2-auth-worker/TvBundleAuthSecret.cs.sample).");
+            if (salirAlTerminar) EditorApplication.Exit(1);
+            return;
+        }
+
         // Asegura el mismo nivel de optimización que se validó en el rig.
         TvWasmOptimize.SetDiskSizeLTO();
 

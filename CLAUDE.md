@@ -136,6 +136,12 @@ https://appquarium-assets.appquarium.workers.dev/bundle/<fichero>.bundle
   instalado en `Awake` de `TvSceneBootstrap`). Busca por **ruta** (`/bundle/`), no por host.
 - **Fase 1 = token constante** dentro del `.wasm`. No es DRM: es lo que convierte «cualquiera
   con la URL se lo baja» en «hay que atacar el producto», que es lo que las licencias esperan.
+- ⚠⚠ **El token NO está en git y este repo es PÚBLICO** (2026-08-21). Vive en
+  `Assets/Scripts/Core/TvBundleAuthSecret.cs`, que está en `.gitignore`; la plantilla es
+  `Tools/r2-auth-worker/TvBundleAuthSecret.cs.sample`. **En un clon limpio hay que copiarla y
+  poner el token real**, o el player sale sin credencial. No peta: se queda sin bundles y la
+  tele muestra el acuario vacío — por eso `TvAuthPreflight` **aborta cualquier build de WebGL**
+  que no lleve token (misma lógica que el preflight de audio).
 - **Fase 2** (JWT por usuario) **no necesitará rebuild de player**: `TvAquariumState.castJwt` ya
   existe y el hook lo prefiere. Contrato en `CAST_R2_AUTH_MOVIL.md`.
 - ⚠ **Rotar el token constante cuesta un rebuild de player.** El Worker acepta varios a la vez
@@ -390,13 +396,13 @@ print('OK index.html')
 
 | Carpeta | Contenido |
 |---|---|
-| `Assets/Scripts/Core/` | **TvBundleAuth** ⭐ (firma cada descarga de bundle contra el Worker), AquariumManager (slim), AmbientModeController, AquariumCameraController, AudioManager, CastReceiver, CastDataTypes, FishSpawner, FoodItem, PostProcessingSetup, **TvSceneBootstrap** ⭐, **TvFoodManager**, **TvDecoCatalogPatch** (trasvasa `hasBioLuminescence` del JSON a los SOs — sin esto la biolum es código muerto) |
+| `Assets/Scripts/Core/` | **TvBundleAuth** ⭐ (firma cada descarga de bundle contra el Worker; el token lo aporta `TvBundleAuthSecret.cs`, que **no está en git**), AquariumManager (slim), AmbientModeController, AquariumCameraController, AudioManager, CastReceiver, CastDataTypes, FishSpawner, FoodItem, PostProcessingSetup, **TvSceneBootstrap** ⭐, **TvFoodManager**, **TvDecoCatalogPatch** (trasvasa `hasBioLuminescence` del JSON a los SOs — sin esto la biolum es código muerto) |
 | `Assets/Scripts/Fish/` | FishAgent, FishBrain, SteeringController, NeedsModule, FishProceduralAnimator (sync mobile) |
 | `Assets/Scripts/Tank/` | TankController, DecorationPlacer, BubbleSystem, TankBackground, TankLightingController, WaterSurface (sync mobile) |
 | `Assets/Scripts/Data/` | FishData, DecorationData, TankData (sync mobile) |
 | `Assets/Scripts/Utils/` | AppFlags, AppVersion, CatalogLoader (sync mobile) |
 | `Assets/Scripts/Stubs/` | TvStubs (stubs para clases mobile-only referenciadas indirectamente) |
-| `Assets/Editor/` | TvAddressablesSetup, TvBuildTools, SyncFromMobileMenu, **TvBuildPostprocess** (parchea settings.json tras cada build), **TvProdBuild** ⭐ (build de producción en batchmode + preflight de audio), **TvWasmOptimize** ⭐ (fuerza `DiskSizeLTO` en cualquier build), TvEmptyTestBuild, TvShadowDiag, **TvDecoOptimize** ⭐ (pasa una deco a texturas DXT1 sueltas: −49,8 % de peso medido) |
+| `Assets/Editor/` | TvAddressablesSetup, TvBuildTools, SyncFromMobileMenu, **TvBuildPostprocess** (parchea settings.json tras cada build), **TvProdBuild** ⭐ (build de producción en batchmode + preflight de audio), **TvWasmOptimize** ⭐ (fuerza `DiskSizeLTO` en cualquier build), TvEmptyTestBuild, **TvAuthPreflight** ⭐ (aborta el build si falta el token de los bundles), TvShadowDiag, **TvDecoOptimize** ⭐ (pasa una deco a texturas DXT1 sueltas: −49,8 % de peso medido) |
 | `Tools/` | ~30 ficheros. Los que importan: **r2-auth-worker/** ⭐ (el Worker portero de los bundles + sus dos baterías de pruebas), **SyncFromMobile.ps1**, **cast-headless.js** (sender sin navegador), **cast-run.sh** (ciclo de medición completo), **restore-production-receiver.sh**, **extract_glb_textures.py** (saca las texturas embebidas de un GLB + `mapeo.txt`, paso previo a `TvDecoOptimize`), **r2_huerfanos.py** (lista/borra bundles huérfanos de R2), y los `rcv-*.html` (receivers de diagnóstico). ⚠ Varios escriben en R2 de producción. |
 
 ---
