@@ -212,7 +212,17 @@ public class TankLightingController : MonoBehaviour
         vol.isGlobal = true;
         vol.priority = 11;
         var profile = ScriptableObject.CreateInstance<VolumeProfile>();
-        _colorAdj = profile.Add<ColorAdjustments>(true);
+
+        // ⚠⚠ `Add<T>(false)`, NO `true`. El `true` marca TODOS los parámetros del efecto como
+        // sobreescritos, no sólo los que se tocan después — y como este Volume va a prioridad 11,
+        // imponía también `saturation = 0` y `contrast = 0` por encima del grado que monta
+        // `PostProcessingSetup` (prioridad 10). Resultado: el grado de color de la TV **no podía
+        // verse jamás**, ni con URP activo ni con el post-proceso encendido.
+        // Descubierto el 2026-08-21 mandando un grado deliberadamente extremo (saturación −100)
+        // al player real y viendo que la imagen no cambiaba nada. Con `false`, sólo se imponen
+        // los dos parámetros que este Volume declara explícitamente con `.Override(...)`, y el
+        // resto cae al Volume de abajo, que es justo lo que se quería.
+        _colorAdj = profile.Add<ColorAdjustments>(false);
         _colorAdj.active = true;
         _colorAdj.colorFilter.Override(Color.white);
         _colorAdj.postExposure.Override(0f);

@@ -81,6 +81,17 @@ const esperar = ms => new Promise(r => setTimeout(r, ms));
       await esperar(1500);
     }
 
+    // ⚠ El receiver tapa el canvas con el overlay "Sender desconectado" en cuanto el sender
+    // del devtest se apaga, y ese velo (rgba(4,14,26,0.72)) domina la captura: la primera tanda
+    // salió con las 8 variantes a 22 de luminancia y pareciendo idénticas. No tiene id, así que
+    // se localiza por su z-index.
+    await page.evaluate(() => {
+      document.querySelectorAll('div').forEach(d => {
+        const st = getComputedStyle(d);
+        if (st.position === 'fixed' && st.zIndex === '400') d.style.display = 'none';
+      });
+    });
+
     const archivo = path.join(SALIDA, `${String(i).padStart(2, '0')}_${v.nombre}.png`);
     await page.screenshot({ path: archivo });
     medidas.push({ nombre: v.nombre, archivo });
