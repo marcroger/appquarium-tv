@@ -180,6 +180,17 @@ de un nombre de bundle, sacarlo del catálogo o del bucket, nunca de `ls`.**
       móvil + un rato de Worker. ⚠ Es una **migración**: el token constante tiene que seguir
       aceptándose hasta que la versión nueva esté adoptada, o a quien no actualice se le queda
       la tele vacía.
+- [ ] 🎨 **Paridad visual con el móvil (abierto el 21-ago por el user)** — en la tele los colores
+      se ven menos vivos y **el fondo casi en blanco y negro**. Ya está localizado sobre el papel:
+      el móvil lleva **bloom 1,2 y saturación −15**, la TV **bloom OFF y saturación +18**, más
+      tonemapping Neutral que el móvil no tiene; y los fondos van a WebGL con un override a
+      **512 px** frente a los 2048 del móvil, con `renderScale 0,7` encima. **Todo en
+      `CAST_PARIDAD_VISUAL.md`, con el protocolo de comparación y el precio de cada palanca.**
+      ⚠ Medir antes de tocar: son hipótesis, no mediciones de pantalla.
+- [ ] 🎨 **¿La sombra de una deco debe caer sobre el fondo?** (mismo doc, §2.5). No es un bug:
+      sale de la geometría 2.5D — cuanto más al fondo está la deco, más arriba cae su sombra, y
+      allí ya sólo hay telón. **Decisión de arte del user**, y lo que se toque afecta también a
+      las sombras de los peces.
 - [ ] 🎯 **Las MALLAS** — 11 decos a 100.000 triángulos: 77 % de los triángulos y 52 % del peso.
       Decimar a 50k → −14 MB; a 25k → −21 MB. **Cuesta calidad → decisión del user.**
 - [ ] **Halo de la bioluminiscencia** (quad aditivo, shader CG legacy en Always Included).

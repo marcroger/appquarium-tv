@@ -37,6 +37,7 @@ El móvil envía el estado del tanque vía Google Cast SDK; este proyecto **rend
 | [`CAST_NEXT_SESSION_2026-08-20.md`](CAST_NEXT_SESSION_2026-08-20.md) | Estado al cierre del 19-ago, Estado al cierre del 19-ago, pendientes reales y las trampas caras (bundle local que cambia de hash, y los 3 fallos de la conversión de materiales). |
 | [`ESTADO_PRODUCCION_2026-08-19.md`](ESTADO_PRODUCCION_2026-08-19.md) | 📊 **Foto de estado y valoración para producción.** Qué está validado, y los 2 puntos que faltan antes de difundir (bucket abierto + rigs de diagnóstico servidos). |
 | [`DECOS_PESO_PARA_MOVIL.md`](DECOS_PESO_PARA_MOVIL.md) | 📄 **Para leer en el repo MÓVIL.** Las 3 palancas de peso de decos, qué se reutiliza, qué cambiar (DXT1→ASTC/ETC2) y las 7 trampas ya pagadas. |
+| [`CAST_PARIDAD_VISUAL.md`](CAST_PARIDAD_VISUAL.md) | 🎨 **Abierto el 21-ago.** Por qué en la tele los colores se ven más apagados que en la app y por qué las sombras caen sobre el fondo. Comparativa medida del post-proceso y de los imports, precio de cada palanca y protocolo de comparación. |
 | [`CAST_UPDATES.md`](CAST_UPDATES.md) | ⭐ Protocolo UPDATE en tiempo real — tipos, payloads, gestión memoria, calls mobile pendientes. |
 | [`CAST_NETFLIX_SPEC.md`](CAST_NETFLIX_SPEC.md) | Spec ejecutable para Fase A.1 — contrato del refactor Netflix. 10 secciones. |
 | [`BUILD_REPORT_2026-05-25.md`](BUILD_REPORT_2026-05-25.md) | Diagnóstico del build de 411MB + análisis duplicación. |
