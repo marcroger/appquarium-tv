@@ -8,6 +8,71 @@
 
 ---
 
+## 0. 🚨 CAUSA RAÍZ (2026-08-21): la TV no tiene render pipeline
+
+**El proyecto TV no está usando URP. Renderiza con el pipeline built-in.** Y como el
+post-proceso de este proyecto está montado sobre el *Volume framework* de URP, en la tele **no se
+aplica NINGÚN grado de color**: ni bloom, ni tonemapping, ni saturación, ni contraste, ni viñeta.
+
+No es que la TV tenga un grado distinto al del móvil (que es lo que decía la primera versión de
+este doc, §2.1): es que **no tiene grado**. Eso es exactamente lo que el user describe como
+«se ve más falso y sin tanto colorcete».
+
+### Las cuatro pruebas
+
+| | Qué se midió | Resultado |
+|---|---|---|
+| 1 | Sonda en el Editor (`TvRenderProbe`) | `currentRenderPipeline` = **NULL** · asset de pipeline = **NULL** · **0** callbacks de `beginCameraRendering` en 25 s · `SupportsRenderRequest` = **False** |
+| 2 | `ProjectSettings/GraphicsSettings.asset` | `m_CustomRenderPipeline` apunta al guid `4b83569d67af61e458304325a23e5dfd`, que **no existe en ningún `.meta`** del proyecto: referencia colgada |
+| 3 | Ficheros del proyecto | **No hay ningún `UniversalRenderPipelineAsset`**. Sólo están `UniversalRenderPipelineGlobalSettings.asset` y `DefaultVolumeProfile.asset`, que los crea el paquete solo |
+| 4 | 🎯 **El player DESPLEGADO** (build del 20-ago, corriendo en Chrome) | `[TvScene] renderScale SKIP — rp=null` |
+
+La cuarta es la que cierra el caso: no es una rareza del Editor, **es lo que hay en producción**.
+
+### Por qué no se detectó en dos años
+
+```
+[PostFX] ✅ Bloom + Color + Vignette activos (3 efectos). [P]=toggle [O]=estado
+```
+
+Ese log sale en cada arranque, también en el player desplegado — y **no significa que el
+post-proceso funcione**: se imprime al final de `BuildVolume()` pase lo que pase. Sólo dice «he
+creado un Volume». Lo mismo con la línea `PostFX: bloom=OFF tm=Neutral sat=18 con=10` del panel
+de diagnóstico, que se escribe en el mismo sitio. Dos «confirmaciones» de algo que nunca corrió.
+
+🧭 Es otra vez el patrón de la casa: **no petaba, simplemente no pasaba lo que creíamos**.
+
+### Lo que esto explica hacia atrás
+
+- ⚠ **`renderScale = 0.7` NUNCA se ha aplicado.** El propio log lo dice (`SKIP`). De las «tres
+  palancas que hicieron que fuera fluido en la Xiaomi» (bloom OFF + renderScale 0,7 +
+  targetFrameRate 30), **la única que existió de verdad es el targetFrameRate**; y «bloom OFF»
+  no era una palanca, porque el bloom no se aplicaba de todas formas. **Esto hay que remedirlo.**
+- ⚠ **SMAA tampoco hace nada** (`[TvScene] SMAA Low enabled` es otra línea optimista): es una
+  característica de URP.
+- 🧩 **Los shaders CG legacy y lo «morado».** Los comentarios de `DecoLit`, `FishUnlit`,
+  `PlanarShadow` y `FishShadow` dicen que los pases `LightMode="UniversalForward"` **no se
+  ejecutan** «en el renderer del Cast device» y que sólo funcionan los CG sin `LightMode`. Eso no
+  es una limitación del device: **es exactamente lo que hace el pipeline built-in**, en cualquier
+  máquina. El síntoma llevaba años bien observado y mal atribuido.
+- ✅ Lo que **no** cambia: el acuario se ve, y los shaders CG están escritos para built-in, así
+  que **hoy son correctos**. Esto no es un incendio: es una palanca enorme sin estrenar.
+
+### ⚠ Antes de «arreglarlo»
+
+Asignar un `UniversalRenderPipelineAsset` **no es un cambio de una línea**: encendería de golpe
+el pipeline para el que los shaders propios NO están escritos, y cambiaría el coste de GPU en un
+device que ya va a 37 fps. Hay al menos dos caminos y la decisión es del user:
+
+| | Qué | Riesgo |
+|---|---|---|
+| **A** | Crear y asignar un URP asset (como el móvil, que tiene `Mobile_RPAsset`/`PC_RPAsset`) | Alto: los 4 shaders CG dejan de ser la vía buena, hay que revisarlos uno a uno; y el bloom, que es lo que da el «colorcete», es el efecto más caro en el Mali-G31 |
+| **B** | Quedarse en built-in y hacer el grado con Post Processing Stack v2, que **ya está instalado** (`UNITY_POST_PROCESSING_STACK_V2` está en los defines del proyecto) | Menor: no toca shaders. Pero es una pila distinta a la del móvil, así que la paridad sería «parecido», no «lo mismo» |
+
+En los dos casos hace falta rebuild de player y validación en la tele.
+
+---
+
 ## 1. Lo que se ve (reportado por el user)
 
 1. **Los colores no se ven tan nítidos ni tan bonitos como en la app.** El fondo en concreto se
@@ -34,6 +99,11 @@ escena** (no los defaults del script):
 | Post exposure | 0,1 | 0,05 |
 | Vignette | 0,095 | 0,18 (default del script; sin override en escena) |
 | Color filter | `(0.95, 0.98, 1.00)` | `(0.95, 0.98, 1.00)` — **idéntico** |
+
+⚠⚠ **CORREGIDO EL 21-ago — leer §0 primero.** La columna «TV» de esta tabla son los valores
+**configurados**, no los aplicados: sin URP, el Volume no afecta al render y en la tele **no se
+aplica ninguno**. La comparación que sigue explica qué *pretendía* hacer cada proyecto, pero la
+diferencia real con el móvil no es de valores: es que allí el grado se aplica y aquí no.
 
 🧭 **Lo importante y lo contraintuitivo:** el móvil está **desaturado (−15)**, no saturado. Lo
 que le da el aspecto vivo es el **bloom a 1,2**, que hace florecer las zonas brillantes. La TV
@@ -121,6 +191,9 @@ así que lo que se toque para decos afecta a los peces salvo que se separe expl�
 
 ## 3. La lista de palancas, con su precio
 
+⚠⚠ **Y todas presuponen que el post-proceso se aplique, que hoy NO es el caso** (§0): antes de
+tocar un solo valor hay que decidir el camino A o B.
+
 ⚠⚠ **Todas cuestan un rebuild de player (~55 min)**: los valores de post-proceso están
 serializados en `TvScene`, el `renderScale` está en código, y los fondos viven en
 `Assets/Resources/` → todo va horneado en el `.data`/`.wasm`. No hay ninguna que se despliegue
@@ -134,7 +207,7 @@ sólo subiendo un fichero a R2.
 | **Fondos 512 → 1024** | 4× téxeles (de 9× que faltan) | **+3,8 MB** en el `.data` (hoy 15,94 MB) |
 | **Fondos a 1536 (paridad)** | Lo mismo que ve el móvil | **+10,2 MB** en el `.data`: lo dejaría en ~26 MB, un **+64 %** |
 | 🎯 **Fondos a Addressables** | Paridad **sin** engordar el `.data`: sólo se descarga el que se usa (~1 MB) y los otros 10 dejan de viajar | Convertir `Resources.Load` síncrono en asíncrono + volver a meterlos en un grupo. Riesgo: el primer frame sin fondo si no se cubre |
-| **renderScale 0,7 → 0,8** | Poco: el móvil está en **0,8**, o sea un 12 % de diferencia | Fill-rate: la palanca más cara en FPS de las tres del 19-jun. **Mala relación coste/beneficio** |
+| ~~**renderScale 0,7 → 0,8**~~ | **No aplica: el renderScale NUNCA se ha aplicado** (ver §0). Es una propiedad del URP asset, y no hay URP asset | — |
 
 ---
 
