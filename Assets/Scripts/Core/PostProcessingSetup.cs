@@ -62,6 +62,17 @@ public class PostProcessingSetup : MonoBehaviour
 
     // ── API pública ──────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Reconstruye el Volume con los valores actuales de los campos públicos.
+    /// Lo usa el barrido de grado del Editor (`Appquarium TV → 🎨 Barrido de grado`) para
+    /// comparar variantes sin gastar un build, y es lo que necesitará el control en caliente
+    /// por el mensaje DIAG cuando se afine en la tele.
+    /// </summary>
+    public void Rebuild()
+    {
+        BuildVolume();
+    }
+
     public void TogglePostProcessing()
     {
         if (_volume != null)
@@ -76,6 +87,22 @@ public class PostProcessingSetup : MonoBehaviour
     private void BuildVolume()
     {
         Debug.Log("[PostFX] BuildVolume() iniciado...");
+
+        // ⚠ Limpiar el anterior antes de crear otro. Sin esto, cada Rebuild() apilaría un
+        // Volume global más con la misma prioridad y el resultado dependería del orden en que
+        // URP los evalúe — el mismo patrón de bug que los quads de noche apilados del 15-ago.
+        for (int i = transform.childCount - 1; i >= 0; i--)
+        {
+            var child = transform.GetChild(i);
+            if (child.name != "PostProcessVolume") continue;
+            // Destroy() es DIFERIDO al final del frame: si sólo lo destruyéramos, el Volume
+            // viejo seguiría influyendo durante un frame junto al nuevo. Desactivarlo primero
+            // lo saca del cálculo de URP inmediatamente.
+            var viejo = child.GetComponent<Volume>();
+            if (viejo != null) viejo.enabled = false;
+            if (Application.isPlaying) Destroy(child.gameObject);
+            else                       DestroyImmediate(child.gameObject);
+        }
 
         var go = new GameObject("PostProcessVolume");
         go.transform.SetParent(transform);
