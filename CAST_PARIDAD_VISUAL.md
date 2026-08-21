@@ -61,6 +61,11 @@ ambos). Lo que cambia es el import:
   DXT1 hace **banding** y desplaza tonos: es justo el peor caso para un fondo de agua.
 - `TvSceneBootstrap.cs:104` fuerza **`renderScale = 0.7`**: el frame entero se renderiza al 70 %
   y se reescala. En una tele 1080p el fondo acaba siendo 512 px estirados a 1920.
+  ⚠ **Corregido el 21-ago:** el móvil **también** renderiza a escala reducida
+  (`Mobile_RPAsset.asset: m_RenderScale: 0.8`), así que la diferencia real es 0,7 vs 0,8 — un
+  12 %, no «la TV a 70 % contra el móvil a 100 %». Esta palanca pesa MUCHO menos de lo que
+  parecía; el grueso de la nitidez perdida está en el **512 vs 2048** del fondo. (El
+  `targetFrameRate` sí coincide: 30 en los dos, 24 en modo ambiente.)
 
 El override de 512 no es un accidente: viene de `★ Reduce TV Textures`, que se usó para bajar el
 tiempo de compresión del build de WebGL (documentado en `CLAUDE.md`: «512px → 4× menos tiempo»).
@@ -122,7 +127,7 @@ sólo subiendo un fichero a R2.
 | **Tonemapping Neutral OFF** | Altos sin comprimir, como el móvil | Riesgo de highlights quemados (por eso se puso Neutral, no ACES) |
 | **Saturación +18 → −15** | Igualar el grado del móvil | Sólo tiene sentido **junto** al bloom; sola, apaga el resultado |
 | **Fondos 512 → 1024** | Nitidez del fondo (4× téxeles) | ~+2-3 MB en el `.data` (hoy 15,94 MB) y más tiempo de build |
-| **renderScale 0,7 → 0,85/1,0** | Nitidez de TODO | Fill-rate: la palanca más cara en FPS de las tres del 19-jun |
+| **renderScale 0,7 → 0,8** | Poco: el móvil está en **0,8**, o sea un 12 % de diferencia | Fill-rate: la palanca más cara en FPS de las tres del 19-jun. **Mala relación coste/beneficio** |
 
 ---
 
