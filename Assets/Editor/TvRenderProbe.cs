@@ -98,6 +98,75 @@ public static class TvRenderProbe
         EditorApplication.update += TickComprobar;
     }
 
+    // ── Segunda prueba: ¿el Volume afecta al render, o es mi captura la que se lo salta? ──
+    // Se toman dos capturas por ScreenCapture (que fotografía el frame final ya post-procesado,
+    // camino totalmente distinto al SubmitRenderRequest del barrido): una con el grado actual y
+    // otra con un grado EXTREMO. Si la segunda no cambia, el Volume no está afectando a nada.
+    private const string KeyGrado = "TvRenderProbe.grado";
+    private const string KeyFinG  = "TvRenderProbe.finGrado";
+
+    [MenuItem("Appquarium TV/🔬 Sonda de grado (¿el Volume afecta?)", priority = 213)]
+    public static void PruebaGrado()
+    {
+        var activa = EditorSceneManager.GetActiveScene();
+        if (activa.path != "Assets/Scenes/TvScene.unity")
+            EditorSceneManager.OpenScene("Assets/Scenes/TvScene.unity", OpenSceneMode.Single);
+
+        SessionState.SetInt(KeyGrado, 1);
+        SessionState.SetFloat(KeyFinG, (float)(EditorApplication.timeSinceStartup + 20.0));
+        Debug.Log("[GRADO] Arrancando: 20 s de carga y luego dos capturas por ScreenCapture.");
+        EditorApplication.update -= TickGrado;
+        EditorApplication.update += TickGrado;
+        if (!Application.isPlaying) EditorApplication.EnterPlaymode();
+    }
+
+    private static void TickGrado()
+    {
+        int paso = SessionState.GetInt(KeyGrado, 0);
+        if (paso == 0) return;
+        if (!Application.isPlaying) return;
+        if (EditorApplication.timeSinceStartup < SessionState.GetFloat(KeyFinG, 0f)) return;
+
+        string dir = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "_gradesweep", "grado");
+        System.IO.Directory.CreateDirectory(dir);
+        var pp = Object.FindFirstObjectByType<PostProcessingSetup>();
+
+        if (paso == 1)
+        {
+            ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(dir, "A_normal.png"));
+            Debug.Log("[GRADO] Captura A (grado actual) solicitada.");
+            SessionState.SetInt(KeyGrado, 2);
+            SessionState.SetFloat(KeyFinG, (float)(EditorApplication.timeSinceStartup + 3.0));
+            return;
+        }
+
+        if (paso == 2)
+        {
+            if (pp == null) { Debug.LogError("[GRADO] No hay PostProcessingSetup."); SessionState.SetInt(KeyGrado, 0); return; }
+            pp.enableBloom = false; pp.enableTonemapping = false;
+            pp.saturation = -100f; pp.contrast = 0f; pp.postExposure = -1f;
+            pp.Rebuild();
+            Debug.Log("[GRADO] Grado EXTREMO aplicado (sat -100, exp -1). Capturando B en 3 s.");
+            SessionState.SetInt(KeyGrado, 3);
+            SessionState.SetFloat(KeyFinG, (float)(EditorApplication.timeSinceStartup + 3.0));
+            return;
+        }
+
+        if (paso == 3)
+        {
+            ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(dir, "B_extremo.png"));
+            Debug.Log("[GRADO] Captura B (extremo) solicitada.");
+            SessionState.SetInt(KeyGrado, 4);
+            SessionState.SetFloat(KeyFinG, (float)(EditorApplication.timeSinceStartup + 4.0));
+            return;
+        }
+
+        SessionState.SetInt(KeyGrado, 0);
+        Debug.Log("[GRADO] Hecho. Compara _gradesweep/grado/A_normal.png con B_extremo.png: " +
+                  "si son iguales, el Volume NO afecta al render.");
+        EditorApplication.ExitPlaymode();
+    }
+
     private static void TickComprobar()
     {
         if (!SessionState.GetBool("TvRenderProbe.comprobar", false)) return;

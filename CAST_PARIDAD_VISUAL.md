@@ -58,6 +58,36 @@ de diagnóstico, que se escribe en el mismo sitio. Dos «confirmaciones» de alg
 - ✅ Lo que **no** cambia: el acuario se ve, y los shaders CG están escritos para built-in, así
   que **hoy son correctos**. Esto no es un incendio: es una palanca enorme sin estrenar.
 
+### 0.1 Medido el 21-ago al intentar encender URP
+
+Se creó un URP asset (`Assets/Settings/TvRenderPipeline.asset`, valores copiados del móvil) y se
+comparó el mismo acuario con y sin él. Tres cosas:
+
+1. ✅ **URP NO rompe el aspecto.** Las capturas con built-in y con URP son prácticamente iguales:
+   sin magenta, decos y peces correctos, sombras en su sitio. Los 4 shaders propios están
+   escritos sin `LightMode` y eso los hace válidos en los dos pipelines, como decían sus
+   comentarios. **Es el riesgo grande del camino A, y se ha medido: no aparece.**
+2. ⚠⚠ **Encender URP NO basta: hay una segunda causa.** `renderPostProcessing` de la cámara viene
+   en **false** por defecto en URP y **nadie lo enciende en el código** (`TvSceneBootstrap` toca
+   esa misma componente para poner SMAA y no lo pone). Sin esa línea, el grado sigue sin
+   aplicarse aunque haya pipeline.
+3. ⚠⚠ **Y una tercera:** al crear el `UniversalRendererData` por código, `postProcessData` se
+   queda a **null** y URP **se salta todo el post-proceso en silencio**. `Create()` sólo recarga
+   los recursos del pipeline, no los del renderer. `TvUrpSetup` ya lo rellena y **verifica**.
+
+### ⚠ El barrido del Editor NO sirve para elegir los valores
+
+Se intentó, y hay que decirlo claro para que nadie se fíe de esas PNG: con URP activo, las
+luminancias medidas **alternan según el índice de captura** (los índices pares salen ~133 y los
+impares ~123) **independientemente de los valores de cada variante**, y el resultado es
+reproducible entre tandas. Eso mide el instrumento, no el grado: `SubmitRenderRequest` con
+post-proceso no está devolviendo de forma fiable el frame ya procesado.
+
+🧭 Conclusión práctica: **el grado hay que elegirlo sobre el player de verdad**, no en el Editor.
+Y eso se puede hacer sin la tele: `Tools/local-test.js` abre el player real en Chrome y captura
+consola y pantalla. La tele queda para la validación final y para el coste de GPU, que es lo
+único que el PC no puede decir.
+
 ### ⚠ Antes de «arreglarlo»
 
 Asignar un `UniversalRenderPipelineAsset` **no es un cambio de una línea**: encendería de golpe
