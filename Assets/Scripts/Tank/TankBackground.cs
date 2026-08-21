@@ -220,6 +220,41 @@ public class TankBackground : MonoBehaviour
             ApplyGradient(found.Value.bottom, found.Value.mid, found.Value.top);
     }
 
+    /// <summary>
+    /// Cambia el shader del fondo en caliente, para poder comparar en la tele sin gastar un
+    /// build por variante.
+    ///
+    /// Por qué existe: el fondo de la TV se pinta con `Sprites/Default` — un shader del pipeline
+    /// BUILT-IN — mientras el móvil usa `Universal Render Pipeline/Unlit`. El comentario que
+    /// justificaba el cambio decía «URP/Unlit tiene un bug de color space en WebGL», pero el
+    /// 2026-08-21 se descubrió que este proyecto no tenía render pipeline asignado: los shaders
+    /// de URP no podían pintar, y de ahí el apaño. Con URP ya activo hay que volver a medirlo,
+    /// porque `Sprites/Default` en espacio Linear lava la imagen — que es exactamente lo que el
+    /// user describe como «el fondo se ve grisáceo».
+    /// </summary>
+    public void SwapBackgroundShader(string modo)
+    {
+        if (_bgMaterial == null) { JsBridge.Log("BGSHADER: no hay material de fondo todavía"); return; }
+
+        var nombre = (modo == "sprites") ? "Sprites/Default" : "Universal Render Pipeline/Unlit";
+        var sh = Shader.Find(nombre);
+        if (sh == null)
+        {
+            // Pasa si el shader no está en Always Included: el build lo strippea y Find devuelve
+            // null. Se avisa por JsBridge porque un Debug.Log aquí no viaja por el canal Cast.
+            JsBridge.Log($"BGSHADER: '{nombre}' NO está en el build (stripeado) — no se cambia");
+            return;
+        }
+
+        var tex = _bgMaterial.HasProperty("_BaseMap") ? _bgMaterial.GetTexture("_BaseMap")
+                : _bgMaterial.HasProperty("_MainTex") ? _bgMaterial.GetTexture("_MainTex")
+                : null;
+
+        _bgMaterial.shader = sh;
+        ApplyImageTexture(tex as Texture2D);
+        JsBridge.Log($"BGSHADER: fondo pintado con '{sh.name}' (textura {(tex == null ? "NULL" : tex.name)})");
+    }
+
     private void ApplyImageTexture(Texture2D tex)
     {
         if (_bgMaterial == null) return;

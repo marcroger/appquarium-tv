@@ -103,6 +103,39 @@ En los dos casos hace falta rebuild de player y validación en la tele.
 
 ---
 
+## 0.2 ✅ MEDIDO EN LA TELE (2026-08-21) — qué era y qué no era
+
+Con URP activo, el post-proceso encendido y el Volume de la barra LED arreglado, se desplegó el
+player y se midió sobre el device (12 peces + 6 decos, capturas por `adb exec-out screencap`
+disparadas **por evento del log**, no por reloj: el del receiver va ~20-25 s por detrás del
+sender y las primeras capturas salieron mal etiquetadas por eso).
+
+**Lo que NO era el problema del fondo:**
+
+| Sospechoso | Medido | Veredicto |
+|---|---|---|
+| El shader del fondo (`Sprites/Default` vs `URP/Unlit`) | Mismo fondo, mismo instante: lum **130,9 vs 127,6**, sat **0,955 vs 0,961** | ❌ Da igual. El apaño histórico ya no hace daño, pero cambiarlo no arregla nada |
+| ¿Se carga el fondo equivocado? | Mediana de color contra el catálogo: tropical→`bg_tropical` (dist 7,5 vs 51,5 del segundo), kelp→`bg_kelp`, volcanic→`bg_volcanic` | ❌ Los fondos son los correctos |
+| ¿Se destiñe el color? | Tropical en pantalla **0/168/168** contra **2/162/164** del PNG | ❌ Es fiel al original |
+
+**Lo que SÍ es (idea del user, y confirmada):**
+
+1. 🎯 **Sólo se ve el 62 % de la imagen.** Ajustando qué franja del PNG encaja con el perfil
+   vertical de la tele: **del 0 % al 62 %**, correlación **0,972**. El 38 % inferior —la parte
+   con más textura y profundidad de la foto— **no aparece nunca**.
+2. **Va estirada 1,19× en horizontal**: las imágenes son 1536×1024 (3:2) y la pantalla es 16:9.
+3. Con el override a 512 px, esa franja visible son ~317 px de alto reales estirados a ~840 px
+   de pantalla: **2,6× de ampliación**. Ahí está el aspecto lavado.
+
+🧭 O sea: **el problema del fondo es de encuadre y de resolución, no de color.** Y son dos cosas
+que se arreglan juntas — recuperar el 38 % perdido hace que además sobre menos ampliación.
+
+⚠ El código de geometría del fondo es **idéntico** al del móvil (el diff sólo difiere en el
+shader y en los logs), así que la diferencia viene del aspecto de pantalla, no de una divergencia
+del código.
+
+---
+
 ## 1. Lo que se ve (reportado por el user)
 
 1. **Los colores no se ven tan nítidos ni tan bonitos como en la app.** El fondo en concreto se

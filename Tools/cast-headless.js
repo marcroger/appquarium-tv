@@ -66,6 +66,18 @@ const UPDATES = argv.reduce((acc, a, i) => {
   return acc;
 }, []);
 
+// --raw <TIPO>=<payload JSON>@<segundo>  (repetible) → manda un CastMessage cualquiera.
+//   --raw 'GRADE={"bgShader":"urp"}@40'
+// Existe para poder conmutar cosas EN LA MISMA SESIÓN de la tele en vez de gastar un build por
+// variante. `--update` sólo sirve para los UPDATE del protocolo; esto manda el mensaje crudo.
+const RAWS = argv.reduce((acc, a, i) => {
+  if (a !== '--raw' || !argv[i + 1]) return acc;
+  const m = /^([A-Z_]+)=(.*)@(\d+)$/.exec(argv[i + 1]);
+  if (!m) { console.log(`[WARN] --raw ignorado (formato TIPO=payload@segundos): ${argv[i + 1]}`); return acc; }
+  acc.push({ type: m[1], payload: m[2], at: parseInt(m[3], 10) * 1000 });
+  return acc;
+}, []);
+
 const APP_ID = '8F6C873F';
 
 // ⚠ Guardas contra mediciones falsas. Las dos que van aqui YA han mordido:
@@ -303,6 +315,16 @@ client.connect(HOST, () => {
     // ── UPDATEs programados ──────────────────────────────────────────────────
     // Formato = CastMessage { type:'UPDATE', payload:<TvUpdateMessage en JSON> }
     // (ver CAST_UPDATES.md y TvSceneBootstrap.ApplyUpdate).
+    for (const r of RAWS) {
+      setTimeout(() => {
+        try {
+          appChan.send({ type: r.type, payload: r.payload });
+          log(`RAW ${r.type} enviado → ${r.payload}`);
+        } catch (e) { log(`[WARN] RAW ${r.type} fallo: ${e.message}`); }
+      }, r.at);
+    }
+    if (RAWS.length) log(`${RAWS.length} RAW(s) programados: ` + RAWS.map(r => `${r.type}@${r.at / 1000}s`).join(' '));
+
     for (const u of UPDATES) {
       setTimeout(() => {
         try {

@@ -152,6 +152,14 @@ public class CastReceiver : MonoBehaviour
         pp.vignetteIntensity = g.vignette;
         pp.AplicarValores();
 
+        // Conmutar el shader del fondo en la misma sesión, para comparar sin otro build.
+        if (!string.IsNullOrEmpty(g.bgShader))
+        {
+            var bg = FindFirstObjectByType<TankBackground>();
+            if (bg == null) JsBridge.Log("BGSHADER: no hay TankBackground en la escena");
+            else            bg.SwapBackgroundShader(g.bgShader);
+        }
+
         JsBridge.Log($"GRADE: bloom={(g.bloom ? g.bloomIntensity.ToString("F2") : "OFF")} " +
                      $"tm={(g.tonemapping ? "Neutral" : "OFF")} sat={g.saturation:F0} " +
                      $"con={g.contrast:F0} exp={g.exposure:F2} vig={g.vignette:F2}");
@@ -167,5 +175,6 @@ public class CastReceiver : MonoBehaviour
         public float contrast;
         public float exposure;
         public float vignette;
+        public string bgShader;   // "urp" | "sprites"; vacío = no tocar
     }
 }

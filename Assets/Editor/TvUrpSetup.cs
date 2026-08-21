@@ -129,8 +129,36 @@ public static class TvUrpSetup
                   " · asset en disco = " + (AssetDatabase.LoadAssetAtPath<UniversalRenderPipelineAsset>(RutaPipeline) == null ? "no" : "sí"));
     }
 
+    /// <summary>
+    /// Mete `Universal Render Pipeline/Unlit` en Always Included Shaders.
+    /// Hace falta porque ningún material del proyecto lo usa (el fondo se pinta con
+    /// `Sprites/Default`), así que el build lo strippea y `Shader.Find` devuelve **null** en
+    /// runtime — sin error, simplemente no se puede cambiar. Es la misma trampa que ya se pagó
+    /// con los shaders propios de peces y sombras.
+    /// </summary>
+    [MenuItem("Appquarium TV/🎛 Pipeline — incluir URP/Unlit en el build", priority = 224)]
+    public static void AsegurarUnlit()
+    {
+        var sh = Shader.Find("Universal Render Pipeline/Unlit");
+        if (sh == null) { Debug.LogError("[URP] No encuentro el shader 'Universal Render Pipeline/Unlit'."); return; }
+
+        var gs = AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/GraphicsSettings.asset")[0];
+        var so = new SerializedObject(gs);
+        var arr = so.FindProperty("m_AlwaysIncludedShaders");
+
+        for (int i = 0; i < arr.arraySize; i++)
+            if (arr.GetArrayElementAtIndex(i).objectReferenceValue == sh)
+            { Debug.Log("[URP] URP/Unlit ya estaba en Always Included."); return; }
+
+        arr.InsertArrayElementAtIndex(arr.arraySize);
+        arr.GetArrayElementAtIndex(arr.arraySize - 1).objectReferenceValue = sh;
+        so.ApplyModifiedProperties();
+        AssetDatabase.SaveAssets();
+        Debug.Log("[URP] URP/Unlit añadido a Always Included Shaders (" + arr.arraySize + " en total).");
+    }
+
     // ── Entradas de línea de comandos, para encadenar medición sin tocar la interfaz ──
     public static void CrearBatch()      { Crear();      Estado(); }
-    public static void ActivarBatch()    { Crear();      Activar(); Estado(); }
+    public static void ActivarBatch()    { Crear();      Activar(); AsegurarUnlit(); Estado(); }
     public static void DesactivarBatch() { Desactivar(); Estado(); }
 }
