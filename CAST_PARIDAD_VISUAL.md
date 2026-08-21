@@ -173,8 +173,11 @@ comparación con el histórico no es limpia porque aquél se tomó con otro buil
 
 ### Lo que queda por validar
 
-- [ ] **El arreglo del rayado (causa 4b) está DESPLEGADO pero NO visto en la tele**: la caja se
-      apagó justo antes. Es lo primero que hay que mirar en la próxima sesión.
+- [x] ✅ **El arreglo del rayado, VALIDADO EN LA TELE** (2026-08-21, tras encender la caja):
+      el auto-encaje calculó **0,233** a partir del suelo real (`y=-2.35`) — y ahí está la
+      explicación exacta del defecto: mi valor a ojo era **0,25**, y ese 7 % de más era justo la
+      franja repetida que asomaba. Tropical y kelp bajan limpios hasta la arena, sin rayado.
+      FPS con sesión asentada: 35 (avg 33) en tropical, 40 (avg 35) en kelp.
 - [ ] Tanda A/B de FPS con el protocolo del 15-ago para saber qué cuesta URP de verdad.
 - [ ] Las 54 decos: la comprobación de que URP no rompe nada se hizo con 6.
 
