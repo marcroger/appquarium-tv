@@ -273,6 +273,29 @@ public class DecorationPlacer : MonoBehaviour
     /// </summary>
     public float FloorTopY => _floorRenderer == null ? 0f : _floorMeshBaseY + _floorMeshRiseY;
 
+    /// <summary>
+    /// Margen (en unidades de mundo) en el que la sombra se desvanece al acercarse al borde
+    /// superior del suelo. 0 = comportamiento de siempre. Se puede cambiar en caliente para
+    /// compararlo en la tele sin gastar un build por variante.
+    /// </summary>
+    public float SombraFade { get; private set; }
+
+    private readonly List<Material> _shadowMats = new();
+
+    public void SetSombraFade(float margen)
+    {
+        SombraFade = Mathf.Max(0f, margen);
+        int n = 0;
+        foreach (var m in _shadowMats)
+        {
+            if (m == null) continue;
+            m.SetFloat("_ShadowTop",  FloorTopY);
+            m.SetFloat("_ShadowFade", SombraFade);
+            n++;
+        }
+        JsBridge.Log($"SOMBRA: fade={SombraFade:F2} aplicado a {n} materiales (suelo y={FloorTopY:F2})");
+    }
+
     /// <summary>Posición Y correcta del pivot de una deco en su Z actual.</summary>
     private float GetDecoFloorY(PlacedDeco pd, float z)
         => FloorY(z) + pd.data.floorYOffset + pd.pivotBaseHeight;
@@ -2478,6 +2501,12 @@ public class DecorationPlacer : MonoBehaviour
                 // Material por shadow child (para poder actualizar _FloorY individualmente)
                 var shadowMat = new Material(planarShader) { name = "PlanarShadow_Mat" };
                 shadowMat.SetFloat("_FloorY", floorY);
+                // Desvanecer la sombra que sube por encima del borde del suelo: ahí ya no hay
+                // arena, sólo el telón del fondo, y se lee como una mancha pegada al fondo
+                // (reportado por el user el 2026-08-21). Con SombraFade = 0 no cambia nada.
+                shadowMat.SetFloat("_ShadowTop",  FloorTopY);
+                shadowMat.SetFloat("_ShadowFade", SombraFade);
+                _shadowMats.Add(shadowMat);
 
                 var child = new GameObject("PS");
                 child.transform.SetParent(container.transform, false);

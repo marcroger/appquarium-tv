@@ -25,6 +25,10 @@ Shader "Appquarium/PlanarShadow"
         _Flatten     ("Flatten",      Range(0,1)) = 0.22
         // Empuja la sombra hacia el fondo para que el ZTest la esconda tras su propia deco.
         _ZPush       ("Z Push",       Float)      = 0.35
+        // Desvanecido por altura: lo que sube por encima del borde del suelo ya cae sobre el
+        // telón del fondo, no sobre la arena. Con _ShadowFade = 0 se comporta como siempre.
+        _ShadowTop   ("Borde sup. del suelo (world Y)", Float) = 999
+        _ShadowFade  ("Margen de desvanecido (0=off)",  Float) = 0
     }
 
     SubShader
@@ -74,9 +78,16 @@ Shader "Appquarium/PlanarShadow"
             float _ShadowAlpha;
             float _Flatten;
             float _ZPush;
+            // Desvanecido por altura. La sombra se comprime hacia el suelo pero NO colapsa,
+            // así que en decos altas lo que sobra asoma por encima del borde del suelo y se lee
+            // como una mancha sobre el FONDO (lo reportó el user el 2026-08-21).
+            // _ShadowTop  = world Y del borde del suelo. _ShadowFade = margen de desvanecido.
+            // Con _ShadowFade = 0 el comportamiento es el de siempre (sin desvanecer).
+            float _ShadowTop;
+            float _ShadowFade;
 
             struct appdata { float4 vertex : POSITION; };
-            struct v2f     { float4 pos : SV_POSITION; };
+            struct v2f     { float4 pos : SV_POSITION; float wy : TEXCOORD0; };
 
             v2f vert(appdata v)
             {
@@ -99,6 +110,7 @@ Shader "Appquarium/PlanarShadow"
                 // Empujándola hacia el fondo queda por detrás en profundidad: el ZTest LEqual
                 // la recorta contra el propio objeto y solo asoma lo que cae sobre la arena.
                 wp.z     += _ZPush;
+                o.wy      = wp.y;          // world Y ya aplanado, para el desvanecido
                 o.pos     = UnityWorldToClipPos(wp);
                 return o;
             }
@@ -107,7 +119,12 @@ Shader "Appquarium/PlanarShadow"
             {
                 // Teal MUY oscuro: sobre arena clara un gris medio se lee como una chapa
                 // flotando, no como sombra. Casi negro con un punto de azul del agua.
-                return fixed4(0.0, 0.015, 0.025, _ShadowAlpha);
+                // Desvanecer lo que sube por encima del borde del suelo: ahí ya no hay arena
+                // donde proyectar, sólo el telón del fondo.
+                float a = _ShadowAlpha;
+                if (_ShadowFade > 0.0001)
+                    a *= saturate((_ShadowTop - i.wy) / _ShadowFade);
+                return fixed4(0.0, 0.015, 0.025, a);
             }
             ENDCG
         }

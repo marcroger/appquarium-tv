@@ -140,6 +140,7 @@ public class CastReceiver : MonoBehaviour
             exposure       = pp.postExposure,
             vignette       = pp.vignetteIntensity,
             bgFit          = -1f,     // centinela: si el JSON no lo trae, no se toca el encuadre
+            shadowFade     = -1f,
         };
         try   { JsonUtility.FromJsonOverwrite(payload, g); }
         catch (System.Exception e) { JsBridge.Log("GRADE: payload ilegible — " + e.Message); return; }
@@ -159,6 +160,15 @@ public class CastReceiver : MonoBehaviour
             var bg = FindFirstObjectByType<TankBackground>();
             if (bg == null) JsBridge.Log("BGSHADER: no hay TankBackground en la escena");
             else            bg.SwapBackgroundShader(g.bgShader);
+        }
+
+        // Desvanecido de las sombras que suben por encima del borde del suelo.
+        if (g.shadowFade >= 0f)
+        {
+            var mgr2 = AquariumManager.Instance;
+            var placer = mgr2?.tankController?.GetComponent<DecorationPlacer>();
+            if (placer == null) JsBridge.Log("SOMBRA: no hay DecorationPlacer");
+            else                placer.SetSombraFade(g.shadowFade);
         }
 
         // Encuadre del fondo: qué fracción tapa el suelo. Se barre en caliente para elegirlo.
@@ -186,5 +196,6 @@ public class CastReceiver : MonoBehaviour
         public float vignette;
         public string bgShader;   // "urp" | "sprites"; vacío = no tocar
         public float  bgFit;      // fracción tapada por el suelo; negativo = no tocar
+        public float  shadowFade; // desvanecido de sombra sobre el fondo; negativo = no tocar
     }
 }

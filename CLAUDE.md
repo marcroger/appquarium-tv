@@ -32,12 +32,13 @@ El móvil envía el estado del tanque vía Google Cast SDK; este proyecto **rend
 
 | Doc | Cuándo |
 |---|---|
-| [`CAST_NEXT_SESSION_2026-08-21.md`](CAST_NEXT_SESSION_2026-08-21.md) | ⭐⭐ **EMPEZAR AQUÍ.** Cierre del 20-ago: los bundles ya están detrás del Worker. Qué cambió en el deploy y qué queda. |
+| [`CAST_NEXT_SESSION_2026-08-22.md`](CAST_NEXT_SESSION_2026-08-22.md) | ⭐⭐ **EMPEZAR AQUÍ.** Cierre del 21-ago: la TV recuperó el color (llevaba desde siempre sin aplicar ningún grado, por 5 causas encadenadas). Protocolo auditado 11/11 y coste de URP medido. |
+| [`CAST_PARIDAD_VISUAL.md`](CAST_PARIDAD_VISUAL.md) | 🎨 **El detalle y las pruebas** de lo anterior: qué se descartó con medida, qué reglas salieron, y lo que queda del fondo. |
+| [`CAST_NEXT_SESSION_2026-08-21.md`](CAST_NEXT_SESSION_2026-08-21.md) | Cierre del 20-ago: Cierre del 20-ago: los bundles ya están detrás del Worker. Qué cambió en el deploy y qué queda. |
 | [`CAST_R2_AUTH_MOVIL.md`](CAST_R2_AUTH_MOVIL.md) | 📄 **Para la sesión del repo MÓVIL.** Contrato de la Fase 2 (JWT por usuario): campo del JSON, claims, orden de migración. |
 | [`CAST_NEXT_SESSION_2026-08-20.md`](CAST_NEXT_SESSION_2026-08-20.md) | Estado al cierre del 19-ago, Estado al cierre del 19-ago, pendientes reales y las trampas caras (bundle local que cambia de hash, y los 3 fallos de la conversión de materiales). |
 | [`ESTADO_PRODUCCION_2026-08-19.md`](ESTADO_PRODUCCION_2026-08-19.md) | 📊 **Foto de estado y valoración para producción.** Qué está validado, y los 2 puntos que faltan antes de difundir (bucket abierto + rigs de diagnóstico servidos). |
 | [`DECOS_PESO_PARA_MOVIL.md`](DECOS_PESO_PARA_MOVIL.md) | 📄 **Para leer en el repo MÓVIL.** Las 3 palancas de peso de decos, qué se reutiliza, qué cambiar (DXT1→ASTC/ETC2) y las 7 trampas ya pagadas. |
-| [`CAST_PARIDAD_VISUAL.md`](CAST_PARIDAD_VISUAL.md) | 🎨 **Abierto el 21-ago.** Por qué en la tele los colores se ven más apagados que en la app y por qué las sombras caen sobre el fondo. Comparativa medida del post-proceso y de los imports, precio de cada palanca y protocolo de comparación. |
 | [`CAST_UPDATES.md`](CAST_UPDATES.md) | ⭐ Protocolo UPDATE en tiempo real — tipos, payloads, gestión memoria, calls mobile pendientes. |
 | [`CAST_NETFLIX_SPEC.md`](CAST_NETFLIX_SPEC.md) | Spec ejecutable para Fase A.1 — contrato del refactor Netflix. 10 secciones. |
 | [`BUILD_REPORT_2026-05-25.md`](BUILD_REPORT_2026-05-25.md) | Diagnóstico del build de 411MB + análisis duplicación. |
@@ -154,6 +155,29 @@ https://appquarium-assets.appquarium.workers.dev/bundle/<fichero>.bundle
   `python-urllib` recibe `error code 1010` **antes** de llegar al código. El Chromium del
   Chromecast pasa (validado). Si algún día no pasara, no hay regla de WAF que tocar —
   `workers.dev` no es una zona propia; la salida sería ponerle un dominio propio.
+
+### ⚠⚠ La TV usa URP desde el 2026-08-21 (antes NO usaba ninguno)
+
+Durante toda la vida del proyecto, `GraphicsSettings` apuntaba a un URP asset **que no existía**,
+así que la TV renderizaba con el pipeline **built-in**. Consecuencia: el `Volume` de
+`PostProcessingSetup` no afectaba a nada — **ni bloom, ni tonemapping, ni saturación, ni
+contraste** — y `renderScale` tampoco se aplicaba. Verificado en el player desplegado, no sólo en
+el Editor. Detalle completo y pruebas: **`CAST_PARIDAD_VISUAL.md` §0**.
+
+- El pipeline vive en **`Assets/Settings/TvRenderPipeline.asset`** (+ `TvUniversalRenderer.asset`).
+  Se crea y se enciende/apaga con `Appquarium TV → 🎛 Pipeline — …` (`TvUrpSetup`).
+- ⚠ **Al crear un `UniversalRendererData` por código hay que rellenarle `postProcessData`**: si se
+  queda a null, **URP se salta todo el post-proceso en silencio**. `TvUrpSetup` lo rellena y lo
+  **verifica**, con error si falta.
+- ⚠ **`renderPostProcessing` de la cámara viene en `false`** por defecto en URP. Lo enciende
+  `TvSceneBootstrap`; sin esa línea no hay grado aunque exista el pipeline.
+- ⚠⚠ **Un `Volume` con `Add<T>(true)` marca TODOS los parámetros como override.** El de la barra
+  LED (`TankLightingController`, prioridad 11) lo hacía y machacaba saturación y contraste del
+  grado. Va con `Add<T>(false)` y sólo manda en los dos que declara. **No volver a poner `true`.**
+- El receiver imprime al arrancar `RP: <asset> scale= hdr= msaa= sombras=` — sirve para saber
+  **qué build está corriendo de verdad** en la tele, que cachea.
+- Coste medido (25 peces, 420 s): **FPS 37 contra 37** — URP no cuesta FPS. La memoria sube un
+  escalón del heap geométrico (159 → 191 MB).
 
 ### Estado actual — 2026-08-19 ⭐
 
@@ -403,8 +427,9 @@ print('OK index.html')
 | `Assets/Scripts/Data/` | FishData, DecorationData, TankData (sync mobile) |
 | `Assets/Scripts/Utils/` | AppFlags, AppVersion, CatalogLoader (sync mobile) |
 | `Assets/Scripts/Stubs/` | TvStubs (stubs para clases mobile-only referenciadas indirectamente) |
-| `Assets/Editor/` | TvAddressablesSetup, TvBuildTools, SyncFromMobileMenu, **TvBuildPostprocess** (parchea settings.json tras cada build), **TvProdBuild** ⭐ (build de producción en batchmode + preflight de audio), **TvWasmOptimize** ⭐ (fuerza `DiskSizeLTO` en cualquier build), TvEmptyTestBuild, **TvAuthPreflight** ⭐ (aborta el build si falta el token de los bundles), TvShadowDiag, **TvDecoOptimize** ⭐ (pasa una deco a texturas DXT1 sueltas: −49,8 % de peso medido) |
-| `Tools/` | ~30 ficheros. Los que importan: **r2-auth-worker/** ⭐ (el Worker portero de los bundles + sus dos baterías de pruebas), **SyncFromMobile.ps1**, **cast-headless.js** (sender sin navegador), **cast-run.sh** (ciclo de medición completo), **restore-production-receiver.sh**, **extract_glb_textures.py** (saca las texturas embebidas de un GLB + `mapeo.txt`, paso previo a `TvDecoOptimize`), **r2_huerfanos.py** (lista/borra bundles huérfanos de R2), y los `rcv-*.html` (receivers de diagnóstico). ⚠ Varios escriben en R2 de producción. |
+| `Assets/Settings/` | **TvRenderPipeline.asset** ⭐ + **TvUniversalRenderer.asset** — el render pipeline que faltaba (2026-08-21). Sin esto no hay post-proceso |
+| `Assets/Editor/` | **TvUrpSetup** ⭐ (crea/enciende/apaga el pipeline y verifica `postProcessData`), **TvRenderProbe** (sonda: ¿se está renderizando, y con qué?), **TvGradeSweep** (barrido de grado en el Editor — ⚠ NO fiable para elegir valores, ver `CAST_PARIDAD_VISUAL.md` §0.1), TvAddressablesSetup, TvBuildTools, SyncFromMobileMenu, **TvBuildPostprocess** (parchea settings.json tras cada build), **TvProdBuild** ⭐ (build de producción en batchmode + preflight de audio), **TvWasmOptimize** ⭐ (fuerza `DiskSizeLTO` en cualquier build), TvEmptyTestBuild, **TvAuthPreflight** ⭐ (aborta el build si falta el token de los bundles), TvShadowDiag, **TvDecoOptimize** ⭐ (pasa una deco a texturas DXT1 sueltas: −49,8 % de peso medido) |
+| `Tools/` | ~30 ficheros. Los que importan: **grade-tune.js** ⭐ (afina el grado sobre el player REAL en Chrome, mandando mensajes `GRADE`), **grade_contact_sheet.py** (hoja de contactos + luminancia/saturación por bandas, con guarda de «esto no mide nada»), **r2-auth-worker/** ⭐ (el Worker portero de los bundles + sus dos baterías de pruebas), **SyncFromMobile.ps1**, **cast-headless.js** (sender sin navegador), **cast-run.sh** (ciclo de medición completo), **restore-production-receiver.sh**, **extract_glb_textures.py** (saca las texturas embebidas de un GLB + `mapeo.txt`, paso previo a `TvDecoOptimize`), **r2_huerfanos.py** (lista/borra bundles huérfanos de R2), y los `rcv-*.html` (receivers de diagnóstico). ⚠ Varios escriben en R2 de producción. |
 
 ---
 
