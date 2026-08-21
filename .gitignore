@@ -108,3 +108,4 @@ Assets/Scripts/Core/TvBundleAuthSecret.cs.meta
 /_tvshots/
 /_gradesweep/
 /_gradetune/
+/Tools/_cap*.sh
