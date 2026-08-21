@@ -32,6 +32,7 @@ public static class TvGradeSweep
     private const string KeyEstable  = "TvGradeSweep.estableDesde";
     private const string KeyLimite   = "TvGradeSweep.limiteCarga";
     private const string KeyMedias   = "TvGradeSweep.medias";
+    private const string KeyDir      = "TvGradeSweep.dir";
     private const string CarpetaSalida = "_gradesweep";
 
     // ⚠ NO se espera un tiempo fijo a que carguen los bundles. Una espera a ciegas que se
@@ -68,6 +69,10 @@ public static class TvGradeSweep
         new Variante { nombre = "F_bloom_medio_notm", bloom = true,  bloomIntensity = 0.60f, tonemapping = false, saturation =   0f, contrast = 10f, postExposure = 0.05f },
         new Variante { nombre = "G_bloom_bajo",       bloom = true,  bloomIntensity = 0.35f, tonemapping = true,  saturation =  10f, contrast = 10f, postExposure = 0.05f },
         new Variante { nombre = "H_movil_mas_con",    bloom = true,  bloomIntensity = 1.20f, tonemapping = false, saturation = -15f, contrast = 10f, postExposure = 0.10f },
+        // Testigo a propósito EXAGERADO: gris total y muy oscuro. Si esta captura sale igual que
+        // las demás, el problema no son los valores del grado — es que el Volume no llega al
+        // render. Sirve de control en cada tanda; no es una candidata.
+        new Variante { nombre = "Z_control_extremo",  bloom = false, bloomIntensity = 0.00f, tonemapping = false, saturation = -100f, contrast = 0f, postExposure = -1.0f },
     };
 
     // ── Estado del acuario a inyectar ────────────────────────────────────────
@@ -121,6 +126,7 @@ public static class TvGradeSweep
     [MenuItem("Appquarium TV/🎨 Barrido de grado (Editor, sin build)", priority = 210)]
     public static void Lanzar()
     {
+        SessionState.SetString(KeyDir, LeerCarpetaDeArgs());
         var dir = RutaSalida();
         Directory.CreateDirectory(dir);
 
@@ -141,7 +147,9 @@ public static class TvGradeSweep
             Debug.Log($"[GRADE] Abriendo {RutaEscena} (la activa era '{activa.name}').");
             EditorSceneManager.OpenScene(RutaEscena, OpenSceneMode.Single);
         }
+        var rp = GraphicsSettings.currentRenderPipeline;
         Debug.Log($"[GRADE] Barrido de {Variantes.Length} variantes → {dir}");
+        Debug.Log($"[GRADE] Pipeline activo: {(rp == null ? "NULL → BUILT-IN (el post-proceso NO se aplicará)" : rp.name)}");
         Debug.Log("[GRADE] " + (File.Exists(Path.Combine(dir, "state.json"))
             ? "Usando el estado de _gradesweep/state.json."
             : "Sin _gradesweep/state.json → estado por defecto (bg_tropical / sub_sand / day)."));
@@ -205,17 +213,21 @@ public static class TvGradeSweep
                 SessionState.SetFloat(KeyEstable, (float)ahora);
             }
 
-            // ⚠ Además de la escena, hay que esperar a que EXISTA el render pipeline. URP no se
-            // instancia hasta que se dibuja el primer frame, y `-executeMethod` corre bastante
-            // antes de eso. Sin instancia, `SubmitRenderRequest` no está soportado y cualquier
-            // captura saldría por el camino legacy: sin post-proceso y sin avisar.
-            bool hayPipeline = RenderPipelineManager.currentPipeline != null;
+            // ⚠ Si HAY un SRP configurado, hay que esperar además a que esté instanciado: URP no
+            // se instancia hasta que se dibuja el primer frame, y `-executeMethod` corre mucho
+            // antes. Sin instancia, `SubmitRenderRequest` no está soportado y la captura se iría
+            // por el camino legacy: sin post-proceso y sin avisar.
+            // Si NO hay SRP configurado (built-in, que es el estado de producción hoy), no hay
+            // nada que esperar: nunca habrá instancia, y esa es la línea base que queremos medir.
+            bool hayPipeline = GraphicsSettings.currentRenderPipeline == null ||
+                               RenderPipelineManager.currentPipeline != null;
             bool estable = cuenta > 0 && hayPipeline &&
                            (ahora - SessionState.GetFloat(KeyEstable, (float)ahora)) >= EstabilidadSeg;
             if (estable)
             {
+                var inst = RenderPipelineManager.currentPipeline;
                 Debug.Log($"[GRADE] Escena cargada y estable ({cuenta} objetos entre peces y sombras), " +
-                          $"pipeline={RenderPipelineManager.currentPipeline.GetType().Name}. Empieza el barrido.");
+                          $"pipeline={(inst == null ? "BUILT-IN" : inst.GetType().Name)}. Empieza el barrido.");
                 Programar(2, 0.2);
                 return;
             }
@@ -249,6 +261,7 @@ public static class TvGradeSweep
         // Aplicar la variante y capturar en el mismo tick: Rebuild() destruye el Volume viejo
         // (desactivándolo primero) y crea el nuevo, así que ya está activo al renderizar.
         var v = Variantes[indice];
+        if (indice == 0) VolcarCableado();
         if (!Aplicar(v)) { Abortar("no encuentro PostProcessingSetup en la escena"); return; }
         if (!Capturar(v.nombre, indice)) { Abortar("fallo al capturar"); return; }
 
@@ -266,6 +279,28 @@ public static class TvGradeSweep
         foreach (var t in Object.FindObjectsByType<Transform>(FindObjectsSortMode.None))
             if (t.name.StartsWith("Shadow_")) n++;
         return n;
+    }
+
+    /// <summary>
+    /// Vuelca cómo está cableado el post-proceso. Existe porque dos tandas seguidas dieron
+    /// variantes idénticas y hay más de un sitio donde se puede romper la cadena:
+    /// pipeline → cámara (renderPostProcessing, volumeLayerMask) → Volume (capa, isGlobal,
+    /// prioridad, perfil). Mirarlos todos de golpe es más rápido que ir probando.
+    /// </summary>
+    private static void VolcarCableado()
+    {
+        var cam = Camera.main;
+        var datos = cam == null ? null : cam.GetComponent<UniversalAdditionalCameraData>();
+        Debug.Log($"[GRADE] cámara: postFX={(datos == null ? "sin UniversalAdditionalCameraData" : datos.renderPostProcessing.ToString())}" +
+                  (datos == null ? "" : $" volumeLayerMask={datos.volumeLayerMask.value} volumeTrigger={(datos.volumeTrigger == null ? "null" : datos.volumeTrigger.name)}"));
+
+        var pp = Object.FindFirstObjectByType<PostProcessingSetup>();
+        Debug.Log($"[GRADE] PostProcessingSetup: {(pp == null ? "NO ESTÁ EN LA ESCENA" : "ok en " + pp.gameObject.name)}");
+
+        foreach (var vol in Object.FindObjectsByType<Volume>(FindObjectsSortMode.None))
+            Debug.Log($"[GRADE] Volume '{vol.name}' capa={vol.gameObject.layer} global={vol.isGlobal} " +
+                      $"prio={vol.priority} peso={vol.weight} activo={vol.enabled} " +
+                      $"perfil={(vol.profile == null ? "NULL" : vol.profile.components.Count + " efectos")}");
     }
 
     private static double MediaLuminancia(Texture2D tex)
@@ -322,8 +357,22 @@ public static class TvGradeSweep
 
     // ── Piezas ───────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Carpeta de salida. Se puede fijar con `-gradeOut <sub>` en la línea de comandos, que es
+    /// lo que permite capturar built-in y URP por separado y compararlos después.
+    /// Vive en SessionState porque el domain reload del play mode se lleva los static.
+    /// </summary>
     private static string RutaSalida()
-        => Path.Combine(Directory.GetCurrentDirectory(), CarpetaSalida);
+        => Path.Combine(Directory.GetCurrentDirectory(),
+                        SessionState.GetString(KeyDir, CarpetaSalida));
+
+    private static string LeerCarpetaDeArgs()
+    {
+        var args = System.Environment.GetCommandLineArgs();
+        for (int i = 0; i < args.Length - 1; i++)
+            if (args[i] == "-gradeOut") return args[i + 1];
+        return CarpetaSalida;
+    }
 
     private static bool Inyectar()
     {
@@ -352,7 +401,9 @@ public static class TvGradeSweep
         pp.saturation        = v.saturation;
         pp.contrast          = v.contrast;
         pp.postExposure      = v.postExposure;
-        pp.Rebuild();
+        // Valores en caliente, NO Rebuild(): reconstruir el Volume por variante provocaba una
+        // carrera y salían capturas con el grado de la variante anterior (medido el 21-ago).
+        pp.AplicarValores();
         return true;
     }
 
@@ -373,23 +424,42 @@ public static class TvGradeSweep
         var cam = Camera.main;
         if (cam == null) { Debug.LogError("[GRADE] No hay Camera.main."); return false; }
 
-        // Si el post-proceso no está activo en la cámara, TODAS las capturas saldrían iguales
-        // y el barrido no diría nada. Mejor fallar aquí que entregar 8 PNG idénticas.
+        // ⚠⚠ SEGUNDA causa de que no haya grado en la TV, encontrada el 21-ago midiendo:
+        // en URP, `renderPostProcessing` de la cámara viene en **false** por defecto, y en este
+        // proyecto NO lo enciende nadie (`TvSceneBootstrap` toca esa misma componente para poner
+        // SMAA, y no lo pone). O sea que aunque hubiera pipeline, el Volume seguiría sin
+        // aplicarse. El barrido lo enciende para poder medir; PRODUCCIÓN necesita el mismo
+        // cambio, y sin él activar URP no arreglaría nada.
         var datos = cam.GetComponent<UniversalAdditionalCameraData>();
-        if (datos != null && !datos.renderPostProcessing)
+        if (datos != null && !datos.renderPostProcessing && GraphicsSettings.currentRenderPipeline != null)
         {
-            Debug.LogError("[GRADE] La cámara tiene renderPostProcessing=false → el barrido no mediría nada.");
-            return false;
+            datos.renderPostProcessing = true;
+            Debug.LogWarning("[GRADE] La cámara tenía renderPostProcessing=FALSE (default de URP). " +
+                             "El barrido lo ha encendido para medir. ⚠ Producción necesita esa línea " +
+                             "en TvSceneBootstrap: sin ella, URP no cambia nada.");
         }
 
-        var rt = new RenderTexture(1920, 1080, 24, RenderTextureFormat.ARGB32)
-        {
-            antiAliasing = 1
-        };
-
+        var rt = new RenderTexture(1920, 1080, 24, RenderTextureFormat.ARGB32) { antiAliasing = 1 };
         var activaPrev = RenderTexture.active;
         try
         {
+            // Dos caminos, y cuál se usa NO se adivina: se decide por lo que haya configurado.
+            //  · built-in → cam.Render() sobre targetTexture. Es el camino REAL del proyecto hoy
+            //               (ver CAST_PARIDAD_VISUAL.md §0), y por tanto la línea base válida.
+            //  · URP      → SubmitRenderRequest, la única vía que ejecuta el pipeline entero.
+            //               Con URP, cam.Render() se salta el post-proceso y no avisa de nada.
+            if (GraphicsSettings.currentRenderPipeline == null)
+            {
+                var previa = cam.targetTexture;
+                try
+                {
+                    cam.targetTexture = rt;
+                    cam.Render();
+                }
+                finally { cam.targetTexture = previa; }
+                return VolcarPng(rt, nombre, indice, "built-in");
+            }
+
             var peticion = new UniversalRenderPipeline.SingleCameraRequest { destination = rt };
             if (!RenderPipeline.SupportsRenderRequest(cam, peticion))
             {
@@ -397,29 +467,13 @@ public static class TvGradeSweep
                 Debug.LogError("[GRADE] SingleCameraRequest no soportado. currentPipeline=" +
                     (actual == null ? "NULL" : actual.GetType().Name) +
                     (actual == null && Application.isBatchMode
-                        ? " → es esto: en -batchmode no hay pantalla, no se instancia URP, y sin " +
-                          "instancia no hay post-proceso. Lanza el Editor con -executeMethod pero " +
-                          "SIN -batchmode (ver la cabecera de este fichero)."
+                        ? " → en -batchmode no hay pantalla y no se instancia URP. Lanza el Editor " +
+                          "con -executeMethod pero SIN -batchmode (ver la cabecera de este fichero)."
                         : ""));
                 return false;
             }
             RenderPipeline.SubmitRenderRequest(cam, peticion);
-
-            RenderTexture.active = rt;
-            var tex = new Texture2D(rt.width, rt.height, TextureFormat.RGB24, false);
-            tex.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0);
-            tex.Apply();
-
-            var archivo = Path.Combine(RutaSalida(), $"{indice:00}_{nombre}.png");
-            File.WriteAllBytes(archivo, tex.EncodeToPNG());
-
-            // Guarda de «esto no está midiendo nada»: si el post-proceso no se aplicara, todas
-            // las variantes saldrían con la misma media y el barrido parecería correcto. Ya
-            // pasó una vez (cam.Render()), así que ahora el arnés se vigila a sí mismo.
-            double media = MediaLuminancia(tex);
-            SessionState.SetString(KeyMedias, SessionState.GetString(KeyMedias, "") + media.ToString("F3") + ";");
-            Object.DestroyImmediate(tex);
-            Debug.Log($"[GRADE] {indice + 1}/{Variantes.Length} → {Path.GetFileName(archivo)} (lum media {media:F2})");
+            return VolcarPng(rt, nombre, indice, "URP");
         }
         finally
         {
@@ -427,6 +481,28 @@ public static class TvGradeSweep
             rt.Release();
             Object.DestroyImmediate(rt);
         }
+    }
+
+    /// <summary>Lee la RenderTexture, la guarda como PNG y anota su luminancia media.</summary>
+    private static bool VolcarPng(RenderTexture rt, string nombre, int indice, string via)
+    {
+        RenderTexture.active = rt;
+        var tex = new Texture2D(rt.width, rt.height, TextureFormat.RGB24, false);
+        tex.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0);
+        tex.Apply();
+
+        var archivo = Path.Combine(RutaSalida(), $"{indice:00}_{nombre}.png");
+        File.WriteAllBytes(archivo, tex.EncodeToPNG());
+
+        // Guarda de «esto no está midiendo nada»: si el grado no se aplicara, todas las variantes
+        // saldrían con la misma media y el barrido parecería correcto. Pasó exactamente eso el
+        // 21-ago, y resultó ser el hallazgo (no había pipeline), no un fallo del arnés.
+        double media = MediaLuminancia(tex);
+        SessionState.SetString(KeyMedias, SessionState.GetString(KeyMedias, "") + media.ToString("F3") + ";");
+        Object.DestroyImmediate(tex);
+
+        Debug.Log($"[GRADE] {indice + 1}/{Variantes.Length} → {Path.GetFileName(archivo)} " +
+                  $"(lum media {media:F2}, vía {via})");
         return true;
     }
 }

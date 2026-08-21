@@ -102,3 +102,9 @@ Assets/AddressableAssetsData/link.xml.meta
 # Plantilla: Tools/r2-auth-worker/TvBundleAuthSecret.cs.sample
 Assets/Scripts/Core/TvBundleAuthSecret.cs
 Assets/Scripts/Core/TvBundleAuthSecret.cs.meta
+
+# Capturas y barridos de diagnostico (adb screencap, barridos de grado).
+# Son cientos de MB de PNG y este repo es publico: NO van a git.
+/_tvshots/
+/_gradesweep/
+/_gradetune/

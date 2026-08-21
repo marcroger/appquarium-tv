@@ -58,6 +58,36 @@ de diagnóstico, que se escribe en el mismo sitio. Dos «confirmaciones» de alg
 - ✅ Lo que **no** cambia: el acuario se ve, y los shaders CG están escritos para built-in, así
   que **hoy son correctos**. Esto no es un incendio: es una palanca enorme sin estrenar.
 
+### 0.1 Medido el 21-ago al intentar encender URP
+
+Se creó un URP asset (`Assets/Settings/TvRenderPipeline.asset`, valores copiados del móvil) y se
+comparó el mismo acuario con y sin él. Tres cosas:
+
+1. ✅ **URP NO rompe el aspecto.** Las capturas con built-in y con URP son prácticamente iguales:
+   sin magenta, decos y peces correctos, sombras en su sitio. Los 4 shaders propios están
+   escritos sin `LightMode` y eso los hace válidos en los dos pipelines, como decían sus
+   comentarios. **Es el riesgo grande del camino A, y se ha medido: no aparece.**
+2. ⚠⚠ **Encender URP NO basta: hay una segunda causa.** `renderPostProcessing` de la cámara viene
+   en **false** por defecto en URP y **nadie lo enciende en el código** (`TvSceneBootstrap` toca
+   esa misma componente para poner SMAA y no lo pone). Sin esa línea, el grado sigue sin
+   aplicarse aunque haya pipeline.
+3. ⚠⚠ **Y una tercera:** al crear el `UniversalRendererData` por código, `postProcessData` se
+   queda a **null** y URP **se salta todo el post-proceso en silencio**. `Create()` sólo recarga
+   los recursos del pipeline, no los del renderer. `TvUrpSetup` ya lo rellena y **verifica**.
+
+### ⚠ El barrido del Editor NO sirve para elegir los valores
+
+Se intentó, y hay que decirlo claro para que nadie se fíe de esas PNG: con URP activo, las
+luminancias medidas **alternan según el índice de captura** (los índices pares salen ~133 y los
+impares ~123) **independientemente de los valores de cada variante**, y el resultado es
+reproducible entre tandas. Eso mide el instrumento, no el grado: `SubmitRenderRequest` con
+post-proceso no está devolviendo de forma fiable el frame ya procesado.
+
+🧭 Conclusión práctica: **el grado hay que elegirlo sobre el player de verdad**, no en el Editor.
+Y eso se puede hacer sin la tele: `Tools/local-test.js` abre el player real en Chrome y captura
+consola y pantalla. La tele queda para la validación final y para el coste de GPU, que es lo
+único que el PC no puede decir.
+
 ### ⚠ Antes de «arreglarlo»
 
 Asignar un `UniversalRenderPipelineAsset` **no es un cambio de una línea**: encendería de golpe
@@ -70,6 +100,135 @@ device que ya va a 37 fps. Hay al menos dos caminos y la decisión es del user:
 | **B** | Quedarse en built-in y hacer el grado con Post Processing Stack v2, que **ya está instalado** (`UNITY_POST_PROCESSING_STACK_V2` está en los defines del proyecto) | Menor: no toca shaders. Pero es una pila distinta a la del móvil, así que la paridad sería «parecido», no «lo mismo» |
 
 En los dos casos hace falta rebuild de player y validación en la tele.
+
+---
+
+## 0.2 ✅ MEDIDO EN LA TELE (2026-08-21) — qué era y qué no era
+
+Con URP activo, el post-proceso encendido y el Volume de la barra LED arreglado, se desplegó el
+player y se midió sobre el device (12 peces + 6 decos, capturas por `adb exec-out screencap`
+disparadas **por evento del log**, no por reloj: el del receiver va ~20-25 s por detrás del
+sender y las primeras capturas salieron mal etiquetadas por eso).
+
+**Lo que NO era el problema del fondo:**
+
+| Sospechoso | Medido | Veredicto |
+|---|---|---|
+| El shader del fondo (`Sprites/Default` vs `URP/Unlit`) | Mismo fondo, mismo instante: lum **130,9 vs 127,6**, sat **0,955 vs 0,961** | ❌ Da igual. El apaño histórico ya no hace daño, pero cambiarlo no arregla nada |
+| ¿Se carga el fondo equivocado? | Mediana de color contra el catálogo: tropical→`bg_tropical` (dist 7,5 vs 51,5 del segundo), kelp→`bg_kelp`, volcanic→`bg_volcanic` | ❌ Los fondos son los correctos |
+| ¿Se destiñe el color? | Tropical en pantalla **0/168/168** contra **2/162/164** del PNG | ❌ Es fiel al original |
+
+**Lo que SÍ es (idea del user, y confirmada):**
+
+1. 🎯 **Sólo se ve el 62 % de la imagen.** Ajustando qué franja del PNG encaja con el perfil
+   vertical de la tele: **del 0 % al 62 %**, correlación **0,972**. El 38 % inferior —la parte
+   con más textura y profundidad de la foto— **no aparece nunca**.
+2. **Va estirada 1,19× en horizontal**: las imágenes son 1536×1024 (3:2) y la pantalla es 16:9.
+3. Con el override a 512 px, esa franja visible son ~317 px de alto reales estirados a ~840 px
+   de pantalla: **2,6× de ampliación**. Ahí está el aspecto lavado.
+
+🧭 O sea: **el problema del fondo es de encuadre y de resolución, no de color.** Y son dos cosas
+que se arreglan juntas — recuperar el 38 % perdido hace que además sobre menos ampliación.
+
+⚠ El código de geometría del fondo es **idéntico** al del móvil (el diff sólo difiere en el
+shader y en los logs), así que la diferencia viene del aspecto de pantalla, no de una divergencia
+del código.
+
+---
+
+## 0.3 ✅ ARREGLADO Y DESPLEGADO (2026-08-21)
+
+Cinco causas, todas silenciosas. Las tres primeras dejaban la TV **sin grado de color**; las dos
+últimas son las del fondo «grisáceo», y son un problema distinto.
+
+| # | Causa | Arreglo |
+|---|---|---|
+| 1 | **No había render pipeline**: `GraphicsSettings` apuntaba a un URP asset inexistente | `Assets/Settings/TvRenderPipeline.asset` (valores del móvil) + `TvUrpSetup` para encender/apagar y comparar |
+| 2 | **`renderPostProcessing` de la cámara en `false`** (default de URP) y nadie lo encendía | Una línea en `TvSceneBootstrap`, con `JsBridge.Log` para que se vea por el canal Cast |
+| 3 | 🎯 **El Volume de la barra LED machacaba el grado entero**: `Add<ColorAdjustments>(true)` marca TODOS los parámetros como override, y va a prioridad 11 | `Add<ColorAdjustments>(false)`: sólo manda en los dos que declara |
+| 4 | **Sólo se veía el 62 % del fondo** | `TankBackground` encaja la imagen entre el suelo y el borde superior |
+| 5 | **Fondos a 512 px** con 2,6× de ampliación | Override de WebGL a **1024** |
+
+⚠⚠ **Y una trampa que salió del propio arreglo 4, cazada por el user en la tele:** por debajo de
+v=0 la textura está en Clamp y **repite su última fila hacia abajo**, lo que dibuja un rayado
+vertical (cada columna arrastra su píxel). Con la fracción puesta a ojo (0,25) esa zona asomaba
+por encima del suelo. Ahora se calcula de la **geometría real del suelo**
+(`DecorationPlacer.FloorTopY`), así que cae exactamente debajo — y sigue cayendo ahí aunque la
+cámara se mueva, porque el cálculo es en coordenadas de mundo.
+
+🧭 Regla que deja esto: **un valor de encuadre «a ojo» es un bug esperando su momento.** Si hay
+una geometría real de la que derivarlo, se deriva.
+
+### Coste medido
+
+| | antes de hoy | ahora | Δ |
+|---|---|---|---|
+| `.data` | 15.942.355 | **19.503.971** | +3,56 MB (2,0 de shaders URP + 1,56 de fondos a 1024) |
+| `.wasm` | 21.664.370 | 21.668.206 | +3,8 KB |
+| FPS (12 peces, sesión asentada) | 45 (15-ago) | **32-41** | ⚠ pendiente de tanda A/B propia |
+
+⚠ El FPS **no está medido en serio todavía**: las primeras lecturas (`avg 29`) estaban
+contaminadas por el pico de carga de bundles, y con la sesión asentada sube a 32-41. La
+comparación con el histórico no es limpia porque aquél se tomó con otro build y otro protocolo.
+
+### 0.4 Auditoría del protocolo y coste real (2026-08-21, tras la sesión de tarde)
+
+**Los 11 tipos que manda la app, verificados uno a uno en la tele.** El móvil manda exactamente
+estos y la TV los aplica todos: `add_fish · remove_fish · add_deco · remove_deco · change_bg ·
+change_sub · change_light · ambient · speed · feed · startle`.
+
+⚠ Dos hallazgos de la auditoría:
+
+1. **`speed`, `feed`, `startle` y `refresh` no reportaban nada** por el canal Cast. Sus efectos
+   son movimiento, que no se ve en una captura, así que un mensaje perdido era **indetectable**.
+   Ahora cada uno confirma qué hizo y **sobre cuántos peces**, que es lo que distingue «no llegó»
+   de «llegó y no había a quién aplicárselo».
+2. ⚠⚠ **El `try/catch` NO protege en este build.** `add_fish` y `add_deco` con un payload
+   malformado soltaban `JS ERR: Uncaught undefined` **con el catch puesto**: el player va con
+   `Exception Support: None` y una excepción del runtime no se captura, se escapa como error de
+   JS. `SafeFromJson` era una guarda decorativa. Ahora **valida la forma antes de parsear** (que
+   sí funciona sin excepciones) y avisa por JsBridge.
+   🧭 Regla: **en este proyecto, `try/catch` no es una red de seguridad. Validar antes.**
+
+### Coste real de URP, medido con el protocolo del 19-ago (25 peces + 6 decos, 420 s)
+
+| | 19-ago (sin URP) | hoy (con URP) |
+|---|---|---|
+| **FPS medio** | 37 | **37** |
+| WASM heap | 159 MB | **191 MB** |
+| Sesión | 421 s, 0 errores | 420 s, 0 errores, 0 JS ERR |
+
+✅ **URP no cuesta FPS.** La alarma inicial (`avg 29`) era el pico de carga de bundles.
+
+⚠ La memoria sube un escalón. Matiz que hay que tener presente: **el heap de WASM crece a saltos
+geométricos** (0,2 de paso), y 159 × 1,2 = 191 — son **dos escalones consecutivos**. Que se pase
+de uno a otro NO significa +32 MB de datos: significa que el uso cruzó el umbral. El coste real
+está entre 1 y 32 MB y con esta instrumentación no se puede afinar más.
+
+⚠⚠ **Hipótesis que falló, y por qué importa cómo falló:** apagar HDR y las sombras de main light
+**no devolvió ni un MB**. La primera medición pareció confirmarlo... porque **el device servía el
+build anterior de caché** (`max-age=3600` en `Build/`) y comparé el mismo build consigo mismo.
+De ahí sale el **sello de pipeline** que ahora imprime el receiver al arrancar:
+
+```
+RP: TvRenderPipeline scale=0.70 hdr=OFF msaa=1 sombras=OFF
+```
+
+🧭 Regla: **si el device cachea, una medición A/B sin un sello que identifique el build no vale
+nada.** Y para iterar, desplegar con `max-age=60` y **restaurar 3600 al terminar**.
+
+ℹ HDR se queda **OFF** a propósito: con `m_ColorGradingMode: 0` (LDR) no aportaba nada. Si algún
+día se enciende el bloom, hay que volver a ponerlo ON.
+
+### Lo que queda por validar
+
+- [x] ✅ **El arreglo del rayado, VALIDADO EN LA TELE** (2026-08-21, tras encender la caja):
+      el auto-encaje calculó **0,233** a partir del suelo real (`y=-2.35`) — y ahí está la
+      explicación exacta del defecto: mi valor a ojo era **0,25**, y ese 7 % de más era justo la
+      franja repetida que asomaba. Tropical y kelp bajan limpios hasta la arena, sin rayado.
+      FPS con sesión asentada: 35 (avg 33) en tropical, 40 (avg 35) en kelp.
+- [ ] Tanda A/B de FPS con el protocolo del 15-ago para saber qué cuesta URP de verdad.
+- [ ] Las 54 decos: la comprobación de que URP no rompe nada se hizo con 6.
 
 ---
 

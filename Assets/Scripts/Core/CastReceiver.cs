@@ -66,6 +66,13 @@ public class CastReceiver : MonoBehaviour
                 TvSceneBootstrap.Instance?.ApplyUpdate(upd);
                 break;
 
+            // Afinado del grado de color EN CALIENTE, sin rebuild de player (55 min por variante).
+            // Los campos que no vengan en el JSON se quedan como están, así que se puede mandar
+            // sólo lo que se quiere tocar: { "type":"GRADE", "payload":"{\"saturation\":-15}" }
+            case "GRADE":
+                AplicarGrado(msg.payload);
+                break;
+
             case "PING":
             case "KEEPALIVE":
                 break;
@@ -109,5 +116,75 @@ public class CastReceiver : MonoBehaviour
                 mgr.FeedAll();
                 break;
         }
+    }
+
+    /// <summary>
+    /// Cambia el grado de color en caliente. Existe porque elegir estos valores a base de builds
+    /// cuesta 55 min por variante, y porque el barrido del Editor demostró no ser fiable para
+    /// esto (ver CAST_PARIDAD_VISUAL.md §0.1): hay que decidirlo sobre el player de verdad.
+    /// </summary>
+    private void AplicarGrado(string payload)
+    {
+        var pp = FindFirstObjectByType<PostProcessingSetup>();
+        if (pp == null) { JsBridge.Log("GRADE: no hay PostProcessingSetup en la escena"); return; }
+
+        // Se parte de los valores ACTUALES y se sobreescribe sólo lo que traiga el JSON, para
+        // poder mandar un único campo sin arrastrar el resto.
+        var g = new GradePayload
+        {
+            bloom          = pp.enableBloom,
+            bloomIntensity = pp.bloomIntensity,
+            tonemapping    = pp.enableTonemapping,
+            saturation     = pp.saturation,
+            contrast       = pp.contrast,
+            exposure       = pp.postExposure,
+            vignette       = pp.vignetteIntensity,
+            bgFit          = -1f,     // centinela: si el JSON no lo trae, no se toca el encuadre
+        };
+        try   { JsonUtility.FromJsonOverwrite(payload, g); }
+        catch (System.Exception e) { JsBridge.Log("GRADE: payload ilegible — " + e.Message); return; }
+
+        pp.enableBloom       = g.bloom;
+        pp.bloomIntensity    = g.bloomIntensity;
+        pp.enableTonemapping = g.tonemapping;
+        pp.saturation        = g.saturation;
+        pp.contrast          = g.contrast;
+        pp.postExposure      = g.exposure;
+        pp.vignetteIntensity = g.vignette;
+        pp.AplicarValores();
+
+        // Conmutar el shader del fondo en la misma sesión, para comparar sin otro build.
+        if (!string.IsNullOrEmpty(g.bgShader))
+        {
+            var bg = FindFirstObjectByType<TankBackground>();
+            if (bg == null) JsBridge.Log("BGSHADER: no hay TankBackground en la escena");
+            else            bg.SwapBackgroundShader(g.bgShader);
+        }
+
+        // Encuadre del fondo: qué fracción tapa el suelo. Se barre en caliente para elegirlo.
+        if (g.bgFit >= 0f)
+        {
+            var bg2 = FindFirstObjectByType<TankBackground>();
+            if (bg2 == null) JsBridge.Log("BGFIT: no hay TankBackground en la escena");
+            else             bg2.SetBackgroundFit(g.bgFit);
+        }
+
+        JsBridge.Log($"GRADE: bloom={(g.bloom ? g.bloomIntensity.ToString("F2") : "OFF")} " +
+                     $"tm={(g.tonemapping ? "Neutral" : "OFF")} sat={g.saturation:F0} " +
+                     $"con={g.contrast:F0} exp={g.exposure:F2} vig={g.vignette:F2}");
+    }
+
+    [System.Serializable]
+    private class GradePayload
+    {
+        public bool  bloom;
+        public float bloomIntensity;
+        public bool  tonemapping;
+        public float saturation;
+        public float contrast;
+        public float exposure;
+        public float vignette;
+        public string bgShader;   // "urp" | "sprites"; vacío = no tocar
+        public float  bgFit;      // fracción tapada por el suelo; negativo = no tocar
     }
 }

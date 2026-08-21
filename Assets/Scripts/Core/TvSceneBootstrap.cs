@@ -103,6 +103,14 @@ public class TvSceneBootstrap : MonoBehaviour
         {
             urpAsset.renderScale = 0.7f;
             Debug.Log($"[TvScene] renderScale set to {urpAsset.renderScale}");
+            // Sello de configuración del pipeline por el canal Cast. Existe porque el device
+            // CACHEA el player (`max-age=3600` en Build/) y sin esto no hay forma de saber qué
+            // build está corriendo de verdad: el 21-ago comparé dos tandas de memoria creyendo
+            // que eran builds distintos y era el mismo, servido de caché las dos veces.
+            JsBridge.Log($"RP: {urpAsset.name} scale={urpAsset.renderScale:F2} " +
+                         $"hdr={(urpAsset.supportsHDR ? "ON" : "OFF")} " +
+                         $"msaa={urpAsset.msaaSampleCount} " +
+                         $"sombras={(urpAsset.supportsMainLightShadows ? "ON" : "OFF")}");
         }
         else
         {
@@ -116,9 +124,21 @@ public class TvSceneBootstrap : MonoBehaviour
             var camData = cam.GetComponent<UnityEngine.Rendering.Universal.UniversalAdditionalCameraData>();
             if (camData != null)
             {
+                // ⚠⚠ 2026-08-21: SIN esta línea no hay post-proceso, aunque exista el pipeline y
+                // aunque PostProcessingSetup construya su Volume. En URP `renderPostProcessing`
+                // viene en FALSE por defecto, y aquí nadie lo encendía: este mismo bloque llevaba
+                // meses tocando la componente para poner SMAA y se dejaba lo importante.
+                // El síntoma es el peor de todos: no falla nada, simplemente la tele se ve plana.
+                camData.renderPostProcessing = true;
+
                 camData.antialiasing        = UnityEngine.Rendering.Universal.AntialiasingMode.SubpixelMorphologicalAntiAliasing;
                 camData.antialiasingQuality = UnityEngine.Rendering.Universal.AntialiasingQuality.Low;
-                Debug.Log("[TvScene] SMAA Low enabled");
+                Debug.Log("[TvScene] postFX ON + SMAA Low enabled");
+                JsBridge.Log("POSTFX: activado en la cámara (renderPostProcessing=true)");
+            }
+            else
+            {
+                JsBridge.Log("ERR: la cámara no tiene UniversalAdditionalCameraData → sin post-proceso");
             }
         }
 
@@ -166,22 +186,36 @@ public class TvSceneBootstrap : MonoBehaviour
         {
             case "ambient": ApplyAmbientMode(upd.value); break;
 
+            // ⚠ Estos cuatro no reportaban NADA por el canal Cast (2026-08-21). Un fallo aquí
+            // era invisible: el `Debug.Log` no viaja por Cast y el resto son efectos de
+            // movimiento, que no se ven en una captura. Ahora cada uno confirma lo que hizo
+            // Y sobre cuántos peces, que es lo que permite distinguir «no llegó el mensaje» de
+            // «llegó pero no había a quién aplicárselo».
             case "speed":
                 if (float.TryParse(upd.value,
                         System.Globalization.NumberStyles.Float,
                         System.Globalization.CultureInfo.InvariantCulture, out float spd))
+                {
                     mgr.FishSpeedMultiplier = spd;
+                    JsBridge.Log($"speed: x{spd:F2} aplicado a {mgr.fishSpawner?.ActiveFish?.Count ?? -1} peces");
+                }
+                else JsBridge.Log($"ERR speed: valor ilegible '{upd.value}'");
                 break;
 
-            case "feed":    mgr.FeedAll(); break;
+            case "feed":
+                mgr.FeedAll();
+                JsBridge.Log($"feed: comida soltada ({mgr.fishSpawner?.ActiveFish?.Count ?? -1} peces en el tanque)");
+                break;
 
             case "startle":
                 var sBounds = mgr.tankController.GetTankBounds();
                 mgr.StartleAll(sBounds.center);
+                JsBridge.Log($"startle: {mgr.fishSpawner?.ActiveFish?.Count ?? -1} peces espantados desde {sBounds.center:F1}");
                 break;
 
             case "refresh":
                 Debug.Log("[TvScene] Refresh requested — waiting for new INIT.");
+                JsBridge.Log("refresh: recibido — esperando un INIT nuevo");
                 break;
 
             // ── Real-time asset updates ──────────────────────────────────────
@@ -647,10 +681,36 @@ public class TvSceneBootstrap : MonoBehaviour
         JsBridge.Log($"change_light: {lightId}");
     }
 
+    /// <summary>
+    /// Parseo defensivo de los payloads que llegan por Cast.
+    ///
+    /// ⚠⚠ El `try/catch` de aquí abajo **NO es una red de seguridad en este build**: el player
+    /// se compila con `Exception Support: None` (obligatorio, ver CLAUDE.md), y con eso una
+    /// excepción del runtime no se captura — se escapa como error de JS. Medido el 2026-08-21:
+    /// mandando `add_fish=<id suelto>` en vez del JSON que manda el móvil, el receiver soltó
+    /// `JS ERR: Uncaught undefined` **con el catch puesto**, y el update se perdió sin más.
+    ///
+    /// Por eso lo que protege de verdad es la comprobación de FORMA de antes: si no parece un
+    /// objeto JSON, ni se intenta. Y se avisa por JsBridge, porque un fallo que sólo se ve por
+    /// Debug.Log es invisible en la tele.
+    /// </summary>
     private static T SafeFromJson<T>(string json) where T : class
     {
-        if (string.IsNullOrEmpty(json)) return null;
-        try   { return JsonUtility.FromJson<T>(json); }
-        catch { return null; }
+        if (string.IsNullOrEmpty(json))
+        {
+            JsBridge.Log("ERR payload: vacío");
+            return null;
+        }
+
+        var limpio = json.TrimStart();
+        if (limpio.Length == 0 || limpio[0] != '{')
+        {
+            var muestra = json.Length > 40 ? json.Substring(0, 40) + "…" : json;
+            JsBridge.Log($"ERR payload: se esperaba un objeto JSON y llegó '{muestra}'");
+            return null;
+        }
+
+        try   { return JsonUtility.FromJson<T>(limpio); }
+        catch { JsBridge.Log("ERR payload: JSON con forma correcta pero ilegible"); return null; }
     }
 }

@@ -265,6 +265,14 @@ public class DecorationPlacer : MonoBehaviour
     /// </summary>
     public float GetFloorSurfaceY(float z) => FloorSurfaceY(z);
 
+    /// <summary>
+    /// Borde SUPERIOR del suelo en world-space (el del fondo del tanque, que en la perspectiva
+    /// 2.5D es el que aparece más arriba en pantalla). Lo usa TankBackground para encajar la
+    /// imagen de fondo justo encima y que no asome la zona repetida del borde de la textura.
+    /// Devuelve 0 si el suelo aún no se ha construido.
+    /// </summary>
+    public float FloorTopY => _floorRenderer == null ? 0f : _floorMeshBaseY + _floorMeshRiseY;
+
     /// <summary>Posición Y correcta del pivot de una deco en su Z actual.</summary>
     private float GetDecoFloorY(PlacedDeco pd, float z)
         => FloorY(z) + pd.data.floorYOffset + pd.pivotBaseHeight;

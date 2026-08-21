@@ -42,6 +42,14 @@ public class PostProcessingSetup : MonoBehaviour
     // ── Interno ──────────────────────────────────────────────────────────────
     private Volume _volume;
 
+    // Referencias a los efectos, para poder cambiar valores SIN reconstruir el Volume.
+    // Reconstruirlo por cada cambio (destruir + crear) resultó ser una carrera: capturas
+    // seguidas salían unas con el grado nuevo y otras con el viejo (medido el 21-ago).
+    private Bloom            _bloom;
+    private Tonemapping      _tonemapping;
+    private ColorAdjustments _color;
+    private Vignette         _vignette;
+
     // ── Ciclo de vida ────────────────────────────────────────────────────────
 
     void Start()
@@ -71,6 +79,36 @@ public class PostProcessingSetup : MonoBehaviour
     public void Rebuild()
     {
         BuildVolume();
+    }
+
+    /// <summary>
+    /// Empuja los valores actuales de los campos a los efectos YA creados, sin tocar el Volume.
+    /// Es la vía buena para cambiar el grado en caliente: la usa el barrido del Editor y es la
+    /// que necesitará el control por `DIAG` para afinar en la tele sin gastar un build por
+    /// variante. Si el Volume aún no existe, construye.
+    /// </summary>
+    public void AplicarValores()
+    {
+        if (_volume == null || _color == null) { BuildVolume(); return; }
+
+        _bloom.active = enableBloom;
+        _bloom.intensity.Override(bloomIntensity);
+        _bloom.threshold.Override(bloomThreshold);
+        _bloom.scatter.Override(bloomScatter);
+
+        _tonemapping.active = enableTonemapping;
+
+        _color.colorFilter.Override(colorFilter);
+        _color.contrast.Override(contrast);
+        _color.saturation.Override(saturation);
+        _color.postExposure.Override(postExposure);
+
+        _vignette.intensity.Override(vignetteIntensity);
+        _vignette.smoothness.Override(vignetteSmoothness);
+        _vignette.color.Override(vignetteColor);
+
+        TvLayerDebug.Set("PostFX", $"bloom={(enableBloom ? bloomIntensity.ToString("F2") : "OFF")} " +
+                                   $"tm={(enableTonemapping ? "Neutral" : "OFF")} sat={saturation:F0} con={contrast:F0}");
     }
 
     public void TogglePostProcessing()
@@ -120,41 +158,37 @@ public class PostProcessingSetup : MonoBehaviour
         // más caro en el Mali-G31. Sin él, el pass de post-proceso queda en Color +
         // Vignette (single-pass, barato). Recortar bloom recupera la mayor parte del
         // coste GPU del post-proceso manteniendo el tono submarino.
-        if (enableBloom)
-        {
-            var bloom = profile.Add<Bloom>(true);
-            bloom.active = true;
-            bloom.intensity.Override(bloomIntensity);
-            bloom.threshold.Override(bloomThreshold);
-            bloom.scatter.Override(bloomScatter);
-            bloom.highQualityFiltering.Override(false); // Cast device GPU — high quality too expensive
-        }
+        // Se añade SIEMPRE y se enciende con `active`: así se puede alternar en caliente sin
+        // reconstruir nada. Un efecto con active=false no cuesta pases de GPU.
+        _bloom = profile.Add<Bloom>(true);
+        _bloom.active = enableBloom;
+        _bloom.intensity.Override(bloomIntensity);
+        _bloom.threshold.Override(bloomThreshold);
+        _bloom.scatter.Override(bloomScatter);
+        _bloom.highQualityFiltering.Override(false); // Cast device GPU — high quality too expensive
 
         // ── Tonemapping ───────────────────────────────────────────────────────
         // Neutral: preserva colores de autor sin el gris-shift de ACES.
         // Coste cero — se hornea en el mismo LUT pass que ColorAdjustments.
-        if (enableTonemapping)
-        {
-            var tm = profile.Add<Tonemapping>(true);
-            tm.active = true;
-            tm.mode.Override(TonemappingMode.Neutral);
-        }
+        _tonemapping = profile.Add<Tonemapping>(true);
+        _tonemapping.active = enableTonemapping;
+        _tonemapping.mode.Override(TonemappingMode.Neutral);
 
         // ── Color Adjustments ─────────────────────────────────────────────────
-        var color = profile.Add<ColorAdjustments>(true);
-        color.active = true;
-        color.colorFilter.Override(colorFilter);
-        color.contrast.Override(contrast);
-        color.saturation.Override(saturation);
-        color.postExposure.Override(postExposure);
+        _color = profile.Add<ColorAdjustments>(true);
+        _color.active = true;
+        _color.colorFilter.Override(colorFilter);
+        _color.contrast.Override(contrast);
+        _color.saturation.Override(saturation);
+        _color.postExposure.Override(postExposure);
 
         // ── Vignette ──────────────────────────────────────────────────────────
-        var vignette = profile.Add<Vignette>(true);
-        vignette.active     = true;
-        vignette.color.Override(vignetteColor);
-        vignette.intensity.Override(vignetteIntensity);
-        vignette.smoothness.Override(vignetteSmoothness);
-        vignette.rounded.Override(true);
+        _vignette = profile.Add<Vignette>(true);
+        _vignette.active     = true;
+        _vignette.color.Override(vignetteColor);
+        _vignette.intensity.Override(vignetteIntensity);
+        _vignette.smoothness.Override(vignetteSmoothness);
+        _vignette.rounded.Override(true);
 
         _volume.profile = profile;
 
