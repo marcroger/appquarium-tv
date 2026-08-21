@@ -171,6 +171,55 @@ una geometría real de la que derivarlo, se deriva.
 contaminadas por el pico de carga de bundles, y con la sesión asentada sube a 32-41. La
 comparación con el histórico no es limpia porque aquél se tomó con otro build y otro protocolo.
 
+### 0.4 Auditoría del protocolo y coste real (2026-08-21, tras la sesión de tarde)
+
+**Los 11 tipos que manda la app, verificados uno a uno en la tele.** El móvil manda exactamente
+estos y la TV los aplica todos: `add_fish · remove_fish · add_deco · remove_deco · change_bg ·
+change_sub · change_light · ambient · speed · feed · startle`.
+
+⚠ Dos hallazgos de la auditoría:
+
+1. **`speed`, `feed`, `startle` y `refresh` no reportaban nada** por el canal Cast. Sus efectos
+   son movimiento, que no se ve en una captura, así que un mensaje perdido era **indetectable**.
+   Ahora cada uno confirma qué hizo y **sobre cuántos peces**, que es lo que distingue «no llegó»
+   de «llegó y no había a quién aplicárselo».
+2. ⚠⚠ **El `try/catch` NO protege en este build.** `add_fish` y `add_deco` con un payload
+   malformado soltaban `JS ERR: Uncaught undefined` **con el catch puesto**: el player va con
+   `Exception Support: None` y una excepción del runtime no se captura, se escapa como error de
+   JS. `SafeFromJson` era una guarda decorativa. Ahora **valida la forma antes de parsear** (que
+   sí funciona sin excepciones) y avisa por JsBridge.
+   🧭 Regla: **en este proyecto, `try/catch` no es una red de seguridad. Validar antes.**
+
+### Coste real de URP, medido con el protocolo del 19-ago (25 peces + 6 decos, 420 s)
+
+| | 19-ago (sin URP) | hoy (con URP) |
+|---|---|---|
+| **FPS medio** | 37 | **37** |
+| WASM heap | 159 MB | **191 MB** |
+| Sesión | 421 s, 0 errores | 420 s, 0 errores, 0 JS ERR |
+
+✅ **URP no cuesta FPS.** La alarma inicial (`avg 29`) era el pico de carga de bundles.
+
+⚠ La memoria sube un escalón. Matiz que hay que tener presente: **el heap de WASM crece a saltos
+geométricos** (0,2 de paso), y 159 × 1,2 = 191 — son **dos escalones consecutivos**. Que se pase
+de uno a otro NO significa +32 MB de datos: significa que el uso cruzó el umbral. El coste real
+está entre 1 y 32 MB y con esta instrumentación no se puede afinar más.
+
+⚠⚠ **Hipótesis que falló, y por qué importa cómo falló:** apagar HDR y las sombras de main light
+**no devolvió ni un MB**. La primera medición pareció confirmarlo... porque **el device servía el
+build anterior de caché** (`max-age=3600` en `Build/`) y comparé el mismo build consigo mismo.
+De ahí sale el **sello de pipeline** que ahora imprime el receiver al arrancar:
+
+```
+RP: TvRenderPipeline scale=0.70 hdr=OFF msaa=1 sombras=OFF
+```
+
+🧭 Regla: **si el device cachea, una medición A/B sin un sello que identifique el build no vale
+nada.** Y para iterar, desplegar con `max-age=60` y **restaurar 3600 al terminar**.
+
+ℹ HDR se queda **OFF** a propósito: con `m_ColorGradingMode: 0` (LDR) no aportaba nada. Si algún
+día se enciende el bloom, hay que volver a ponerlo ON.
+
 ### Lo que queda por validar
 
 - [x] ✅ **El arreglo del rayado, VALIDADO EN LA TELE** (2026-08-21, tras encender la caja):
