@@ -510,16 +510,31 @@ public class TvSceneBootstrap : MonoBehaviour
         return keys;
     }
 
+    /// <summary>
+    /// ⚠ 2026-08-24 — `ambient` era el ÚNICO de los 11 UPDATE que no reportaba nada por el
+    /// canal Cast. La auditoría del 21-ago le puso confirmación a `speed`, `feed`, `startle`
+    /// y `refresh` y se dejó éste fuera, y tenía TRES salidas mudas: sin controlador, con un
+    /// modo que no encaja, y "ya estaba en ese modo". Resultado: del log de una sesión en la
+    /// tele no se podía saber si el ciclo día/noche había funcionado — que es justo lo que
+    /// hizo falta averiguar hoy. Ahora dice qué hizo, desde qué modo, y si no hizo nada.
+    /// </summary>
     private void ApplyAmbientMode(string mode)
     {
         var amb = FindFirstObjectByType<AmbientModeController>();
-        if (amb == null) return;
+        if (amb == null) { JsBridge.Log($"ERR ambient: no hay AmbientModeController en la escena (pedido '{mode}')"); return; }
+
+        var previo = amb.CurrentMode;
         switch (mode)
         {
             case "day":    amb.SetDay();    break;
             case "sunset": amb.SetSunset(); break;
             case "night":  amb.SetNight();  break;
+            default:       JsBridge.Log($"ERR ambient: modo desconocido '{mode}' (day|sunset|night)"); return;
         }
+
+        JsBridge.Log(previo == amb.CurrentMode
+            ? $"ambient: {mode} — ya estaba en ese modo, sin cambio"
+            : $"ambient: {previo} → {amb.CurrentMode}");
     }
 
     // ── Real-time asset update handlers ───────────────────────────────────────

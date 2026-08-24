@@ -70,6 +70,28 @@ Shader "Appquarium/DecoLit"
             // por defecto), y fixed4 la recortaría a 1,0 justo donde empieza a notarse.
             float4    _EmissionColor;
 
+            // ⚠ 2026-08-24 — EL CICLO DÍA/NOCHE NO LLEGABA A LAS DECOS.
+            // Medido: suelo y decos daban 92,09 y 47,98 de luminancia en los OCHO momentos
+            // del ciclo, idénticos a dos decimales, mientras el fondo caía a 0,45× y el agua
+            // a 0,23×. La causa es la luz fija de más abajo: ni `RenderSettings.ambientLight`
+            // ni la intensidad del `Light` direccional —que es lo que anima
+            // `AmbientModeController`— tenían ningún camino hasta aquí. En el móvil las decos
+            // van con `Universal Render Pipeline/Lit`, que sí lee la escena: de ahí el
+            // desajuste que reportó el user.
+            //
+            // Se resuelve con un global que publica `AmbientModeController` cada frame de la
+            // transición, en vez de leer los globals de luz del SRP: en un pass CG sin
+            // LightMode (que es lo que somos) no hay garantía de que el pipeline los tenga
+            // bindeados, y este proyecto ya ha pagado caro depender de cosas que "deberían"
+            // estar puestas.
+            //
+            // ⚠⚠ ES UN *DARKEN*, NO UN *TINT*, Y ESO ES DELIBERADO: un global que nadie
+            // publica vale 0, no 1. Con un tint, cualquier escena sin `AmbientModeController`
+            // (o un fallo de orden de inicialización) renderizaría las decos EN NEGRO. Con
+            // darken, el valor por defecto 0 significa "no toques nada" y el aspecto es
+            // exactamente el de siempre. Fallar hacia lo de antes, no hacia lo roto.
+            float4    _AqDecoDarken;
+
             v2f vert(appdata v)
             {
                 v2f o;
@@ -97,7 +119,14 @@ Shader "Appquarium/DecoLit"
                 float  hemi = saturate(N.y * 0.5 + 0.5);          // 1 arriba, 0 abajo
                 float  amb  = _Ambient * lerp(0.5, 1.3, hemi);
                 float  lite = saturate(amb + (1.0 - _Ambient) * ndl);
-                float3 col  = tex.rgb * lite * _Brightness;
+
+                // El ciclo día/noche entra AQUÍ y sólo aquí: se conserva intacta la fórmula
+                // de iluminación validada (relieve, hemisférico, sombras propias) y se
+                // multiplica por el color de la fase. En día el global vale 0 → factor
+                // (1,1,1) → la imagen es EXACTAMENTE la de antes, bit a bit; el riesgo de
+                // regresión sobre el aspecto ya validado es nulo por construcción.
+                float3 fase = saturate(1.0 - _AqDecoDarken.rgb);
+                float3 col  = tex.rgb * lite * _Brightness * fase;
 
                 // Emisión aditiva: se suma DESPUÉS de la iluminación a propósito, para que el
                 // coral siga brillando aunque esté en la cara en sombra. `DecorationPlacer`
