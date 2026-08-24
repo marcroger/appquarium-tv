@@ -32,7 +32,8 @@ El móvil envía el estado del tanque vía Google Cast SDK; este proyecto **rend
 
 | Doc | Cuándo |
 |---|---|
-| [`CAST_NEXT_SESSION_2026-08-22.md`](CAST_NEXT_SESSION_2026-08-22.md) | ⭐⭐ **EMPEZAR AQUÍ.** Cierre del 21-ago: la TV recuperó el color (llevaba desde siempre sin aplicar ningún grado, por 5 causas encadenadas). Protocolo auditado 11/11 y coste de URP medido. |
+| [`CAST_NEXT_SESSION_2026-08-25.md`](CAST_NEXT_SESSION_2026-08-25.md) | ⭐⭐ **EMPEZAR AQUÍ.** Cierre del 24-ago: el ciclo día/noche por fin llega a decos y peces. **Construido y verificado, NO desplegado.** Trae la trampa del shader horneado en el bundle y por qué el deploy va sólo con `Build/`. |
+| [`CAST_NEXT_SESSION_2026-08-22.md`](CAST_NEXT_SESSION_2026-08-22.md) | Cierre del 21-ago: la TV recuperó el color (llevaba desde siempre sin aplicar ningún grado, por 5 causas encadenadas). Protocolo auditado 11/11 y coste de URP medido. |
 | [`CAST_PARIDAD_VISUAL.md`](CAST_PARIDAD_VISUAL.md) | 🎨 **El detalle y las pruebas** de lo anterior: qué se descartó con medida, qué reglas salieron, y lo que queda del fondo. |
 | [`CAST_NEXT_SESSION_2026-08-21.md`](CAST_NEXT_SESSION_2026-08-21.md) | Cierre del 20-ago: Cierre del 20-ago: los bundles ya están detrás del Worker. Qué cambió en el deploy y qué queda. |
 | [`CAST_R2_AUTH_MOVIL.md`](CAST_R2_AUTH_MOVIL.md) | 📄 **Para la sesión del repo MÓVIL.** Contrato de la Fase 2 (JWT por usuario): campo del JSON, claims, orden de migración. |
@@ -178,6 +179,34 @@ el Editor. Detalle completo y pruebas: **`CAST_PARIDAD_VISUAL.md` §0**.
   **qué build está corriendo de verdad** en la tele, que cachea.
 - Coste medido (25 peces, 420 s): **FPS 37 contra 37** — URP no cuesta FPS. La memoria sube un
   escalón del heap geométrico (159 → 191 MB).
+
+### ⚠⚠ Un shader tocado NO llega a las decos con sólo rebuildear el player (2026-08-24)
+
+Un material que sale de un **AssetBundle trae su propia copia del shader**, compilada cuando se
+construyó el bundle. Sigue llamándose `Appquarium/DecoLit`, así que la guarda «ya es device-safe»
+de `FixNonURPMaterials` lo deja pasar — pero es el bytecode del día en que se construyó el bundle,
+y no conoce las propiedades nuevas.
+
+- **Costó un build entero de 55 min**: el ciclo día/noche salió «hecho» y las decos siguieron
+  planas (47,97 de luminancia en las 8 fases), mientras una sonda en el Editor demostraba que el
+  global sí llegaba al shader.
+- **`FishSpawner.cs:341-360` ya lo resolvía para los peces** desde hace meses, con el razonamiento
+  escrito en su comentario. A las decos nunca se les aplicó.
+- Ahora `DecorationPlacer.FixNonURPMaterials` **reapunta** (`mat.shader = Shader.Find(...)`, que
+  devuelve la copia del player) y lo **cuenta**: `AQUARIUM READY … | shaders reapuntados: N`.
+- 🧭 La alternativa era reconstruir los 80 bundles: **68 min + 87 MB de subida**. Reapuntar es
+  gratis y sobrevive a cualquier cambio futuro de shader.
+
+### ⚠⚠ El catálogo local YA NO cuadra con R2 (2026-08-24)
+
+Un build de player regenera `webgl-output/StreamingAssets/aa/` con **hashes de bundle distintos**
+a los que hay desplegados (fish `b5a9bb42…` local contra `724dbae8…` en R2). **Subir
+`StreamingAssets/` deja la tele vacía**: los 80 bundles dejan de encontrarse. Comprobado en vivo el
+24-ago (7/7 `RemoteProviderException`).
+
+**Al desplegar sólo un cambio de código: subir `Build/` + `index.html` y NADA MÁS.** Si algún día
+hay que volver a cuadrarlos, la vía es un New Build de Addressables + redespliegue de los 80
+bundles, nunca subir el catálogo suelto.
 
 ### Estado actual — 2026-08-19 ⭐
 
