@@ -229,9 +229,28 @@ public class AmbientModeController : MonoBehaviour
         Color actual = ambient    + sun         * intensity;
 
         // Se manda el complemento: el shader hace 1 - esto. Ver arriba por qué.
-        Shader.SetGlobalColor(AqDecoDarken, Complemento(actual, refDia, sueloDecoNoche));
-        Shader.SetGlobalColor(AqFishDarken, Complemento(actual, refDia, sueloPecesNoche));
+        Color deco = Complemento(actual, refDia, sueloDecoNoche);
+        Color pez  = Complemento(actual, refDia, sueloPecesNoche);
+        Shader.SetGlobalColor(AqDecoDarken, deco);
+        Shader.SetGlobalColor(AqFishDarken, pez);
+
+        // ⚠ 2026-08-24 — REPORTAR EL MECANISMO, NO SÓLO EL EFECTO.
+        // El build del 24-ago salió con el ciclo "hecho" y las decos siguieron planas, y no
+        // se pudo saber por qué sin otro build: nadie decía qué factor se estaba publicando.
+        // Con esto, «llegó el mensaje pero el factor es 1» y «el factor baja pero la deco no
+        // se entera» dejan de ser indistinguibles. Se emite sólo cuando cambia de verdad
+        // (~2 líneas por transición), no en cada frame del fundido.
+        int firma = Mathf.RoundToInt((1f - deco.r) * 100f) * 1000
+                  + Mathf.RoundToInt((1f - deco.g) * 100f);
+        if (firma != _ultimaFirmaLuz)
+        {
+            _ultimaFirmaLuz = firma;
+            JsBridge.Log($"luz: deco={1f - deco.r:F2}/{1f - deco.g:F2}/{1f - deco.b:F2} " +
+                         $"pez={1f - pez.r:F2}/{1f - pez.g:F2}/{1f - pez.b:F2}");
+        }
     }
+
+    private int _ultimaFirmaLuz = int.MinValue;
 
     private static Color Complemento(Color actual, Color refDia, float suelo)
     {

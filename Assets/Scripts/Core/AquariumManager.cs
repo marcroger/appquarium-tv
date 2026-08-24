@@ -186,7 +186,8 @@ public class AquariumManager : MonoBehaviour
         FoodManager.Instance.StartAutoFeed(tankBounds);
 
         Debug.Log($"[AquariumManager] Aquarium ready (async). Fish: {fishSpawner?.ActiveFish?.Count ?? 0}");
-        JsBridge.Log($"AQUARIUM READY: {fishSpawner?.ActiveFish?.Count ?? 0} fish active");
+        JsBridge.Log($"AQUARIUM READY: {fishSpawner?.ActiveFish?.Count ?? 0} fish active"
+                   + $" | shaders reapuntados al player: {DecorationPlacer.ShadersReapuntados}");
     }
 
     /// <summary>
@@ -316,7 +317,8 @@ public class AquariumManager : MonoBehaviour
         catch (Exception e) { Debug.LogError($"[AquariumManager] Preset load error: {e.Message}"); }
 
         Debug.Log($"[AquariumManager] Aquarium ready. Fish: {fishSpawner.ActiveFish.Count}");
-        JsBridge.Log($"AQUARIUM READY: {fishSpawner.ActiveFish.Count} fish active");
+        JsBridge.Log($"AQUARIUM READY: {fishSpawner.ActiveFish.Count} fish active"
+                   + $" | shaders reapuntados al player: {DecorationPlacer.ShadersReapuntados}");
     }
 
     private void SpawnCastFish(Bounds tankBounds)

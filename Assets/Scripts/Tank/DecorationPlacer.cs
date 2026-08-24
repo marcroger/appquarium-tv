@@ -1723,6 +1723,12 @@ public class DecorationPlacer : MonoBehaviour
     /// También repara materiales URP/Unlit sin textura que hayan quedado blancos por una
     /// conversión incorrecta en el Editor (cuando se leyó _MainTex pero GLTFast usa _BaseMap).
     /// </summary>
+    /// <summary>Cuántos materiales se han reapuntado del shader del bundle al del player.
+    /// Se reporta por el canal Cast: si sale 0 con decos colocadas, o el reapuntado no hace
+    /// falta o no está entrando, y en cualquier caso hay que mirarlo.</summary>
+    private static int _shadersReapuntados;
+    public static int ShadersReapuntados => _shadersReapuntados;
+
     public static void FixNonURPMaterials(GameObject go)
     {
         // Device-safe targets (CG legacy, sin LightMode → ejecutan en el Cast renderer):
@@ -1755,6 +1761,30 @@ public class DecorationPlacer : MonoBehaviour
                 bool unlitEnDeco = decoLit != null
                                    && sname.Contains("Appquarium/FishUnlit")
                                    && !mat.name.EndsWith("_DECOLIT");
+
+                // ⚠⚠ 2026-08-24 — «YA ES EL SHADER BUENO» NO SIGNIFICA «ES *NUESTRO* SHADER».
+                // Un material que viene de un AssetBundle trae su PROPIA copia del shader,
+                // horneada cuando se construyó el bundle. Sigue llamándose
+                // "Appquarium/DecoLit", así que la guarda de abajo lo dejaba pasar, pero es
+                // el bytecode del 19-ago: no conoce `_AqDecoDarken` y por tanto ignora el
+                // ciclo día/noche. Se midió: tras cambiar el shader y rebuildear el PLAYER,
+                // las decos seguían clavadas en 47,97 de luminancia en las 8 fases, mientras
+                // la misma sonda en el Editor demostraba que el global sí llega al shader.
+                //
+                // `FishSpawner.cs:341-360` ya resolvía esto para los peces desde hace
+                // tiempo, con este mismo razonamiento escrito en su comentario — a las decos
+                // nunca se les aplicó. `Shader.Find` devuelve la copia del PLAYER (los
+                // shaders dentro de bundles no se registran ahí), así que reapuntar basta.
+                //
+                // 🧭 Regla que sale de aquí: tocar DecoLit/FishUnlit NO se despliega sólo con
+                // un build de player mientras el material viva en un bundle. O se reapunta
+                // aquí, o hay que reconstruir los 80 bundles.
+                if (!unlitEnDeco && decoLit != null
+                    && sname.Contains("Appquarium/DecoLit") && mat.shader != decoLit)
+                {
+                    mat.shader = decoLit;
+                    _shadersReapuntados++;
+                }
 
                 // Ya device-safe → dejar intacto: Sprites/UI, DecoLit, o ya procesado.
                 if (!unlitEnDeco
