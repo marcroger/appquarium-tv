@@ -4,7 +4,9 @@
 >
 > **El ciclo día/noche por fin llega a las decos y a los peces.** Llevaba desde siempre sin
 > tocarlas: sólo se apagaban el fondo y el agua. Está construido y verificado en el player real,
-> pero **NO desplegado** — el deploy espera decisión del user (ver §6).
+> pero **NO desplegado**. Encima lleva un cambio más (la arena, §1.1) escrito y compilado
+> **pero sin construir**: el player del `ciclo2` ya no vale. **Mañana: elegir un valor,
+> construir y desplegar** — el orden exacto está en §9.
 
 ---
 
@@ -17,6 +19,30 @@
 | 3 | **`ambient` no reportaba nada por el canal Cast** | Era el único de los 11 UPDATE sin confirmación; la auditoría del 21-ago se lo saltó |
 | 4 | **`sunLight` se resolvía sin filtrar por tipo** | `FindFirstObjectByType<Light>()` a secas, mientras `TankLightingController:147` sí filtra |
 | 5 | `_modoManual` para que el reloj local no pise una orden del móvil | ⚠ **No arreglaba nada vivo** — ver §5 |
+
+### 1.1 La arena: NO es paridad, es una mejora deliberada sobre el móvil
+
+Se resolvió **leyendo el repo móvil**, que era lo que había que hacer desde el principio en vez de
+pedirle al user que mirase el teléfono (aquí todo se valida en el Cast):
+
+| Sospechoso | Qué dice el código del móvil | Veredicto |
+|---|---|---|
+| `SubstrateShadow` | `color.rgb *= lerp(1-_ShadowStrength, 1, shadowAtten)` y nada más | ❌ No multiplica por la luz |
+| `TankNightOverlay` | Idéntico en los dos proyectos, pero vive en `z = BGZOffset - 0.01` = **4,99**: delante del fondo (z=5,0) y **detrás de todo lo demás** (decos en z≈2) | ❌ Sólo oscurece el telón |
+| `DecorationPlacer.OnAmbientChanged` | Línea por línea igual que el de TV: sólo el fundido de biolum | ❌ No tiñe el suelo |
+
+**En el móvil la arena también se queda encendida de noche.** Así que apagarla en TV **se aparta
+de la app a propósito**, y la razón es que en la tele la arena es la superficie más grande del
+encuadre —en el teléfono el tanque va pequeño y con UI alrededor— y con el fondo, las decos y los
+peces ya apagados, se comía la noche entera.
+
+Implementado en `DecorationPlacer.AplicarLuzAlSustrato` vía `_Color` de `Sprites/Default`, que es
+lo que usa el suelo en TV (el `Shader.Find("Appquarium/SubstrateShadow")` de `BuildFloorMaterial`
+no encuentra nada, porque ese shader no existe en este proyecto). **Sin shader nuevo.**
+
+⚠ No puede ir por un global como las decos y los peces: `_Color` es una propiedad **del material**
+y por tanto **gana al global**. Se escribe directamente, y `SetSubstrate` lo vuelve a aplicar
+porque construye un material nuevo.
 
 ### La causa raíz del 1
 
@@ -150,15 +176,15 @@ luz: deco=1,00/1,00/1,00      ← vuelta a día, exacto
 
 ## 6. ⏭ Lo que queda — DECISIONES DEL USER
 
-- [ ] 🎨 **El suelo.** Ahora que todo lo demás se apaga, la alfombra verde es lo único que no
-      encaja de noche. **Está a la par con el móvil** (§1), así que la pregunta es de gusto, no de
-      paridad. El user iba a **contrastarlo con la app en el teléfono**:
-      - si allí también brilla → es paridad, se deja
-      - si allí no brilla → falta algo por leer del repo móvil
-      - si brilla en los dos pero no gusta → **arreglo barato**: el suelo en TV usa
-        `Sprites/Default`, que multiplica por `_Color`; basta teñirlo desde `AmbientModeController`
-        con el mismo factor. Sin shader nuevo, pero cuesta otro build.
-- [ ] 🚀 **DESPLEGAR.** Construido y verificado, **sin subir**. Ver §7 para el comando exacto.
+- [x] 🎨 **El suelo — RESUELTO Y ESCRITO, falta construirlo.** Se comprobó **leyendo el repo
+      móvil**, no mirando el teléfono: allí la arena **tampoco** se apaga (§1 y §6.1). O sea que
+      estábamos a la par y la pregunta era de gusto. **El user decidió apagarla igualmente**
+      (2026-08-24). Ya está implementado y compilado; falta el build.
+- [ ] ❓ **Elegir el valor de `sueloSustratoNoche`** (hoy **0,45**). Se le pasaron al user cuatro
+      candidatos simulados sobre la captura real de noche (0,45 · 0,30 · 0,18 · sin tocar).
+      **Poner el elegido ANTES de lanzar el build**, en `AmbientModeController`.
+- [ ] 🚀 **CONSTRUIR Y DESPLEGAR** (queda para el 25-ago). El player del `ciclo2` ya no vale: hay
+      código nuevo encima. Ver §7 para el comando de deploy y §9 para el orden completo.
 - [ ] 📺 **Validar en la tele.** Todo lo de hoy está medido en Chrome de escritorio con
       SwiftShader. Para *lógica de render* vale (mismo shader, números deterministas), pero **no
       dice nada del coste de GPU en el Mali-G31**. Falta una tanda con el protocolo del 19-ago.
@@ -198,7 +224,38 @@ de Addressables + redespliegue de los 80 bundles, no subir el catálogo suelto.
 
 ---
 
-## 8. Estado
+## 8. Los tres suelos del ciclo
+
+Cada familia conserva un brillo mínimo distinto en la noche cerrada. El cálculo puro daría ~0,03
+para todo — fiel a la física y visualmente inservible.
+
+| | campo | suelo | brillo en noche | por qué |
+|---|---|---|---|---|
+| Decos | `sueloDecoNoche` | 0,18 | 21,6 % | Son el decorado: pueden quedar en silueta |
+| Peces | `sueloPecesNoche` | 0,35 | 37,9 % | Son el protagonista; con el suelo de las decos la noche se los comía |
+| Arena | `sueloSustratoNoche` | **0,45** ❓ | 47,4 % | La superficie más grande del encuadre; bajarla mucho deja un agujero negro |
+
+⚠ **El 0,45 está sin validar** — es el valor que se propuso de palabra. Ver §6.
+
+---
+
+## 9. Orden para mañana (25-ago)
+
+1. **Elegir `sueloSustratoNoche`** con la hoja de candidatos y ponerlo en
+   `AmbientModeController`.
+2. **Bump del sello** en `Assets/WebGLTemplates/CastReceiver/index.html` (`ciclo2` → `ciclo3`).
+   Sin sello nuevo, la A/B contra el device no vale.
+3. **Build**: `-executeMethod TvProdBuild.BuildProd` (~55 min). Preflights de audio y auth van
+   solos.
+4. **Verificar en local ANTES de subir**, con el arnés descrito en §10: `Build/` nuevo +
+   `StreamingAssets/` **bajado de R2**. Comprobar en el log `luz: … arena=…` y
+   `shaders reapuntados al player: N` (con 6 decos debe dar 6).
+5. **Desplegar sólo `Build/` + `index.html`** (§7). NADA de `StreamingAssets/`.
+6. **Validar en la tele** con el protocolo del 19-ago: FPS y memoria. Es lo único que el PC no
+   puede decir.
+7. Merge a `main` **con confirmación del user**, y push.
+
+## 10. Estado
 
 | | |
 |---|---|

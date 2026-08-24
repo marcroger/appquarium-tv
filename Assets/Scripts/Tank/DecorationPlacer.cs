@@ -1669,6 +1669,43 @@ public class DecorationPlacer : MonoBehaviour
         var mat = BuildFloorMaterial(subId, found.Value.colorA, found.Value.colorB);
         if (_floorRenderer         != null) _floorRenderer.material         = mat;
         if (_floorOccluderRenderer != null) _floorOccluderRenderer.material = mat;
+        // El material es NUEVO, así que hay que devolverle la fase del ciclo: si no, cambiar
+        // de sustrato de noche encendería la arena a pleno día.
+        AplicarLuzAlSustrato(_luzSustrato);
+    }
+
+    // ── El ciclo día/noche sobre la arena ────────────────────────────────────
+    //
+    // ⚠ 2026-08-24 — El sustrato NO se apagaba de noche, y en el móvil TAMPOCO: su
+    // `SubstrateShadow` sólo multiplica por `shadowAttenuation`, y el `TankNightOverlay`
+    // (idéntico en los dos proyectos) vive en z=4,99, delante del fondo pero DETRÁS de todo
+    // lo demás, así que sólo oscurece el telón.
+    //
+    // O sea que esto NO es paridad con el móvil: es una mejora deliberada sobre él, decidida
+    // por el user. El motivo es que en la tele la arena es la superficie más grande del
+    // encuadre —en el teléfono el tanque va pequeño y con UI alrededor—, y con el fondo, las
+    // decos y los peces ya apagados, una alfombra fluorescente se comía la noche entera, que
+    // es justo cuando luce la bioluminiscencia.
+    //
+    // Va por `_Color` de `Sprites/Default`, que es lo que usa el suelo en TV (el
+    // `Shader.Find("Appquarium/SubstrateShadow")` de `BuildFloorMaterial` no encuentra nada
+    // porque ese shader no existe en este proyecto). Sin shader nuevo.
+
+    private Color _luzSustrato = Color.white;
+
+    /// <summary>Aplica el factor de luz de la fase actual a la arena. (1,1,1) = día.</summary>
+    public void AplicarLuzAlSustrato(Color factor)
+    {
+        _luzSustrato = factor;
+        Tenir(_floorRenderer);
+        Tenir(_floorOccluderRenderer);
+
+        void Tenir(MeshRenderer r)
+        {
+            if (r == null) return;
+            var m = r.material;
+            if (m != null && m.HasProperty("_Color")) m.SetColor("_Color", factor);
+        }
     }
 
     // ── Internos ─────────────────────────────────────────────────────────────

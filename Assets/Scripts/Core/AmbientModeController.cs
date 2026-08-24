@@ -60,6 +60,12 @@ public class AmbientModeController : MonoBehaviour
              "escena y con el suelo de las decos la noche se los comía. Subirlo los destaca " +
              "más sobre el fondo apagado; bajarlo hasta sueloDecoNoche los integra del todo.")]
     public float sueloPecesNoche = 0.35f;
+    [Range(0f, 1f)]
+    [Tooltip("Igual para la ARENA. El más alto de los tres: es la superficie más grande del " +
+             "encuadre y bajarla mucho deja un agujero negro bajo el acuario. ⚠ Esto NO es " +
+             "paridad con el móvil (allí la arena tampoco se apaga): es una mejora sobre él, " +
+             "decidida por el user el 2026-08-24. Ver DecorationPlacer.AplicarLuzAlSustrato.")]
+    public float sueloSustratoNoche = 0.45f;
 
     // Globals de shader que leen `Appquarium/DecoLit` y `Appquarium/FishUnlit`. Son DARKEN
     // (0 = sin cambio) a propósito: un global que nadie publica vale 0, así que el fallo cae
@@ -234,6 +240,15 @@ public class AmbientModeController : MonoBehaviour
         Shader.SetGlobalColor(AqDecoDarken, deco);
         Shader.SetGlobalColor(AqFishDarken, pez);
 
+        // La arena no puede ir por un global: usa `Sprites/Default`, cuyo `_Color` es una
+        // propiedad del material y por tanto GANA al global. Se escribe directamente.
+        if (_placer == null) _placer = FindFirstObjectByType<DecorationPlacer>();
+        if (_placer != null)
+        {
+            Color arena = Complemento(actual, refDia, sueloSustratoNoche);
+            _placer.AplicarLuzAlSustrato(new Color(1f - arena.r, 1f - arena.g, 1f - arena.b, 1f));
+        }
+
         // ⚠ 2026-08-24 — REPORTAR EL MECANISMO, NO SÓLO EL EFECTO.
         // El build del 24-ago salió con el ciclo "hecho" y las decos siguieron planas, y no
         // se pudo saber por qué sin otro build: nadie decía qué factor se estaba publicando.
@@ -245,12 +260,16 @@ public class AmbientModeController : MonoBehaviour
         if (firma != _ultimaFirmaLuz)
         {
             _ultimaFirmaLuz = firma;
+            Color ar = Complemento(actual, refDia, sueloSustratoNoche);
             JsBridge.Log($"luz: deco={1f - deco.r:F2}/{1f - deco.g:F2}/{1f - deco.b:F2} " +
-                         $"pez={1f - pez.r:F2}/{1f - pez.g:F2}/{1f - pez.b:F2}");
+                         $"pez={1f - pez.r:F2}/{1f - pez.g:F2}/{1f - pez.b:F2} " +
+                         $"arena={1f - ar.r:F2}/{1f - ar.g:F2}/{1f - ar.b:F2}" +
+                         (_placer == null ? " ⚠ SIN PLACER — la arena no se está tiñendo" : ""));
         }
     }
 
     private int _ultimaFirmaLuz = int.MinValue;
+    private DecorationPlacer _placer;
 
     private static Color Complemento(Color actual, Color refDia, float suelo)
     {
