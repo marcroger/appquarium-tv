@@ -149,6 +149,7 @@ public class CastReceiver : MonoBehaviour
             vignette       = pp.vignetteIntensity,
             bgFit          = -1f,     // centinela: si el JSON no lo trae, no se toca el encuadre
             shadowFade     = -1f,
+            renderScale    = -1f,
         };
         try   { JsonUtility.FromJsonOverwrite(payload, g); }
         catch (System.Exception e) { JsBridge.Log("GRADE: payload ilegible — " + e.Message); return; }
@@ -185,6 +186,41 @@ public class CastReceiver : MonoBehaviour
             var bg2 = FindFirstObjectByType<TankBackground>();
             if (bg2 == null) JsBridge.Log("BGFIT: no hay TankBackground en la escena");
             else             bg2.SetBackgroundFit(g.bgFit);
+        }
+
+        // ── renderScale en caliente (2026-08-25) ─────────────────────────────
+        // POR QUE: la TV renderiza a `renderScale 0,70`, o sea 1344x756 estirados a 1920x1080
+        // — el 55 % de los pixeles. El movil va a escala 1, y de ahi la mitad del "en el
+        // telefono se ve mas nitido" que reporto el user (la otra mitad es el grado: TV lleva
+        // tonemapping + sat +18, el movil bloom 1,2 / sat -15).
+        //
+        // ⚠⚠ Subirlo NO es gratis: es fill-rate puro, y el Mali-G31 de la Xiaomi va justo.
+        // El 0,70 se eligio en su dia para llegar a 30 fps estables. Por eso esto es un
+        // MENSAJE y no una constante: la unica forma honesta de decidirlo es barrer 0,70 /
+        // 0,85 / 1,00 en la tele leyendo el FPS del HUD, y elegir con el dato delante en vez
+        // de gastar un build por variante. Mismo criterio que la niebla y el grado.
+        //
+        // Se reporta la resolucion EFECTIVA, no solo el factor: es lo que hay que comparar
+        // contra los 1920x1080 del panel.
+        if (g.renderScale > 0f)
+        {
+            var rp = UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline
+                     as UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset;
+            if (rp == null)
+            {
+                JsBridge.Log("RENDERSCALE: no hay UniversalRenderPipelineAsset activo — sin efecto");
+            }
+            else
+            {
+                // URP acepta [0.1, 2]. Se acota aqui para que un valor absurdo no deje la
+                // tele en negro sin explicacion.
+                float previo = rp.renderScale;
+                rp.renderScale = Mathf.Clamp(g.renderScale, 0.3f, 2f);
+                JsBridge.Log($"RENDERSCALE: {previo:F2} → {rp.renderScale:F2} " +
+                             $"({Mathf.RoundToInt(Screen.width * rp.renderScale)}x" +
+                             $"{Mathf.RoundToInt(Screen.height * rp.renderScale)} " +
+                             $"sobre {Screen.width}x{Screen.height})");
+            }
         }
 
         JsBridge.Log($"GRADE: bloom={(g.bloom ? g.bloomIntensity.ToString("F2") : "OFF")} " +
@@ -284,5 +320,6 @@ public class CastReceiver : MonoBehaviour
         public string bgShader;   // "urp" | "sprites"; vacío = no tocar
         public float  bgFit;      // fracción tapada por el suelo; negativo = no tocar
         public float  shadowFade; // desvanecido de sombra sobre el fondo; negativo = no tocar
+        public float  renderScale;// escala de render de URP; negativo = no tocar
     }
 }
