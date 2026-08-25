@@ -535,6 +535,73 @@ public class TvSceneBootstrap : MonoBehaviour
         JsBridge.Log(previo == amb.CurrentMode
             ? $"ambient: {mode} — ya estaba en ese modo, sin cambio"
             : $"ambient: {previo} → {amb.CurrentMode}");
+
+        // Sonda: leer el estado real del render cuando el fundido haya terminado.
+        StartCoroutine(SondaDeRender(mode));
+    }
+
+
+    // ── SONDA DE RENDER (TV-only, 2026-08-25) ────────────────────────────────
+    // ⚠⚠ POR QUÉ EXISTE: el ciclo día/noche funciona en Chrome y NO en el Chromecast.
+    // Medido el 25-ago con el MISMO build y la MISMA escena (bg_classic + sub_sand):
+    //
+    //                    Chrome                    tele
+    //   ancla sunset     0,831/0,593/0,437         0,966/1,010/1,074   ← no pasa nada
+    //   arena sunset     0,862/0,636/0,478         1,001/1,001/1,001   ← no pasa nada
+    //   ancla night      0,392/0,406/0,460         0,487/0,718/1,057   ← el AZUL SUBE
+    //
+    // El patrón de la tele en noche (R baja, B sube) es el de un VELO AZUL superpuesto,
+    // no el de una multiplicación: o sea que lo que oscurece la tele de noche es algo que
+    // ya existía, y el `_AqDecoDarken` no está llegando.
+    //
+    // El log `luz:` no puede distinguir el fallo porque reporta lo que el controlador
+    // CALCULA, no lo que el material TIENE. Esta sonda lee el estado real del render:
+    // el global tal y como lo ve el shader, y el material de cada renderer de la escena.
+    //
+    // Es la misma lección que ya está escrita en `AmbientModeController`: reportar el
+    // MECANISMO, no sólo el efecto. Aquí se lleva un paso más allá — leer, no publicar.
+    private System.Collections.IEnumerator SondaDeRender(string etiqueta)
+    {
+        // Esperar a que termine el fundido (~2-3 s) antes de leer nada.
+        yield return new WaitForSeconds(4f);
+
+        var gDeco = Shader.GetGlobalColor(Shader.PropertyToID("_AqDecoDarken"));
+        var gPez  = Shader.GetGlobalColor(Shader.PropertyToID("_AqFishDarken"));
+        JsBridge.Log($"sonda[{etiqueta}] GLOBAL deco={gDeco.r:F2}/{gDeco.g:F2}/{gDeco.b:F2} " +
+                     $"pez={gPez.r:F2}/{gPez.g:F2}/{gPez.b:F2}");
+
+        // ¿Los shaders que creemos usar existen y son soportados EN ESTE DEVICE?
+        foreach (var n in new[] { "Appquarium/DecoLit", "Appquarium/FishUnlit", "Sprites/Default" })
+        {
+            var sh = Shader.Find(n);
+            JsBridge.Log($"sonda[{etiqueta}] SHADER {n}: " +
+                         (sh == null ? "NO ENCONTRADO" : $"ok supported={sh.isSupported}"));
+        }
+
+        // Estado REAL de los renderers que importan. Se listan por nombre para que se pueda
+        // ver si el objeto que se tiñe es el mismo que se está viendo.
+        int n_deco = 0;
+        foreach (var r in FindObjectsByType<Renderer>(FindObjectsSortMode.None))
+        {
+            var go = r.gameObject.name;
+            bool esSuelo = go.StartsWith("TankFloor");
+            var m = r.sharedMaterial;
+            if (m == null) continue;
+            bool esDeco = m.shader != null && m.shader.name.Contains("DecoLit");
+            if (!esSuelo && !(esDeco && n_deco < 2)) continue;
+            if (esDeco) n_deco++;
+
+            var col  = m.HasProperty("_Color") ? m.GetColor("_Color") : new Color(-1, -1, -1);
+            // ⚠ Si el MATERIAL declara `_AqDecoDarken`, su valor GANA al global y el ciclo
+            // no se vería aunque el global esté bien puesto. Hay que saberlo.
+            bool propEnMat = m.HasProperty("_AqDecoDarken");
+            var  colMat    = propEnMat ? m.GetColor("_AqDecoDarken") : new Color(-1, -1, -1);
+
+            JsBridge.Log($"sonda[{etiqueta}] {go} activo={r.enabled && r.gameObject.activeInHierarchy} " +
+                         $"shader='{(m.shader == null ? "null" : m.shader.name)}' sup={(m.shader != null && m.shader.isSupported)} " +
+                         $"_Color={col.r:F2}/{col.g:F2}/{col.b:F2}/{col.a:F2} " +
+                         $"darkenEnMat={propEnMat}" + (propEnMat ? $"={colMat.r:F2}/{colMat.g:F2}/{colMat.b:F2}" : ""));
+        }
     }
 
     // ── Real-time asset update handlers ───────────────────────────────────────
