@@ -91,17 +91,37 @@ public class TvSceneBootstrap : MonoBehaviour
 
         Application.targetFrameRate = 30; // stable 30fps on Cast device > choppy 60fps
 
-        // renderScale < 1 → URP renderiza a menos resolución (gran ahorro de fill-rate
-        // GPU en el Mali-G31, que va a ~7fps). Se hace en runtime porque el asset URP no
-        // está como fichero editable en el proyecto. 0.7 = 49% de píxeles, leve pérdida de
-        // nitidez a cambio de framerate. Ajustable según lo que dé el device.
+        // renderScale < 1 → URP renderiza a menos resolución (ahorro de fill-rate en el
+        // Mali-G31). Se hace en runtime porque el asset URP no está como fichero editable.
+        //
+        // ⚠⚠ 2026-08-25 — **LA TELE REPORTA 2560x1440, NO 1920x1080.** Este comentario decía
+        // "0.7 = 49% de píxeles" y era falso: daba por hecho un panel de 1080p sin
+        // comprobarlo. Con 2560x1440 de `Screen`, 0,70 renderiza **1792x1008**, que es el
+        // 93 % LINEAL de 1080p — o sea que la renderScale apenas estaba costando nitidez, y
+        // la diferencia con el móvil que reportó el user hay que buscarla en el GRADO
+        // (la TV lleva tonemapping + sat +18; el móvil bloom 1,2 / sat -15).
+        //
+        // **0,75 es el único valor no arbitrario: 2560x0,75 = 1920 y 1440x0,75 = 1080**, o
+        // sea 1:1 con lo que el device entrega de verdad. Por debajo se renderiza de menos y
+        // se estira; por encima se renderiza de más y se tira (a 1,0 serían 2560x1440 para
+        // sacar 1080p).
+        //
+        // Coste medido en el Xiaomi, una sesión por escala y leyendo el HUD siempre al mismo
+        // SESSION (12 peces + 3 decos):
+        //     0,70  1792x1008  avg 35     0,85  2176x1224  avg 34
+        //     0,75  1920x1080  avg 35     1,00  2560x1440  avg 33
+        // O sea: 0,75 sale GRATIS respecto al 0,70 anterior.
+        //
+        // ⚠ Para remedirlo NO sirve barrer las escalas dentro de una sesión: el `avg` del HUD
+        // es acumulativo desde el arranque y sube monótonamente pase lo que pase. Hacen falta
+        // sesiones separadas. Ajustable en caliente con `GRADE {"renderScale": x}`.
         // Lookup robusto: el asset activo puede venir del quality level o del default global.
         // Debug.Log (no JsBridge) porque esto corre muy temprano, antes de que el bridge esté listo.
         var rpAsset = QualitySettings.renderPipeline
                    ?? UnityEngine.Rendering.GraphicsSettings.defaultRenderPipeline;
         if (rpAsset is UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset urpAsset)
         {
-            urpAsset.renderScale = 0.7f;
+            urpAsset.renderScale = 0.75f;   // 1:1 con la salida real (2560x1440 → 1920x1080)
             Debug.Log($"[TvScene] renderScale set to {urpAsset.renderScale}");
             // Sello de configuración del pipeline por el canal Cast. Existe porque el device
             // CACHEA el player (`max-age=3600` en Build/) y sin esto no hay forma de saber qué

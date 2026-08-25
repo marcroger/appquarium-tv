@@ -258,6 +258,39 @@ y esa varianza domina. Y una máscara por umbral (`croma > 35`) **tiene sesgo de
 escoge «lo más saturado que haya» y su media no se mueve aunque desatures un 35 %. Usar objetos
 **FIJOS** (las decos).
 
+### ⚠⚠ La tele reporta 2560x1440, NO 1920x1080 (2026-08-25)
+
+`Screen.width x Screen.height` en el Xiaomi es **2560x1440**. Durante toda la vida del proyecto
+el comentario de `TvSceneBootstrap` decía que `renderScale 0,70` era «49 % de píxeles» dando por
+hecho un panel de 1080p — **falso, y nunca se comprobó**. Con 2560x1440, el 0,70 renderizaba
+**1792x1008**, que es el **93 % LINEAL** de 1080p.
+
+Consecuencia: **la `renderScale` apenas estaba costando nitidez**. Si la diferencia con el móvil
+que reporta el user sigue ahí, hay que buscarla en el **grado** (la TV lleva tonemapping +
+`sat +18`; el móvil `bloom 1,2` / `sat -15`), no en la resolución.
+
+🎯 **`renderScale = 0,75` es el único valor no arbitrario**: `2560 x 0,75 = 1920` y
+`1440 x 0,75 = 1080`, o sea **1:1 con lo que el device entrega**. Por debajo se renderiza de
+menos y se estira; por encima se tira trabajo (a 1,0 son 2560x1440 para sacar 1080p).
+
+Coste medido en el device (12 peces + 3 decos, una sesión por escala, HUD leído siempre al mismo
+`SESSION`):
+
+| escala | resolución | FPS avg |
+|---|---|---|
+| 0,70 | 1792x1008 | 35 |
+| **0,75** | **1920x1080** | **35** ← gratis |
+| 0,85 | 2176x1224 | 34 |
+| 1,00 | 2560x1440 | 33 |
+
+**Ajustable en caliente**, sin gastar builds: `--raw 'GRADE={"renderScale":0.85}@50'`. Reporta la
+resolución efectiva: `RENDERSCALE: 0.70 → 0.85 (2176x1224 sobre 2560x1440)`.
+
+⚠⚠ **Para comparar escalas NO sirve barrerlas dentro de una sesión.** El `FPS avg` del HUD es
+**acumulativo desde el arranque**, así que sube monótonamente pase lo que pase. El primer intento
+dio «0,70 → 28 fps» al principio y «0,70 → 41 fps» al final de la misma tanda: pura deriva.
+Hacen falta **sesiones separadas leídas al mismo `SESSION`**.
+
 ### ⚠⚠ El catálogo local YA NO cuadra con R2 (2026-08-24)
 
 Un build de player regenera `webgl-output/StreamingAssets/aa/` con **hashes de bundle distintos**
