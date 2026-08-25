@@ -59,6 +59,7 @@ Shader "Appquarium/DecoLit"
                 float4 pos     : SV_POSITION;
                 float2 uv      : TEXCOORD0;
                 float3 wnormal : TEXCOORD1;
+                float  wz      : TEXCOORD2;   // Z del mundo, para la niebla de agua
             };
 
             sampler2D _MainTex;
@@ -92,12 +93,40 @@ Shader "Appquarium/DecoLit"
             // exactamente el de siempre. Fallar hacia lo de antes, no hacia lo roto.
             float4    _AqDecoDarken;
 
+            // ── AGUA: la misma niebla que los peces (2026-08-25) ────────────────────
+            // Las decos ya estan razonablemente integradas (croma C* 25,5 contra 23,1 del
+            // agua), asi que aqui la niebla aporta poco color y mucha PROFUNDIDAD: sin ella,
+            // una deco al fondo tiene el mismo contraste que una pegada al cristal.
+            // Va con los MISMOS globales que `FishUnlit` a proposito: si decos y peces no
+            // comparten el medio, se vuelve a ver el collage que se intenta quitar.
+            // Default 0 = sin cambio. Ver el bloque largo de `FishUnlit.shader`.
+            float4    _AqWaterFog;        // rgb = color del agua · a = densidad (0 = apagado)
+            float4    _AqWaterFogRange;   // x = Z donde empieza · y = Z donde satura
+
+            // ⚠⚠ LAS DECOS LLEVAN SU PROPIO MULTIPLICADOR, Y ARRANCA EN 0 (2026-08-25).
+            // Decision del user viendo las capturas en la tele: con la niebla completa las
+            // decos "pierden demasiado" — un ancla negra salia turquesa y una estrella azul
+            // marino salia celeste.
+            //
+            // El primer intento fue acortar el rango de Z para que la niebla empezara por
+            // DETRAS de las decos. No vale, y lo cazo el user: las decos se colocan en
+            // cualquier Z hasta ZDecoBack=+3,0, asi que una puesta al fondo volveria a
+            // comerse la niebla. Un corte por profundidad no puede proteger algo que se
+            // mueve en profundidad.
+            //
+            // Con un multiplicador propio el suelo puede fundir su juntura con el fondo y los
+            // peces pueden ganar profundidad, mientras las decos conservan su color EXACTO
+            // esten donde esten. Y sigue siendo ajustable en caliente por el mensaje FOG
+            // (`decoFog`) si algun dia se quiere un punto de niebla en ellas.
+            float     _AqDecoFogMul;      // 0 = las decos NO reciben niebla · 1 = como los peces
+
             v2f vert(appdata v)
             {
                 v2f o;
                 o.pos     = UnityObjectToClipPos(v.vertex);
                 o.uv      = TRANSFORM_TEX(v.uv, _MainTex);
                 o.wnormal = UnityObjectToWorldNormal(v.normal);
+                o.wz      = mul(unity_ObjectToWorld, v.vertex).z;
                 return o;
             }
 
@@ -133,6 +162,13 @@ Shader "Appquarium/DecoLit"
                 // pone aquí tintColor × bioGlowIntensity × BioLumEmissionScale × strength,
                 // con strength animado 0→1 por `FadeBioLum` al pasar a noche.
                 col += _EmissionColor.rgb;
+
+                // Niebla de agua. Se aplica DESPUES de la emision a proposito: un coral
+                // bioluminiscente al fondo tambien tiene agua delante, y si la emision se
+                // saltara la niebla volveria a despegarse de la escena.
+                float den = _AqWaterFogRange.y - _AqWaterFogRange.x;
+                float t   = saturate((i.wz - _AqWaterFogRange.x) / (abs(den) < 1e-4 ? 1e-4 : den));
+                col = lerp(col, _AqWaterFog.rgb, saturate(t * _AqWaterFog.a * _AqDecoFogMul));
 
                 return fixed4(col, 1.0); // forzar opaco
             }

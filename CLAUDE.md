@@ -197,6 +197,67 @@ y no conoce las propiedades nuevas.
 - 🧭 La alternativa era reconstruir los 80 bundles: **68 min + 87 MB de subida**. Reapuntar es
   gratis y sobrevive a cualquier cambio futuro de shader.
 
+### ⚠⚠ Añadir un shader nuevo: GUID hexadecimal + Always Included (2026-08-25)
+
+Dos trampas encadenadas, y las dos fallan **en silencio** — nada peta, nada sale magenta, el
+shader simplemente no existe en el device y `Shader.Find` devuelve `null`.
+
+1. **El GUID del `.meta` DEBE ser hexadecimal** (`0-9a-f`). Se crearon `SubstrateFog` y
+   `FishFin` con GUIDs "legibles" (`5ub57ra7e…`, `f15hf1n0…`) y **`u`, `r`, `h`, `n` no son
+   hex**. Unity **reescribió las entradas de `m_AlwaysIncludedShaders` como `{fileID: 0}`** y
+   stripeó los shaders. **Costó un build.** La convención buena ya existía: `DecoLit` usa
+   `dec011710000000000000000000000ab` — leetspeak dentro del alfabeto hex.
+2. **Hay que registrarlo en `ProjectSettings/GraphicsSettings.asset`**
+   (`m_AlwaysIncludedShaders`), o el build lo stripea.
+
+⚠ Al arreglar el GUID, buscar-y-reemplazar el viejo **no encuentra nada** (Unity ya lo borró):
+hay que reponer las líneas `- {fileID: 0}`. Comprobar que el GUID **nuevo esté**, no que el
+viejo no esté.
+
+🧭 **Se caza en 60 s con la sonda**, que reporta el shader REAL de cada renderer por el canal
+Cast: `node Tools/cast-headless.js --ip <IP> --fish 2 --decos deco_anchor --update ambient=day@45`
+→ `sonda[day] TankFloor … shader='Appquarium/SubstrateFog'` (o `'Sprites/Default'` si no llegó).
+
+### 🌊 Niebla de agua y tono de peces (2026-08-25) — el «assets separados»
+
+Medido en la tele: los peces iban a croma perceptual C* **42,6** contra **23,1** del agua, y las
+decos ya estaban integradas (**25,5**). O sea, **el problema eran los peces, no el decorado**.
+Y ningún shader leía la profundidad, así que un pez del fondo tenía el mismo contraste que uno
+pegado al cristal.
+
+Constantes en `TvSceneBootstrap` (`PublicarAspectoDelAgua`), elegidas sobre el device:
+`TonoDesat 0,32` · `TonoDim 0,16` · `NieblaDens 0,30` · **`DecoNiebla 0,25`** · rango
+`[ZFront, ZBack] = [-1,0 · +4,2]`.
+
+- ⚠ **La cámara es ORTOGRÁFICA** → la distancia a cámara no sirve. Se usa la **Z del mundo**.
+- El **telón de fondo (Z=5,0) queda fuera** del rango a propósito: ya representa la lejanía.
+- Como el suelo llega a Z=+4,2 y ahí la niebla satura, **la juntura suelo/fondo se funde de
+  regalo** — era el otro problema medido (salto de ×12 a ×30 en 40 píxeles).
+- **Las decos llevan multiplicador propio** (`_AqDecoFogMul`). ⚠⚠ El primer intento fue acortar
+  el rango de Z para dejarlas fuera; **no vale**: se colocan a cualquier profundidad hasta
+  `ZDecoBack=+3,0`. **Un corte por profundidad no puede proteger algo que se mueve en
+  profundidad.** El caso que manda es el **ancla, acromática**: croma 1,9 → 8,4 (con 0,25) →
+  17,3 (con 1,0, ya turquesa). La estrella azul apenas se inmuta: su color ya está cerca del agua.
+- **Las aletas NO eran `FishUnlit`, eran `Sprites/Default`** → `Appquarium/FishFin`. El suelo
+  igual → `Appquarium/SubstrateFog`. Ambos clonan `Sprites/Default` al pie de la letra (blend
+  premultiplicado, `ZWrite Off`, `Cull Off`, cola `Transparent`) y sólo añaden la niebla.
+- El color del agua sale del **`surfaceTint` del preset de fondo** y se republica en cada
+  `change_bg`.
+
+**Afinar sin gastar builds — mensaje `FOG`** (mismo espíritu que `GRADE`):
+```
+--raw 'FOG={"auto":true,"density":0.30,"decoFog":0.25,"fishDesat":0.32,"fishDim":0.16}@70'
+```
+Campos: `r/g/b` · `density` · `z0/z1` · `fishDim` · `fishDesat` · `decoFog` · `auto`. Los que no
+vengan se quedan como están. **Rollback sin build:** `{"density":0,"fishDesat":0,"fishDim":0}`.
+⚠ Todos los globales valen **0 = sin cambio**: un global que nadie publica vale 0, nunca 1.
+Coste medido: FPS 29-43 (avg 32-35), igual que sin niebla.
+
+⚠ **Medir esto sobre los peces desde capturas sueltas NO es fiable**: entran y salen del encuadre
+y esa varianza domina. Y una máscara por umbral (`croma > 35`) **tiene sesgo de selección** —
+escoge «lo más saturado que haya» y su media no se mueve aunque desatures un 35 %. Usar objetos
+**FIJOS** (las decos).
+
 ### ⚠⚠ El catálogo local YA NO cuadra con R2 (2026-08-24)
 
 Un build de player regenera `webgl-output/StreamingAssets/aa/` con **hashes de bundle distintos**

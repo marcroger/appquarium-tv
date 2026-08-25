@@ -346,6 +346,19 @@ public class FishSpawner : MonoBehaviour
     {
         // Sprites/Default está garantizado en el build (TankBackground lo usa)
         var fallback = Shader.Find("Sprites/Default");
+
+        // ⚠ 2026-08-25 — LAS ALETAS NO SON `FishUnlit`, SON `Sprites/Default`.
+        // Se descubrio con un control extremo sobre la tele: con `fishDesat=1.0` los CUERPOS
+        // salian en escala de grises y las ALETAS seguian amarillas y azules fluorescentes,
+        // porque `Sprites/Default` no conoce ninguno de los globales del pez.
+        // `Appquarium/FishFin` es ese mismo shader clonado (mismo blend, mismo orden) mas los
+        // globales de ciclo, tono y niebla, para que la aleta reciba el mismo trato que el
+        // cuerpo al que esta pegada.
+        //
+        // El mapeo es exacto y no puede desbordarse: este metodo recibe el VISUAL DEL PEZ, asi
+        // que un material que apunte a `Sprites/Default` aqui es por definicion parte del pez.
+        // El suelo y el fondo tambien usan `Sprites/Default` pero no pasan por aqui.
+        var finShader = Shader.Find("Appquarium/FishFin");   // null → se queda como estaba
         foreach (var r in visual.GetComponentsInChildren<Renderer>(true))
         {
             var mats = r.materials;
@@ -355,6 +368,8 @@ public class FishSpawner : MonoBehaviour
                 if (mats[i] == null || mats[i].shader == null) continue;
                 var found = Shader.Find(mats[i].shader.name);
                 if (found == null) found = fallback; // shader stripeado → Sprites/Default
+                // Las aletas: Sprites/Default → FishFin, para que sigan al cuerpo.
+                if (finShader != null && found == fallback) found = finShader;
                 if (found != null && found != mats[i].shader)
                 {
                     mats[i].shader = found;

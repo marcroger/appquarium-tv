@@ -336,6 +336,10 @@ public class TvSceneBootstrap : MonoBehaviour
         yield return StartCoroutine(mgr.InitializeFromCastStateAsync(state, fishData, decoData));
         JsBridge.Log($"InitDone: fish={mgr.fishSpawner?.ActiveFish?.Count ?? -1}");
 
+        // Aspecto del agua: se publica AQUI, con el acuario ya montado, porque el color de la
+        // niebla sale del preset de fondo y antes de esto TankBackground puede no existir.
+        PublicarAspectoDelAgua();
+
         HideLoadingOverlay();
     }
 
@@ -541,6 +545,67 @@ public class TvSceneBootstrap : MonoBehaviour
     }
 
 
+
+    // ── ASPECTO DEL AGUA (2026-08-25) ────────────────────────────────────────
+    // Publica el tono de los peces y la niebla de agua. Estos son los valores POR DEFECTO
+    // del producto; el mensaje `FOG` sigue pudiendo cambiarlos en caliente sin rebuild.
+    //
+    // POR QUE ESTOS NUMEROS: medido en la tele, los peces iban a croma C* 42,6 contra 23,1
+    // del agua que los rodea (1,8x) y L* 59 contra 47, mientras las decos ya estaban
+    // integradas (25,5). Por eso el tono sólo toca a los peces. Los valores salieron de un
+    // barrido de 4 variantes sobre el device, elegidos por el user: los peces conservan su
+    // color e identidad —que es de lo que vive el producto— pero dejan de parecer pegatinas.
+    //
+    // ⚠ La niebla usa el `surfaceTint` del preset de fondo activo, asi que se vuelve a
+    // publicar en cada `change_bg`: cada fondo tiene su agua y con un color fijo la niebla
+    // desentonaria en 10 de los 11 fondos.
+    private const float TonoDesat  = 0.32f;   // elegido sobre el device
+    private const float TonoDim    = 0.16f;
+    private const float NieblaDens = 0.30f;   // suelo y peces
+    // ⚠ 0 = las decos NO reciben niebla. Decision del user viendo la tele: con niebla
+    // "pierden demasiado" (un ancla negra salia turquesa). No se puede resolver acotando el
+    // rango de Z porque las decos se colocan a cualquier profundidad hasta ZDecoBack=+3,0.
+    // Elegido por el user sobre la tele (barrido 0 / 0,25 / 0,50 / 1,00). El caso que manda
+    // es el ANCLA, que es acromatica: con niebla completa su croma C* pasa de 1,9 a 17,3 y se
+    // lee como turquesa, no como negra. Con 0,25 se queda en 8,4 — recibe agua, que es lo
+    // fisicamente correcto, pero sigue siendo negra.
+    // 🧭 El efecto depende MUCHO del color de la deco: la estrella azul cobalto apenas se
+    // inmuta ni con niebla completa (14,6 → 12,3) porque su color ya esta cerca del agua.
+    private const float DecoNiebla = 0.25f;
+
+    public void PublicarAspectoDelAgua()
+    {
+        Shader.SetGlobalFloat(Shader.PropertyToID("_AqFishDesat"), TonoDesat);
+        Shader.SetGlobalFloat(Shader.PropertyToID("_AqFishDim"),   TonoDim);
+        Shader.SetGlobalFloat(Shader.PropertyToID("_AqDecoFogMul"), DecoNiebla);
+
+        // Rango de la niebla: del frente del tanque al fondo del suelo. El TELON de fondo
+        // vive en Z=+5,0 y queda FUERA a proposito — ya representa la lejania, y teñirlo del
+        // color del agua le borraria la imagen.
+        Shader.SetGlobalVector(Shader.PropertyToID("_AqWaterFogRange"),
+                               new Vector4(DecorationPlacer.ZFront, DecorationPlacer.ZBack, 0f, 0f));
+
+        var color = new Color(0.10f, 0.45f, 0.50f);   // por si no hay fondo todavia
+        string origen = "default";
+        var bg = FindFirstObjectByType<TankBackground>();
+        if (bg != null)
+        {
+            foreach (var p in TankBackground.Presets)
+            {
+                if (p.id != bg.CurrentPresetId) continue;
+                color = new Color(p.surfaceTint.r, p.surfaceTint.g, p.surfaceTint.b);
+                origen = p.id;
+                break;
+            }
+        }
+        Shader.SetGlobalColor(Shader.PropertyToID("_AqWaterFog"),
+                              new Color(color.r, color.g, color.b, NieblaDens));
+
+        JsBridge.Log($"agua: niebla={color.r:F2}/{color.g:F2}/{color.b:F2} den={NieblaDens:F2} " +
+                     $"z=[{DecorationPlacer.ZFront:F1},{DecorationPlacer.ZBack:F1}] " +
+                     $"desat={TonoDesat:F2} dim={TonoDim:F2} deco={DecoNiebla:F2} ({origen})");
+    }
+
     // ── SONDA DE RENDER (TV-only, 2026-08-25) ────────────────────────────────
     // ⚠⚠ POR QUÉ EXISTE: el ciclo día/noche funciona en Chrome y NO en el Chromecast.
     // Medido el 25-ago con el MISMO build y la MISMA escena (bg_classic + sub_sand):
@@ -740,6 +805,7 @@ public class TvSceneBootstrap : MonoBehaviour
         var bg = mgr.tankController.GetComponent<TankBackground>();
         if (bg != null) bg.SetPreset(bgId);
         if (mgr.SaveData != null) mgr.SaveData.selectedBgId = bgId;
+        PublicarAspectoDelAgua();   // el color del agua sale del preset: hay que reeditarlo
         JsBridge.Log($"change_bg: {bgId}");
     }
 

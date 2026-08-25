@@ -73,6 +73,14 @@ public class CastReceiver : MonoBehaviour
                 AplicarGrado(msg.payload);
                 break;
 
+            // Niebla de agua y tono de los peces, en caliente. Misma razon que GRADE: elegir
+            // estos valores a base de builds cuesta ~10 min por variante y hay que verlos en la
+            // tele, no en Chrome. Todo arranca APAGADO (densidad 0 = imagen de siempre), asi que
+            // este mensaje es tambien el interruptor: no mandarlo es el rollback.
+            case "FOG":
+                AplicarNieblaDeAgua(msg.payload);
+                break;
+
             case "PING":
             case "KEEPALIVE":
                 break;
@@ -182,6 +190,85 @@ public class CastReceiver : MonoBehaviour
         JsBridge.Log($"GRADE: bloom={(g.bloom ? g.bloomIntensity.ToString("F2") : "OFF")} " +
                      $"tm={(g.tonemapping ? "Neutral" : "OFF")} sat={g.saturation:F0} " +
                      $"con={g.contrast:F0} exp={g.exposure:F2} vig={g.vignette:F2}");
+    }
+
+    // ── Niebla de agua (2026-08-25) ──────────────────────────────────────────
+    // POR QUE: medido en la tele, los peces van a croma C* 42,6 contra 23,1 del agua que los
+    // rodea (1,8x) y L* 59 contra 47; las decos, en cambio, ya estan integradas (25,5). Y
+    // ningun shader del proyecto lee la profundidad, asi que un pez del fondo tiene el mismo
+    // contraste que uno pegado al cristal. Eso es lo que se lee como "assets separados".
+    //
+    // Los valores buenos NO se pueden elegir aqui ni en Chrome: hay que verlos en la tele.
+    // Por eso esto es un mensaje y no una constante — un solo build permite barrer todas las
+    // variantes en una sesion, igual que GRADE.
+    //
+    // ⚠ Los globales arrancan a 0 = SIN CAMBIO. Si este mensaje no llega nunca, la imagen es
+    // exactamente la de antes. Apagar = mandar density 0.
+    private static readonly int IdFog      = Shader.PropertyToID("_AqWaterFog");
+    private static readonly int IdFogRange = Shader.PropertyToID("_AqWaterFogRange");
+    private static readonly int IdFishDim  = Shader.PropertyToID("_AqFishDim");
+    private static readonly int IdFishDes  = Shader.PropertyToID("_AqFishDesat");
+    private static readonly int IdDecoFog  = Shader.PropertyToID("_AqDecoFogMul");
+
+    private void AplicarNieblaDeAgua(string payload)
+    {
+        // Se parte de lo que hay puesto ahora, para poder mandar un solo campo.
+        var actual = Shader.GetGlobalColor(IdFog);
+        var rango  = Shader.GetGlobalVector(IdFogRange);
+        var f = new FogPayload
+        {
+            r = actual.r, g = actual.g, b = actual.b, density = actual.a,
+            // Defaults del encuadre 2.5D: ZFront=-1,0 · decos hasta +3,0 · fondo en +5,0.
+            z0 = Mathf.Approximately(rango.x, 0f) && Mathf.Approximately(rango.y, 0f) ? -1f : rango.x,
+            z1 = Mathf.Approximately(rango.x, 0f) && Mathf.Approximately(rango.y, 0f) ?  5f : rango.y,
+            fishDim   = Shader.GetGlobalFloat(IdFishDim),
+            fishDesat = Shader.GetGlobalFloat(IdFishDes),
+            decoFog   = Shader.GetGlobalFloat(IdDecoFog),
+            auto      = false,
+        };
+        try   { JsonUtility.FromJsonOverwrite(payload, f); }
+        catch (System.Exception e) { JsBridge.Log("FOG: payload ilegible — " + e.Message); return; }
+
+        // `auto`: tomar el color del agua del preset de fondo activo en vez de darlo a mano.
+        // Es lo que tiene sentido en produccion — cada fondo tiene su agua.
+        string origen = "manual";
+        if (f.auto)
+        {
+            var bg = FindFirstObjectByType<TankBackground>();
+            if (bg == null) JsBridge.Log("FOG: no hay TankBackground, se usa el color manual");
+            else
+            {
+                foreach (var p in TankBackground.Presets)
+                {
+                    if (p.id != bg.CurrentPresetId) continue;
+                    f.r = p.surfaceTint.r; f.g = p.surfaceTint.g; f.b = p.surfaceTint.b;
+                    origen = $"auto({p.id})";
+                    break;
+                }
+            }
+        }
+
+        Shader.SetGlobalColor (IdFog,      new Color(f.r, f.g, f.b, Mathf.Clamp01(f.density)));
+        Shader.SetGlobalVector(IdFogRange, new Vector4(f.z0, f.z1, 0f, 0f));
+        Shader.SetGlobalFloat (IdFishDim,  Mathf.Clamp01(f.fishDim));
+        Shader.SetGlobalFloat (IdFishDes,  Mathf.Clamp01(f.fishDesat));
+        Shader.SetGlobalFloat (IdDecoFog,  Mathf.Clamp01(f.decoFog));
+
+        JsBridge.Log($"FOG: color={f.r:F2}/{f.g:F2}/{f.b:F2} den={f.density:F2} " +
+                     $"z=[{f.z0:F1},{f.z1:F1}] fishDim={f.fishDim:F2} fishDesat={f.fishDesat:F2} " +
+                     $"decoFog={f.decoFog:F2} ({origen})");
+    }
+
+    [System.Serializable]
+    private class FogPayload
+    {
+        public float r, g, b;
+        public float density;      // 0 = apagado
+        public float z0, z1;       // rango de profundidad en Z del mundo
+        public float fishDim;      // 0 = sin cambio
+        public float fishDesat;    // 0 = sin cambio
+        public float decoFog;      // 0 = las decos NO reciben niebla
+        public bool  auto;         // true = color del agua tomado del preset de fondo activo
     }
 
     [System.Serializable]

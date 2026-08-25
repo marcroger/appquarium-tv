@@ -2109,7 +2109,14 @@ public class DecorationPlacer : MonoBehaviour
         // SubstrateShadow: como Sprites/Default (vertex color RGB×tex + alpha fade)
         // pero también recibe sombras URP del main light (fish/decos proyectan sombra en el suelo).
         // Fallback a Sprites/Default si el shader custom no está disponible.
-        Shader shader = Shader.Find("Appquarium/SubstrateShadow")
+        // ⚠ 2026-08-25 — `Appquarium/SubstrateFog` va PRIMERO (TV). Es `Sprites/Default`
+        // clonado mas la niebla de agua, para que la arena entre en el mismo medio que las
+        // decos y los peces. Sin el, la niebla tinie las decos de turquesa y deja el suelo
+        // blanco: medido en la tele, queda PEOR que sin niebla.
+        // Si no existe (proyecto movil, o shader stripeado) la cadena cae a lo de siempre y
+        // el suelo se comporta exactamente como antes. Fallar hacia lo de antes.
+        Shader shader = Shader.Find("Appquarium/SubstrateFog")
+                     ?? Shader.Find("Appquarium/SubstrateShadow")
                      ?? Shader.Find("Sprites/Default")
                      ?? Shader.Find("UI/Default")
                      ?? Shader.Find("Universal Render Pipeline/Unlit");
