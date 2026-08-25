@@ -32,7 +32,8 @@ El móvil envía el estado del tanque vía Google Cast SDK; este proyecto **rend
 
 | Doc | Cuándo |
 |---|---|
-| [`CAST_NEXT_SESSION_2026-08-25.md`](CAST_NEXT_SESSION_2026-08-25.md) | ⭐⭐ **EMPEZAR AQUÍ.** Cierre del 24-ago: el ciclo día/noche por fin llega a decos y peces. **Construido y verificado, NO desplegado.** Trae la trampa del shader horneado en el bundle y por qué el deploy va sólo con `Build/`. |
+| [`CAST_NEXT_SESSION_2026-08-26.md`](CAST_NEXT_SESSION_2026-08-26.md) | ⭐⭐ **EMPEZAR AQUÍ.** Cierre del 25-ago: la escena deja de verse como assets separados (niebla de agua, tono de peces, `renderScale` 1:1). Todo desplegado y validado **menos `renderScale 0,75`**, que se quedó sin tanda. Trae las 3 trampas del día y 2 afirmaciones mías que resultaron falsas. |
+| [`CAST_NEXT_SESSION_2026-08-25.md`](CAST_NEXT_SESSION_2026-08-25.md) | Cierre del 24-ago: Cierre del 24-ago: el ciclo día/noche por fin llega a decos y peces. **Construido y verificado, NO desplegado.** Trae la trampa del shader horneado en el bundle y por qué el deploy va sólo con `Build/`. |
 | [`CAST_NEXT_SESSION_2026-08-22.md`](CAST_NEXT_SESSION_2026-08-22.md) | Cierre del 21-ago: la TV recuperó el color (llevaba desde siempre sin aplicar ningún grado, por 5 causas encadenadas). Protocolo auditado 11/11 y coste de URP medido. |
 | [`CAST_PARIDAD_VISUAL.md`](CAST_PARIDAD_VISUAL.md) | 🎨 **El detalle y las pruebas** de lo anterior: qué se descartó con medida, qué reglas salieron, y lo que queda del fondo. |
 | [`CAST_NEXT_SESSION_2026-08-21.md`](CAST_NEXT_SESSION_2026-08-21.md) | Cierre del 20-ago: Cierre del 20-ago: los bundles ya están detrás del Worker. Qué cambió en el deploy y qué queda. |
