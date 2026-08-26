@@ -135,6 +135,38 @@ pequeño: `decoJson` lo genera `JsonUtility` en el móvil, no un humano.
 en la TV.** → El hueco «renombrar un pez no manda nada» (**§6.5 del móvil**) **no existe**: no hay
 nada que actualizar. Si algún día la TV pinta motes, vuelve a existir.
 
+### 4.4 El emparejamiento está montado y VACÍO (encontrado por la sesión móvil, 26-ago)
+
+Toda la maquinaria de parejas existe aquí: `FishAgent.WirePairsFromSave` (`:55`),
+`SaveData.activePairs` (`TvStubs.cs:98`), `BreedingPair {maleUid, femaleUid}` (`TvStubs.cs:33`) y
+`SteeringController.PairBond()` con peso **1,8** en Idle y **1,2** en Explore (`:116`, `:127`).
+
+**Y no se usa nunca**, porque `TvAquariumState` no transporta las parejas: `activePairs` está
+siempre vacío y `WirePairsFromSave` se va por su primera línea (`FishAgent.cs:60`). Una pareja
+emparejada nada junta en el móvil y **suelta** en la tele.
+
+Tres cosas que hay que saber antes de arreglarlo:
+
+1. **Depende del uid, igual que `remove_fish`.** Empareja por `pair.maleUid`/`femaleUid` contra
+   `FishAgent.Uid`, y hoy los uid los genero yo. Mandar parejas sin mandar uid antes no sirve
+   de nada.
+2. ⚠⚠ **Genero uid en TRES sitios, no en uno:** `AquariumManager.cs:112` (INIT async, el que
+   corre), `AquariumManager.cs:218` (INIT sync, la lógica **duplicada** de §1) y
+   **`TvSceneBootstrap.cs:726` (`AddFishAsync`)**. Ese tercero es el que se escapa: un pez que
+   entra por `add_fish` a mitad de sesión recibe un uid mío, así que **`uid` en
+   `TvAddFishPayload` no es opcional** — sin él, un pez añadido durante la sesión no puede
+   emparejarse jamás.
+3. ⚠ **`WirePairsFromSave` se llama en UN solo sitio** (`AquariumManager.cs:349`, dentro del
+   INIT). O sea que `activePairs` en el INIT arregla el caso «reconecto y las parejas salen
+   bien», pero **NO** el caso «empareja dos peces con el Cast puesto»: eso no llega hasta el
+   siguiente INIT. Cerrar eso pide un UPDATE propio (`pair`/`unpair`) o re-llamar a
+   `WirePairsFromSave` tras cada `add_fish` — pero re-llamarlo sólo sirve si `SaveData.activePairs`
+   está al día, o sea que **el UPDATE hace falta igual**. Hueco aparte, no lo tapa el INIT.
+
+ℹ Lo que **no** es problema: un `PartnerUid` colgando es inofensivo. `GetPartner()` re-resuelve
+buscando en `All` (`:45-47`) y devuelve `null` si el compañero ya no está, con lo que `PairBond`
+no aporta fuerza. No hay referencia rota que limpiar al quitar un pez.
+
 ### 4.3 En INIT no valido los ids de preset
 
 El arreglo del 26-ago cubre **sólo** `change_bg`/`change_sub`/`change_light`. Un `bgId` inválido
@@ -218,10 +250,17 @@ transporte.
   colocadas se remapearon con el valor viejo**: hay que recolocarlas todas con el factor nuevo, o
   media escena queda desplazada. Eso es un `RepositionAll` que hoy no existe. ~3 h.
 
-### 6.3 `remove_fish` por uid
+### 6.3 `uid` + `activePairs` (fundidos en un solo trabajo)
 
-- **Coste TV: bajo-medio** (~2 h), ver §5.3. Aditivo y sin riesgo: mientras el móvil no mande
-  `uid`, la TV sigue con el camino de hoy.
+- **Coste TV: ~3 h.** El `uid` solo son ~2 h (§5.3); las parejas suman **~1 h** encima, porque una
+  vez adoptado el uid `activePairs` es un campo más del INIT y `WirePairsFromSave` ya existe.
+- **Forma que quiero recibir:** `activePairs` como lista de `{maleUid, femaleUid}` y nada más.
+  Encaja 1:1 con `BreedingPair` (`TvStubs.cs:33`) sin una línea de pegamento.
+  ⚠ `JsonUtility` casa por **nombre de campo, no de clase**: da igual que en el móvil se llame
+  `BreedingPairRecord` mientras los campos se llamen `maleUid` y `femaleUid` y la lista
+  `activePairs`.
+- Aditivo y sin riesgo: mientras el móvil no mande `uid`, la TV sigue con el camino de hoy.
+- ⚠ **Esto arregla el caso «reconecto», no el caso «empareja con el Cast puesto»** — ver §4.4.3.
 
 ### 6.4 Orden preferido
 
