@@ -10,6 +10,29 @@
 
 ---
 
+## ⏳ ESTADO DE ESTE DOCUMENTO — no está cerrado
+
+Se escribió el **26-ago** y se entrega **cuando el trabajo de la TV esté validado contra el
+device**. Mientras eso no pase, lo que dice sobre la parte TV es *«construido y probado en local»*,
+que **no es lo mismo que funciona**.
+
+Lo que hay que rellenar aquí antes de pasarlo:
+
+- [ ] **La tanda en la tele** (ver `CAST_NEXT_SESSION_2026-08-27.md` §1). Valida de una vez el
+      ciclo día/noche, `renderScale 0,75`, los ids y el emparejamiento. Al terminar: actualizar §7
+      con lo que se vio de verdad, y **decir si `pairs` cableó en el device**, que es lo único que
+      le importa al lado móvil.
+- [ ] **Desplegar el Worker de la Fase 2**, o dejar dicho que sigue sin desplegar. Hasta entonces
+      §1 describe un endpoint que **no existe todavía en producción**, y eso tiene que quedar
+      claro o el otro lado programa contra un fantasma.
+- [ ] Si algo de §1 cambia al desplegar, **corregirlo aquí antes de entregar**, no después.
+
+⚠ **Lo que NO hay que hacer:** pasar este doc diciendo que el emparejamiento «funciona». Hoy lo
+que se sabe es que **12/12 tests en local** y **0 errores de compilación**. El device no ha visto
+nada de esto.
+
+---
+
 ## 0. Los dos documentos que mandan
 
 | Doc | Dónde | Qué es |

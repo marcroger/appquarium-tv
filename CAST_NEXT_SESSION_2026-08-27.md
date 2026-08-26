@@ -148,12 +148,13 @@ mandaste.** Comprobar contra algo que lea el estado real — para el fondo, la l
 
 | | |
 |---|---|
-| Rama | **`feat/ciclo-dia-noche`** (7 commits) — `main` **sin tocar**, nada pusheado |
+| Rama | **`feat/ciclo-dia-noche`** (21 commits) — `main` **sin tocar**, nada pusheado |
 | Sello construido | **`rcv 2026-08-26 uid+pairs`** |
 | Player | `.data` **19.505.585** · `.wasm` **21.684.934** · LTO aplicado, `PreflightAudio` 3/3, 0 errores CS |
 | Build | **6 minutos** — caché caliente. (El «55 min» de los docs es con caché fría de IL2CPP.) |
 | Bundles | **sin tocar** |
-| Verificado sin tele | `test-updates.js` **9/9** · `check_preset_ids.js` **limpio** · B×6 + S×4 → **10 cambios reales, 0 rechazos** (antes 6 de esas 10 no hacían nada) |
+| Verificado sin tele | `test-updates.js` **12/12** (incluye uid y parejas) · Worker `test-local.mjs` **42/42** · `check_preset_ids.js` **limpio** · B×6 + S×4 → **10 cambios reales de 10** |
+| Verificado EN device | **NADA de lo de hoy.** La caja estaba apagada |
 | Backup | `player-desplegado-escala75/` en el scratchpad (`.wasm` md5 `5f886ff3…`) |
 
 ---
@@ -177,6 +178,22 @@ mandaste.** Comprobar contra algo que lea el estado real — para el fondo, la l
 - [ ] De antes: **fondos del `.data` a Addressables** · **Fase 2 JWT** (repo móvil) · **editar
       una deco colocada no manda UPDATE** (repo móvil) · ❌ decimar mallas **descartado por el
       user**, no volver a proponerlo.
+
+---
+
+## 5.bis 📲 El traspaso al repo MÓVIL
+
+Todo lo que el otro lado necesita está en **[`CAST_HANDOFF_MOVIL_2026-08-26.md`](CAST_HANDOFF_MOVIL_2026-08-26.md)**,
+escrito para esa sesión. **No está cerrado a propósito**: lleva arriba una lista de lo que hay que
+rellenar antes de entregarlo, y lo primero es **la tanda de §1**.
+
+🧭 **La regla al entregarlo:** hoy lo único que se sabe del emparejamiento es que pasa **12/12 en
+local** y compila. Eso **no es «funciona»**. Si se entrega antes de la tanda, hay que decirlo con
+esas palabras — es exactamente el error que este proyecto lleva un mes pagando (dar por bueno lo
+que sólo se vio en el Editor o en Chrome).
+
+Orden natural: **tanda → actualizar §7 del handoff con lo que se vio → entregar.** El despliegue
+del Worker puede ir antes o después; lo que no puede es quedar sin decir en qué estado está.
 
 ---
 
