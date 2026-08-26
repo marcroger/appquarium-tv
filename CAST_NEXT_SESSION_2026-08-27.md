@@ -14,7 +14,7 @@
 
 ## 1. ⚠ PENDIENTE DE VALIDAR EN LA TELE
 
-Hay un player nuevo construido: **`rcv 2026-08-26 ids`**. Lleva dentro el `renderScale 0,75`
+Hay un player nuevo construido: **`rcv 2026-08-26 uid+pairs`**. Lleva dentro el `renderScale 0,75`
 de ayer (que nunca llegó a verse en la tele) **y** los arreglos de hoy.
 
 ```bash
@@ -26,7 +26,9 @@ node Tools/cast-headless.js --ip <IP> --fish 12 \
 
 | en el log | esperado |
 |---|---|
-| el sello de la esquina | **`rcv 2026-08-26 ids`** — si dice `escala75`, la tele está cacheando |
+| el sello de la esquina | **`rcv 2026-08-26 uid+pairs`** — si dice otra cosa, la tele está cacheando |
+| `peces: N (uid propios: M)` | **M = 0** si el móvil ya manda uid; **M = N** con un móvil viejo, y entonces no habrá parejas (es correcto, no es un fallo) |
+| `pairs: N recibidas, M cableadas` | **N = M**. Si N≠M, falta algún pez en el tanque |
 | `RP: TvRenderPipeline scale=0,75 …` | **0,75**, no 0,70 |
 | `add_deco: … at …` (×4) | y **ningún** `ERR add_deco: … PlaceAt lo rechazó` |
 | `AQUARIUM READY … shaders reapuntados al player: 4` | 4 con 4 decos |
@@ -43,7 +45,7 @@ Comprobado después:
 
 | | |
 |---|---|
-| sello que sirve R2 | `rcv 2026-08-26 ids` |
+| sello que sirve R2 | `rcv 2026-08-26 uid+pairs` |
 | `{{{` sin sustituir en el `index.html` | **0** — es el procesado, no el template |
 | md5 de `.wasm` / `.data` | `ba33d26a…` / `9ac8a928…`, **idénticos al local** |
 | `keepalive_black.mp4` y `silence.wav` | **siguen ahí** (la trampa del `--delete`, esquivada) |
@@ -54,6 +56,24 @@ disco, así que los hashes de bundle que pide son los que hay en producción.
 ⚠ De paso, una discrepancia con `CLAUDE.md`: dice que en `Build/` viven también los rigs de
 diagnóstico (`webgl-min.*`, `webgl-output-empty.*`) y **ahí sólo hay los 4 ficheros del player**.
 No los ha borrado este deploy (`sync` sin `--delete` no puede borrar nada); ya no estaban.
+
+---
+
+## 1.bis Lo que entró DESPUÉS del primer deploy (misma tarde)
+
+El user dio luz verde a los tres pendientes y se hicieron enteros. **El player desplegado ya no es
+el de `ids`, es el de `uid+pairs`.**
+
+- 🐟 **Emparejamiento vivo** — uid del móvil adoptado, `activePairs` en el INIT y UPDATE `pairs`.
+  Detalle y la carrera que hubo que arreglar: `CAST_CONTRACT_TV.md` §4.4.
+- ✅ **Los tres huecos que el contrato declaraba míos, cerrados**: validación de ids en el INIT
+  (§4.3), comprobación de forma del `decoJson` (§4.1) y borrada la copia síncrona muerta de
+  `InitializeFromCastState` (65 líneas que nadie llamaba y que había que mantener en paralelo).
+- 🔐 **Fase 2 del JWT escrita en el Worker** (HS256 + `/mint-token`), **probada (42/42) y SIN
+  DESPLEGAR**: necesita dos secrets que sólo puede poner el user — ver §7.
+
+Verificado en local: **`test-updates.js` 12/12** con tres tests nuevos que añaden dos peces con uid
+explícito y los emparejan. ⚠ **Nada de esto se ha visto en el device.**
 
 ---
 
@@ -129,8 +149,8 @@ mandaste.** Comprobar contra algo que lea el estado real — para el fondo, la l
 | | |
 |---|---|
 | Rama | **`feat/ciclo-dia-noche`** (7 commits) — `main` **sin tocar**, nada pusheado |
-| Sello construido | **`rcv 2026-08-26 ids`** |
-| Player | `.data` **19.504.862** (+933) · `.wasm` **21.683.276** (+1.997) · LTO aplicado, `PreflightAudio` 3/3, 0 errores CS |
+| Sello construido | **`rcv 2026-08-26 uid+pairs`** |
+| Player | `.data` **19.505.585** · `.wasm` **21.684.934** · LTO aplicado, `PreflightAudio` 3/3, 0 errores CS |
 | Build | **6 minutos** — caché caliente. (El «55 min» de los docs es con caché fría de IL2CPP.) |
 | Bundles | **sin tocar** |
 | Verificado sin tele | `test-updates.js` **9/9** · `check_preset_ids.js` **limpio** · B×6 + S×4 → **10 cambios reales, 0 rechazos** (antes 6 de esas 10 no hacían nada) |
@@ -144,6 +164,11 @@ mandaste.** Comprobar contra algo que lea el estado real — para el fondo, la l
 - [ ] 🎨 **Paridad de grado con el móvil** — lo que queda del «se ve más nítido en el teléfono»
       una vez descartada la resolución. TV: tonemapping + `sat +18`. Móvil: `bloom 1,2` /
       `sat -15`. **Se barre con `GRADE` sin gastar builds.**
+- [ ] 🔐 **Desplegar el Worker de la Fase 2** (§7 de `CAST_R2_AUTH_MOVIL.md`). El código está
+      escrito y probado; faltan `JWT_SECRET` y `MINT_TOKENS`, que sólo puede poner el user. Es
+      aditivo: sin esos secrets el camino nuevo da 503 y el token constante sigue igual.
+- [ ] 🐟 **`remove_fish` por uid** (~1 h). Ahora es barato: los uid ya son los buenos en los dos
+      lados. Falta `DespawnByUid` aquí y que el móvil mande el uid.
 - [ ] ❓ **Decidir si la sonda de render se queda en producción.** Cuesta ~9 líneas de log por
       cambio de ambiente. Recomendación: **dejarla** — hoy ha vuelto a pagar su precio (el
       `RP: … scale=0,75` es lo que dice qué build está corriendo de verdad).
