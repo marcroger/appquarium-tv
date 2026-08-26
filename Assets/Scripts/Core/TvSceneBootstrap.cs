@@ -694,7 +694,12 @@ public class TvSceneBootstrap : MonoBehaviour
     private IEnumerator AddFishAsync(string jsonValue)
     {
         var payload = SafeFromJson<TvAddFishPayload>(jsonValue);
-        if (payload == null || string.IsNullOrEmpty(payload.speciesId)) yield break;
+        if (payload == null) yield break;                     // SafeFromJson ya lo ha dicho
+        if (string.IsNullOrEmpty(payload.speciesId))
+        {
+            JsBridge.Log("ERR add_fish: el payload no trae speciesId");
+            yield break;
+        }
 
         var mgr = AquariumManager.Instance;
         if (mgr == null) yield break;
@@ -723,9 +728,19 @@ public class TvSceneBootstrap : MonoBehaviour
             nickname  = payload.nickname ?? "",
             ageScale  = payload.ageScale
         };
+        // ⚠ 2026-08-26 — Esto decía «spawned» AUNQUE `SpawnFish` devolviera null: el
+        // `if (agent != null)` protegía las dos llamadas de abajo y el log salía igual. Mismo
+        // fallo que tenían los tres `change_*`: se reportaba la intención, no el efecto.
         var agent = mgr.fishSpawner.SpawnFish(data, bounds, save);
-        if (agent != null) { agent.SetNickname(save.nickname); agent.SetUid(save.uid); }
-        JsBridge.Log($"add_fish: {payload.speciesId} spawned");
+        if (agent == null)
+        {
+            JsBridge.Log($"ERR add_fish: {payload.speciesId} cargó pero SpawnFish devolvió null — no hay pez");
+            yield break;
+        }
+        agent.SetNickname(save.nickname);
+        agent.SetUid(save.uid);
+        JsBridge.Log($"add_fish: {payload.speciesId} spawned"
+                   + $" ({mgr.fishSpawner.ActiveFish?.Count ?? -1} peces en el tanque)");
     }
 
     private void RemoveFish(string speciesId)
@@ -754,7 +769,12 @@ public class TvSceneBootstrap : MonoBehaviour
     private IEnumerator AddDecoAsync(string jsonValue)
     {
         var payload = SafeFromJson<TvAddDecoPayload>(jsonValue);
-        if (payload == null || string.IsNullOrEmpty(payload.itemId)) yield break;
+        if (payload == null) yield break;                     // SafeFromJson ya lo ha dicho
+        if (string.IsNullOrEmpty(payload.itemId))
+        {
+            JsBridge.Log("ERR add_deco: el payload no trae itemId");
+            yield break;
+        }
 
         var mgr = AquariumManager.Instance;
         if (mgr == null) yield break;
@@ -785,14 +805,18 @@ public class TvSceneBootstrap : MonoBehaviour
             }
         }
 
-        placer.PlaceAt(data, payload.position,
+        // ⚠ 2026-08-26 — `PlaceAt` DEVUELVE bool y se estaba tirando: una deco rechazada
+        // (sin sitio, fuera del tanque) se confirmaba como colocada.
+        bool colocada = placer.PlaceAt(data, payload.position,
             flipped:     payload.flipped,
             rotationY:   payload.rotationY,
             scaleFactor: payload.scaleFactor > 0f ? payload.scaleFactor : 1f,
             fromSave:    true,
             instanceId:  string.IsNullOrEmpty(payload.instanceId) ? null : payload.instanceId);
 
-        JsBridge.Log($"add_deco: {payload.itemId} at {payload.position:F1}");
+        JsBridge.Log(colocada
+            ? $"add_deco: {payload.itemId} at {payload.position:F1}"
+            : $"ERR add_deco: {payload.itemId} cargó pero PlaceAt lo rechazó (¿sin sitio en el tanque?)");
     }
 
     private void RemoveDeco(string instanceId)

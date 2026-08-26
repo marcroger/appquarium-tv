@@ -334,6 +334,14 @@ Lo que hay ahora:
 🧭 **Regla:** no comprobar nunca que el receiver **repita** lo que le mandaste. Comprobar
 contra algo que lea el estado real.
 
+**El mismo patrón estaba en dos sitios más** (auditado el mismo día, ya arreglado):
+- **`add_fish` decía «spawned» aunque `SpawnFish` devolviera null.** El `if (agent != null)`
+  protegía las dos llamadas de debajo, pero el log salía igual. Ahora responde `ERR add_fish:
+  … SpawnFish devolvió null` y, si va bien, dice **cuántos peces hay en el tanque**.
+- **`add_deco` tiraba el `bool` que devuelve `PlaceAt`**: una deco rechazada (sin sitio) se
+  confirmaba como colocada.
+- Y los `yield break` mudos de payload sin `speciesId`/`itemId` ahora dicen por qué se van.
+
 ### ⚠⚠ El rig local servía un catálogo que R2 no tiene (2026-08-26)
 
 `Tools/static-server.js` + `?devtest=1` (puerto 3001) llevaba roto **desde el último build de
