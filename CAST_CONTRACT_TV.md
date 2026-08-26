@@ -1,3 +1,13 @@
+### 4.3 ~~En INIT no valido los ids de preset~~ ✅ CERRADO (26-ago)
+
+`SanearEstado` (`TvSceneBootstrap.cs:211`) valida `bgId`, `subId`, `lightId` y `ambientMode` al
+recibir el INIT. **Sanea en vez de rechazar**: un INIT es la escena entera y tirarla por un id malo
+dejaría la tele vacía, así que se corrige el campo, se dice por el canal y se sigue.
+
+🧭 **Vacío ≠ inválido.** Un campo vacío es un cliente viejo o un rig mandando un estado mínimo: se
+calla. Sólo se reporta lo que llega con contenido y equivocado. Una guarda que grita por todo se
+acaba ignorando, y entonces no sirve el día que grita con razón.
+
 # CAST_CONTRACT_TV.md — lo que la TV ACEPTA por el canal Cast
 
 > Lado **receiver** del contrato. El lado **sender** lo declara el proyecto móvil
@@ -35,21 +45,23 @@ como aviso, no como error.
 Entrada: `TvSceneBootstrap.InitializeFromState` (`:178`) → `LoadAndInitializeCoroutine` →
 `AquariumManager.InitializeFromCastStateAsync` (`:89`).
 
-⚠ **Ojo al mantener esto:** la lógica está **duplicada** en `InitializeFromCastStateAsync`
-(`:89-190`) y en `InitializeFromCastState` (`:197-256`). Tocar una y no la otra es un bug
-esperando. Las líneas de abajo son las de la versión **async**, que es la que corre.
+ℹ Hasta el 26-ago esta lógica estaba **duplicada** en una copia síncrona que no llamaba nadie.
+Se borró: al adoptar el uid del móvil había que tocar dos sitios y olvidarse de uno no daba
+ningún error, sólo un comportamiento distinto según la ruta. **Ahora hay un solo camino.**
 
 | Campo | Lo uso en | Qué hago si falta o es inválido |
 |---|---|---|
-| `activeFish` | `AquariumManager.cs:109` | `null` → 0 peces, sin error. Cada entrada genera un **uid nuevo en la TV** (`Guid.NewGuid()`); el móvil no manda uid — ver §5.3 |
+| `activeFish` | `AquariumManager.cs:109` | `null` → 0 peces, sin error |
+| `activeFish[].uid` | ídem | ✅ **Se ADOPTA el uid del móvil** (26-ago). Vacío → genero uno propio, y entonces **ese pez no puede emparejarse**. Se reporta: `peces: N (uid propios: M)` |
+| `activePairs` | `AquariumManager.cs:133` → `FishAgent.WirePairsFromSave` | Lista de `{maleUid, femaleUid}`. `null`/vacía → sin parejas. Sólo se cablea una pareja si **sus dos peces están en el tanque** |
 | `activeFish[].speciesId` | clave Addressable | Si su bundle no carga: `ERR fish load FAILED …` y **ese** pez no aparece; los demás sí |
 | `activeFish[].nickname` | `FishAgent.SetNickname` (`:75`) | **No se pinta en ningún sitio** — ver §4.2 |
 | `activeFish[].ageScale` | `TvStubs.GetAgeGroup` (`:55`) → `FishAgent.cs:185` | `<= 0` (o campo ausente) → **Adulto**. Umbrales: `<0,525` cría · `<0,825` juvenil · `<1,09` adulto · resto senior |
-| `decoJson` | `AquariumManager.cs:121` | `""` o `"{}"` → sin decos. **JSON malformado: ver §4.1, riesgo abierto** |
-| `bgId` | → `SaveData.selectedBgId` → `TankBackground.SetPreset` | ⚠ **NO se valida en INIT**: un id desconocido cae al preset por defecto **en silencio**. Ver §4.3 |
-| `subId` | → `SaveData.selectedSubId` → `DecorationPlacer.SetSubstrate` | ⚠ igual que `bgId` |
-| `lightId` | → `SaveData.lightPresetId` → `TankLightingController.SetPreset` | ⚠ igual. Además `light_green` se migra a `light_white` (`AquariumManager.cs:310`) |
-| `ambientMode` | `AquariumManager.cs:177` | `switch` con `default: SetDay()` → cualquier valor raro **es día, en silencio** |
+| `decoJson` | `AquariumManager.cs:121` | `""` o `"{}"` → sin decos. ✅ **Comprobación de forma antes de parsear** (26-ago): si no parece un objeto JSON → `ERR INIT decoJson: …` y se ignoran las decos, en vez de tumbar el INIT |
+| `bgId` | `SanearEstado` → `SaveData.selectedBgId` | ✅ **Validado (26-ago)**: desconocido → `ERR INIT bgId: id desconocido 'x' — válidos: … — se usa 'bg_classic'`. **Vacío no es error**: es «no me lo mandó» y se calla |
+| `subId` | `SanearEstado` → `SaveData.selectedSubId` | ✅ igual que `bgId`; por defecto `sub_sand` |
+| `lightId` | `SanearEstado` → `SaveData.lightPresetId` | ✅ igual; por defecto `light_white`. Además `light_green` se migra a `light_white` |
+| `ambientMode` | `SanearEstado` → `AquariumManager` | ✅ **Validado (26-ago)**: desconocido → `ERR INIT ambientMode: …` y se usa `day`. Vacío → `day`, callando |
 | `fishSpeed` | `AquariumManager.cs:106` | `<= 0` → `1`. Después `Clamp(0,25 … 3)`. (Antes, un 0 dejaba **todos** los peces clavados sin ningún error) |
 | `selectedTankId` | → `SaveData.selectedTankId` | vacío → el tanque por defecto |
 | `tankHalfWidth` | `AquariumManager.cs:150` → `DecorationPlacer.cs:361` | Remapeo de X **sólo si** `> 0,1` **y** los bounds de la TV `> 0,1`. `0` = cliente viejo → sin remapeo |
@@ -74,13 +86,14 @@ Estado **tras los commits `458c217` y `2dbac4c` del 26-ago** (player `rcv 2026-0
 | `feed` | `:225` | no lleva valor. Confirma con el nº de peces |
 | `startle` | `:230` | ídem |
 | `refresh` | `:236` | **no-op que sólo logea** — ver §5.4 |
-| `add_fish` | `AddFishAsync` (`:707`) | payload no-objeto → `ERR payload: …` · sin `speciesId` → `ERR add_fish: el payload no trae speciesId` · bundle que no carga → `ERR add_fish: load failed x` · **spawn nulo → `ERR add_fish: … SpawnFish devolvió null`** |
+| `add_fish` | `AddFishAsync` (`:707`) | payload no-objeto → `ERR payload: …` · sin `speciesId` → `ERR add_fish: el payload no trae speciesId` · bundle que no carga → `ERR add_fish: load failed x` · **spawn nulo → `ERR add_fish: … SpawnFish devolvió null`**. ✅ Acepta `uid` (26-ago) — sin él, el pez **no puede emparejarse nunca** |
 | `remove_fish` | `:750` | **id desconocido → `remove_fish: x (removed=0)`**. Ya reportaba el efecto real. Quita **una** instancia (`FishSpawner.DespawnOneBySpecies`, `:215`) |
 | `add_deco` | `AddDecoAsync` (`:775`) | sin `itemId` → `ERR add_deco: el payload no trae itemId` · bundle → `ERR add_deco: load failed x` · **`PlaceAt` que rechaza → `ERR add_deco: … PlaceAt lo rechazó`** |
 | `remove_deco` | `:820` | `remove_deco: x (ok=False)` si no existía |
 | `change_bg` | `:899` | **`ERR change_bg: id desconocido 'x' — válidos: bg_classic\|…`** |
 | `change_sub` | `:923` | ídem con los 12 sustratos |
 | `change_light` | `:946` | ídem con las 7 luces |
+| **`pairs`** ⭐ | `AplicarParejas` (`:909`) | Lista **completa** de parejas, no un delta. Payload `{"items":[{maleUid,femaleUid},…]}`. Reporta `pairs: N recibidas, M cableadas` — y **N≠M se dice** |
 
 **Los tres `change_*` releen el estado** después de aplicar (`bg.CurrentPresetId`,
 `placer.CurrentSubstrateId`, `lighting.CurrentPresetId`) y sólo entonces confirman, con la
@@ -91,8 +104,9 @@ aplicarse: `ERR change_bg: 'x' es válido pero el fondo sigue en 'y'`.
 el receiver hacía eco del id y parecía aplicado. Sirve además como sonda: el `ERR` trae la lista
 de válidos.
 
-⚠ **Asimetría que hay que conocer:** todo esto vale para la ruta **UPDATE**. En **INIT** los ids
-siguen cayendo en silencio (§1, §4.3).
+✅ **La asimetría UPDATE-se-oye / INIT-en-silencio está cerrada** desde el 26-ago: el INIT valida
+los mismos ids (§1). ⚠ Con un matiz deliberado: **un campo vacío no es un error**, es «no me lo
+mandó», y se calla. Sólo grita lo que llega **con contenido y equivocado**.
 
 ---
 
@@ -118,16 +132,13 @@ un rebuild de player** (~6 min con caché caliente, no los 55 que dicen los docs
 
 ## 4. Lo que NO cumplo, dicho en voz alta
 
-### 4.1 Un `decoJson` malformado no está protegido
+### 4.1 ~~Un `decoJson` malformado no está protegido~~ ✅ CERRADO (26-ago)
 
-`AquariumManager.cs:119` envuelve el parseo en `try/catch`, **y ese `try/catch` no protege en
-este build**: el player va con `Exception Support: None` (obligatorio, ver `CLAUDE.md`), así que
-la excepción se escapa como error de JS en vez de entrar en el `catch`. Medido el 21-ago con el
-payload de un UPDATE.
-
-En la ruta de UPDATE eso ya se resolvió con una comprobación de **forma** antes de parsear
-(`SafeFromJson`, `TvSceneBootstrap.cs:968`). **La ruta de INIT no la tiene.** Riesgo real pero
-pequeño: `decoJson` lo genera `JsonUtility` en el móvil, no un humano.
+`AquariumManager` envuelve el parseo en un `try/catch` que **no protege en este build** (el player
+va con `Exception Support: None`, así que la excepción se escapa como error de JS). Lo que protege
+ahora es una **comprobación de forma antes de parsear**, en `SanearEstado`: si `decoJson` no
+empieza por `{`, sale `ERR INIT decoJson: se esperaba un objeto JSON y llegó '…'` y se ignoran las
+decos. Es la misma guarda que `SafeFromJson` ya hacía para los payloads de UPDATE.
 
 ### 4.2 El mote de los peces no se pinta
 
@@ -135,43 +146,41 @@ pequeño: `decoJson` lo genera `JsonUtility` en el móvil, no un humano.
 en la TV.** → El hueco «renombrar un pez no manda nada» (**§6.5 del móvil**) **no existe**: no hay
 nada que actualizar. Si algún día la TV pinta motes, vuelve a existir.
 
-### 4.4 El emparejamiento está montado y VACÍO (encontrado por la sesión móvil, 26-ago)
+### 4.4 ~~El emparejamiento está montado y VACÍO~~ ✅ IMPLEMENTADO (26-ago), sin validar en device
 
-Toda la maquinaria de parejas existe aquí: `FishAgent.WirePairsFromSave` (`:55`),
-`SaveData.activePairs` (`TvStubs.cs:98`), `BreedingPair {maleUid, femaleUid}` (`TvStubs.cs:33`) y
-`SteeringController.PairBond()` con peso **1,8** en Idle y **1,2** en Explore (`:116`, `:127`).
+Lo encontró la sesión del repo móvil barriendo su app en busca de estado visual que no sale por el
+canal. Toda la maquinaria existía aquí —`WirePairsFromSave`, `SaveData.activePairs`,
+`BreedingPair`, `PairBond` con peso **1,8** en Idle y **1,2** en Explore— y no se usaba nunca,
+porque `TvAquariumState` no transportaba las parejas. **Una pareja emparejada nadaba junta en el
+móvil y suelta en la tele.**
 
-**Y no se usa nunca**, porque `TvAquariumState` no transporta las parejas: `activePairs` está
-siempre vacío y `WirePairsFromSave` se va por su primera línea (`FishAgent.cs:60`). Una pareja
-emparejada nada junta en el móvil y **suelta** en la tele.
+Lo que hay ahora:
 
-Tres cosas que hay que saber antes de arreglarlo:
+1. **`uid` adoptado del móvil**, en el INIT (`AquariumManager.cs:114`) y en `add_fish`
+   (`TvSceneBootstrap.cs:731`). Antes se generaba aquí con `Guid.NewGuid()` en **tres** sitios; hoy
+   quedan **dos**, y los dos son fallback para cliente viejo. El tercero desapareció con la copia
+   síncrona muerta.
+   ⚠ Por eso `uid` en `TvAddFishPayload` **no es opcional**: un pez que entra a mitad de sesión con
+   uid propio **no puede emparejarse jamás**.
+2. **`activePairs` en el INIT** y **UPDATE `pairs`** para los cambios en vivo (§2).
+3. ⚠⚠ **La carrera, arreglada.** El móvil emite `pairs` justo detrás del `add_fish` que forma la
+   pareja, pero `AddFishAsync` **espera una descarga de bundle** (0,3-1,5 s en local, más en el
+   device y en frío) y un `FishAgent` no entra en `FishAgent.All` hasta su `OnEnable`. O sea que el
+   `pairs` puede llegar **antes que el pez** y `All.Find` devuelve null: la pareja se descartaba en
+   silencio, y como `pairs` es reemplazo y sólo se emite al cambiar, **no se volvía a mandar**.
+   → Se re-empareja tras cada `add_fish` que termina bien. Es seguro repetirlo porque
+   `WirePairsFromSave` limpia **todos** los partners antes de re-cablear: los dos lados son de
+   reemplazo total por construcción.
+4. **Se reporta lo cableado, no lo recibido**: `pairs: 3 recibidas pero sólo 2 cableadas`. No es lo
+   mismo, y la diferencia es exactamente el síntoma de la carrera.
 
-1. **Depende del uid, igual que `remove_fish`.** Empareja por `pair.maleUid`/`femaleUid` contra
-   `FishAgent.Uid`, y hoy los uid los genero yo. Mandar parejas sin mandar uid antes no sirve
-   de nada.
-2. ⚠⚠ **Genero uid en TRES sitios, no en uno:** `AquariumManager.cs:112` (INIT async, el que
-   corre), `AquariumManager.cs:218` (INIT sync, la lógica **duplicada** de §1) y
-   **`TvSceneBootstrap.cs:726` (`AddFishAsync`)**. Ese tercero es el que se escapa: un pez que
-   entra por `add_fish` a mitad de sesión recibe un uid mío, así que **`uid` en
-   `TvAddFishPayload` no es opcional** — sin él, un pez añadido durante la sesión no puede
-   emparejarse jamás.
-3. ⚠ **`WirePairsFromSave` se llama en UN solo sitio** (`AquariumManager.cs:349`, dentro del
-   INIT). O sea que `activePairs` en el INIT arregla el caso «reconecto y las parejas salen
-   bien», pero **NO** el caso «empareja dos peces con el Cast puesto»: eso no llega hasta el
-   siguiente INIT. Cerrar eso pide un UPDATE propio (`pair`/`unpair`) o re-llamar a
-   `WirePairsFromSave` tras cada `add_fish` — pero re-llamarlo sólo sirve si `SaveData.activePairs`
-   está al día, o sea que **el UPDATE hace falta igual**. Hueco aparte, no lo tapa el INIT.
+Verificado en local con el rig (12/12, tests 10-12): dos `add_fish` con uid explícito + un `pairs`
+→ `pairs: 1 recibidas, 1 cableadas`. **Eso sólo sale si el uid del móvil se adopta de verdad.**
+⚠ **Sin validar contra el device todavía.**
 
 ℹ Lo que **no** es problema: un `PartnerUid` colgando es inofensivo. `GetPartner()` re-resuelve
 buscando en `All` (`:45-47`) y devuelve `null` si el compañero ya no está, con lo que `PairBond`
 no aporta fuerza. No hay referencia rota que limpiar al quitar un pez.
-
-### 4.3 En INIT no valido los ids de preset
-
-El arreglo del 26-ago cubre **sólo** `change_bg`/`change_sub`/`change_light`. Un `bgId` inválido
-en el INIT sigue cayendo al preset por defecto sin decir nada, y un `ambientMode` raro se vuelve
-día en silencio. **Coste de cerrarlo: ~15 líneas y el próximo build.**
 
 ---
 
@@ -204,12 +213,16 @@ Verificado desde este lado, contra el código de los dos repos.
 3. 🟡 **«un id nuevo llega y la TV lo rechaza»** (§5 del móvil) es cierto **sólo por la ruta
    UPDATE**. En INIT no. Ver §4.3.
 
-### 5.3 `remove_fish` por uid — el grueso sí cae de este lado
+### 5.3 `uid` — adoptado ✅, pero `remove_fish` sigue yendo por especie
 
-Confirmado: hoy los uid **los genera la TV** (`AquariumManager.cs:113`, `Guid.NewGuid()`), así
-que el uid del móvil no existe aquí. Para arreglarlo: `uid` en `TvFishEntry` **y** en
-`TvAddFishPayload` (aditivo), la TV lo adopta en vez de generarlo, e indexa por uid.
-`DespawnOneBySpecies` (`FishSpawner.cs:215`) pasa a ser `DespawnByUid`.
+El uid del móvil **ya se adopta** (§4.4), que era el bloqueo del emparejamiento. Lo que **no**
+está hecho es usarlo en `remove_fish`: sigue llegando un `speciesId` y `DespawnOneBySpecies`
+(`FishSpawner.cs:215`) quita **la primera** instancia de esa especie. Con 3 Banggai en el tanque,
+quitas uno concreto y desaparece otro.
+
+Ahora es barato: los uid ya son los buenos en los dos lados, así que sólo falta que el móvil mande
+el uid en `remove_fish` y que aquí haya un `DespawnByUid`. **~1 h**, y es aditivo: mientras llegue
+un `speciesId` se sigue usando el camino de hoy.
 
 ### 5.4 `refresh`: qué hace de verdad
 
@@ -250,17 +263,10 @@ transporte.
   colocadas se remapearon con el valor viejo**: hay que recolocarlas todas con el factor nuevo, o
   media escena queda desplazada. Eso es un `RepositionAll` que hoy no existe. ~3 h.
 
-### 6.3 `uid` + `activePairs` (fundidos en un solo trabajo)
+### 6.3 ~~`uid` + `activePairs`~~ ✅ HECHO (26-ago)
 
-- **Coste TV: ~3 h.** El `uid` solo son ~2 h (§5.3); las parejas suman **~1 h** encima, porque una
-  vez adoptado el uid `activePairs` es un campo más del INIT y `WirePairsFromSave` ya existe.
-- **Forma que quiero recibir:** `activePairs` como lista de `{maleUid, femaleUid}` y nada más.
-  Encaja 1:1 con `BreedingPair` (`TvStubs.cs:33`) sin una línea de pegamento.
-  ⚠ `JsonUtility` casa por **nombre de campo, no de clase**: da igual que en el móvil se llame
-  `BreedingPairRecord` mientras los campos se llamen `maleUid` y `femaleUid` y la lista
-  `activePairs`.
-- Aditivo y sin riesgo: mientras el móvil no mande `uid`, la TV sigue con el camino de hoy.
-- ⚠ **Esto arregla el caso «reconecto», no el caso «empareja con el Cast puesto»** — ver §4.4.3.
+Coste real: **~3 h**, clavado en la estimación. Falta `remove_fish` por uid (§5.3, ~1 h) y el
+`DespawnByUid`.
 
 ### 6.4 Orden preferido
 

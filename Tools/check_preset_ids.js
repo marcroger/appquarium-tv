@@ -105,7 +105,11 @@ try {
     if (m) tipos.push(m[1]);
   }
   const doc = L(CONTRATO);
-  const faltan = tipos.filter(t => !doc.includes('| `' + t + '` |'));
+  // Se busca una FILA de tabla que mencione el tipo entre backticks, no una cadena exacta:
+  // la fila puede llevar negrita o un marcador y seguir siendo documentacion valida. Exigir
+  // el formato exacto convierte la guarda en un corrector de estilo y acaba ignorandose.
+  const filas = doc.split(NL).filter(l => l.startsWith('|'));
+  const faltan = tipos.filter(t => !filas.some(f => f.includes(String.fromCharCode(96) + t + String.fromCharCode(96))));
   if (faltan.length) {
     console.log('   ' + CONTRATO + ' no documenta ' + faltan.length + ' tipo(s) de UPDATE: ' + faltan.join(', '));
     sinDocumentar = faltan.length;

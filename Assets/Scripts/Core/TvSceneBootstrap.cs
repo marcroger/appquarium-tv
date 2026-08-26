@@ -185,6 +185,8 @@ public class TvSceneBootstrap : MonoBehaviour
         // el de cualquier app ya instalada -- sigue valiendo el token constante del receiver.
         TvBundleAuth.SetSessionToken(state.castJwt);
 
+        SanearEstado(state);
+
         // ⚠ 2026-08-15 — parar la carga anterior antes de arrancar otra.
         // Si el sender caía y reconectaba MIENTRAS se bajaban bundles (carga fría ~40 s,
         // muy probable), corrían dos corrutinas a la vez: la nueva liberaba handles que la
@@ -192,6 +194,63 @@ public class TvSceneBootstrap : MonoBehaviour
         // HideLoadingOverlay de la primera destapaba la pantalla a media carga de la segunda.
         if (_loadRoutine != null) StopCoroutine(_loadRoutine);
         _loadRoutine = StartCoroutine(LoadAndInitializeCoroutine(state));
+    }
+
+    /// <summary>
+    /// Comprueba el INIT y arregla lo que no sea usable, DICIENDOLO por el canal Cast.
+    ///
+    /// ⚠⚠ 2026-08-26 — Hasta hoy el INIT no validaba nada: un `bgId` que no existiera caia al
+    /// preset por defecto **en silencio** (`SetPreset` se planta en un `Debug.LogWarning`, que
+    /// no viaja por Cast) y un `ambientMode` raro se volvia dia sin decir nada. La validacion
+    /// del 26-ago sólo cubria la ruta UPDATE, asi que el contrato tenia una asimetria fea:
+    /// «por UPDATE se oye, por INIT no». Esto la cierra.
+    ///
+    /// Sanear en vez de rechazar: un INIT es la escena entera, y tirarla por un id malo deja
+    /// la tele vacia. Se corrige el campo y se sigue.
+    /// </summary>
+    private static void SanearEstado(TvAquariumState state)
+    {
+        state.bgId    = IdSaneado("INIT bgId",    state.bgId,    IdsDeFondo(),    TankBackground.Presets[0].id);
+        state.subId   = IdSaneado("INIT subId",   state.subId,   IdsDeSustrato(), DecorationPlacer.SubstratePresets[0].id);
+        state.lightId = IdSaneado("INIT lightId", state.lightId, IdsDeLuz(),      "light_white");
+        state.ambientMode = IdSaneado("INIT ambientMode", state.ambientMode,
+                                      new[] { "day", "sunset", "night" }, "day");
+
+        // ⚠ El `try/catch` que envuelve el parseo de `decoJson` en AquariumManager **NO protege**:
+        // el player va con `Exception Support: None`, con lo que la excepcion se escapa como
+        // error de JS. Lo que protege es esta comprobacion de FORMA, la misma que ya hacia
+        // `SafeFromJson` para los payloads de UPDATE. Sin ella, un decoJson corrupto no daba un
+        // aviso: tumbaba el INIT entero.
+        if (!string.IsNullOrEmpty(state.decoJson))
+        {
+            var limpio = state.decoJson.TrimStart();
+            if (limpio.Length > 0 && limpio[0] != '{')
+            {
+                var muestra = state.decoJson.Length > 40 ? state.decoJson.Substring(0, 40) + "…" : state.decoJson;
+                JsBridge.Log($"ERR INIT decoJson: se esperaba un objeto JSON y llegó '{muestra}' — se ignoran las decos");
+                state.decoJson = "{}";
+            }
+        }
+    }
+
+    /// <summary>
+    /// Devuelve `valor` si es valido; si no, el defecto — y **distingue los dos casos**:
+    ///
+    ///   · **vacio** = el sender no lo mando. No es un error: un cliente viejo, o un rig de
+    ///     diagnostico que manda un estado minimo, entran por aqui. Se calla.
+    ///   · **no vacio y desconocido** = el sender mando algo que no existe. Eso SI se dice.
+    ///
+    /// 🧭 La distincion importa: una guarda que grita por todo se acaba ignorando, y entonces
+    /// no sirve para nada el dia que grita con razon.
+    /// </summary>
+    private static string IdSaneado(string campo, string valor, string[] validos, string porDefecto)
+    {
+        if (string.IsNullOrEmpty(valor)) return porDefecto;
+        foreach (var v in validos) if (v == valor) return valor;
+
+        JsBridge.Log($"ERR {campo}: id desconocido '{valor}' — válidos: {string.Join("|", validos)}"
+                   + $" — se usa '{porDefecto}'");
+        return porDefecto;
     }
 
     public void ApplyUpdate(TvUpdateMessage upd)
@@ -246,6 +305,7 @@ public class TvSceneBootstrap : MonoBehaviour
             case "change_bg":   ChangeBg(upd.value);                       break;
             case "change_sub":  ChangeSub(upd.value);                      break;
             case "change_light":ChangeLight(upd.value);                    break;
+            case "pairs":       AplicarParejas(upd.value);                 break;
         }
     }
 
@@ -723,7 +783,10 @@ public class TvSceneBootstrap : MonoBehaviour
         var bounds = mgr.tankController.GetTankBounds();
         var save   = new OwnedFishSave
         {
-            uid       = System.Guid.NewGuid().ToString(),
+            // ⚠ 2026-08-26 — Se ADOPTA el uid del movil. Antes se generaba SIEMPRE aqui, y por
+            // eso un pez anadido a mitad de sesion no podia emparejarse nunca: `activePairs`
+            // referencia los uid del movil. Vacio = cliente viejo -> uid propio.
+            uid       = string.IsNullOrEmpty(payload.uid) ? System.Guid.NewGuid().ToString() : payload.uid,
             speciesId = payload.speciesId,
             nickname  = payload.nickname ?? "",
             ageScale  = payload.ageScale
@@ -739,8 +802,54 @@ public class TvSceneBootstrap : MonoBehaviour
         }
         agent.SetNickname(save.nickname);
         agent.SetUid(save.uid);
+
+        // Que el pez conste en el save transitorio, o `remove_fish` y el emparejamiento no lo ven.
+        if (mgr.SaveData != null)
+        {
+            mgr.SaveData.ownedFish.Add(save);
+            mgr.SaveData.activeFishUids.Add(save.uid);
+        }
+
+        // ⚠⚠ LA CARRERA (2026-08-26). El movil emite `pairs` justo despues del `add_fish` que
+        // forma la pareja, pero aqui se acaba de ESPERAR UNA DESCARGA DE BUNDLE (0,3-1,5 s en
+        // local, mas en el device y en frio). Un `FishAgent` no entra en `FishAgent.All` hasta
+        // su OnEnable, o sea hasta que existe de verdad, asi que el `pairs` puede llegar ANTES
+        // que el pez y `All.Find` devuelve null: la pareja se descarta EN SILENCIO. Y como
+        // `pairs` es reemplazo y sólo se emite al cambiar, esa pareja NO se vuelve a mandar.
+        //
+        // Por eso se re-empareja aqui, con la ultima lista recibida. Es seguro repetirlo tantas
+        // veces como haga falta porque `WirePairsFromSave` limpia TODOS los partners antes de
+        // re-cablear: el consumidor es de reemplazo total, igual que el emisor.
+        int parejas = ReemparejarYContar(mgr, "add_fish");
+
         JsBridge.Log($"add_fish: {payload.speciesId} spawned"
-                   + $" ({mgr.fishSpawner.ActiveFish?.Count ?? -1} peces en el tanque)");
+                   + $" ({mgr.fishSpawner.ActiveFish?.Count ?? -1} peces en el tanque"
+                   + (parejas > 0 ? $", {parejas} parejas" : "") + ")");
+    }
+
+    /// <summary>
+    /// Re-aplica la ultima lista de parejas y devuelve cuantas quedaron CABLEADAS de verdad
+    /// (las dos mitades presentes), que no tiene por que ser cuantas se recibieron.
+    /// </summary>
+    private static int ReemparejarYContar(AquariumManager mgr, string origen)
+    {
+        if (mgr?.SaveData?.activePairs == null || mgr.SaveData.activePairs.Count == 0) return 0;
+
+        FishAgent.WirePairsFromSave(mgr.SaveData);
+
+        int cableadas = 0;
+        foreach (var p in mgr.SaveData.activePairs)
+        {
+            bool macho  = false, hembra = false;
+            foreach (var a in FishAgent.All)
+            {
+                if (a == null) continue;
+                if (a.Uid == p.maleUid)   macho  = true;
+                if (a.Uid == p.femaleUid) hembra = true;
+            }
+            if (macho && hembra) cableadas++;
+        }
+        return cableadas;
     }
 
     private void RemoveFish(string speciesId)
@@ -840,6 +949,41 @@ public class TvSceneBootstrap : MonoBehaviour
             _runtimeDecoHandles.Remove(itemId);
             mgr.allDecoCatalog.RemoveAll(d => d.itemId == itemId);
         }
+    }
+
+    /// <summary>
+    /// UPDATE `pairs` — la lista COMPLETA de parejas activas, no un delta.
+    ///
+    /// El movil la emite desde un unico choke point (el final de `CheckBreedingPairs`) cada vez
+    /// que cambia. Es reemplazo a proposito: un delta `pair`/`unpair` se desincroniza para
+    /// siempre si se pierde un mensaje, y aqui no hay acuse de recibo de nada.
+    ///
+    /// Encaja sin adaptador porque `WirePairsFromSave` **limpia TODOS los partners** antes de
+    /// re-cablear: los dos lados son de reemplazo total por construccion.
+    ///
+    /// ⚠ Se reporta cuantas quedan CABLEADAS, no cuantas llegaron. No es lo mismo: una pareja
+    /// cuyo pez aun se esta descargando no se cablea, y ese hueco es justo la carrera que
+    /// documenta `AddFishAsync`. Si el log dice «3 recibidas, 2 cableadas», ahi esta.
+    /// </summary>
+    private void AplicarParejas(string jsonValue)
+    {
+        var mgr = AquariumManager.Instance;
+        if (mgr == null) return;
+        if (mgr.SaveData == null) { JsBridge.Log("ERR pairs: todavia no hay acuario (llego antes del INIT)"); return; }
+
+        var payload = SafeFromJson<TvPairList>(jsonValue);
+        if (payload == null) return;                      // SafeFromJson ya lo ha dicho
+
+        mgr.SaveData.activePairs = payload.items ?? new System.Collections.Generic.List<BreedingPair>();
+        int recibidas = mgr.SaveData.activePairs.Count;
+        int cableadas = ReemparejarYContar(mgr, "pairs");
+
+        if (recibidas == 0) { JsBridge.Log("pairs: 0 — todas las parejas deshechas"); return; }
+
+        JsBridge.Log(recibidas == cableadas
+            ? $"pairs: {recibidas} recibidas, {cableadas} cableadas"
+            : $"pairs: {recibidas} recibidas pero sólo {cableadas} cableadas"
+              + " — al resto le falta algun pez en el tanque (¿aun descargando?)");
     }
 
     // ── Los tres «cambiar preset»: fondo, sustrato y luz ─────────────────────

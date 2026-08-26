@@ -4,7 +4,7 @@ using UnityEngine;
 
 /// <summary>
 /// TV receiver version — stripped of all mobile-only systems (IAP, Ads, Save, UI).
-/// Initializes the aquarium via InitializeFromCastState() called by TvSceneBootstrap
+/// Initializes the aquarium via InitializeFromCastStateAsync() called by TvSceneBootstrap
 /// when the Cast INIT message arrives. No save persistence.
 /// </summary>
 public class AquariumManager : MonoBehaviour
@@ -69,18 +69,14 @@ public class AquariumManager : MonoBehaviour
     }
 
     // ── Cast initialization ───────────────────────────────────────────────────
+    // ⚠⚠ 2026-08-26 — Aqui vivian DOS metodos mas: `InitializeFromCastState(state, fish, decos)`
+    // y `InitializeFromCastState(state)`, una copia SINCRONA de toda la logica de abajo.
+    // No los llamaba nadie (sólo se llamaban entre ellos) y llevaban meses divergiendo en
+    // silencio: el 26-ago, al adoptar el uid del movil, habia que tocar la logica en DOS
+    // sitios y olvidarse de uno no daba ningun error, sólo un comportamiento distinto segun
+    // la ruta. Borrados. Si algun dia hace falta una ruta sincrona, que llame a la async y
+    // la agote, no que la duplique.
 
-    /// <summary>
-    /// v2 entry point: called by TvSceneBootstrap after Addressables loading completes.
-    /// Receives only the assets needed for this user's tank.
-    /// </summary>
-    public void InitializeFromCastState(TvAquariumState state, List<FishData> fishData, List<DecorationData> decoData)
-    {
-        allFishCatalog = fishData ?? new List<FishData>();
-        allDecoCatalog = decoData ?? new List<DecorationData>();
-        Debug.Log($"[AquariumManager] Catalogs loaded — fish:{allFishCatalog.Count} decos:{allDecoCatalog.Count}");
-        InitializeFromCastState(state);
-    }
 
     /// <summary>
     /// Async variant: loads decos with yields to keep the browser event loop alive.
@@ -105,11 +101,17 @@ public class AquariumManager : MonoBehaviour
             // los peces clavados en el sitio, sin ningún error.
             fishSpeedMultiplier = state.fishSpeed <= 0f ? 1f : Mathf.Clamp(state.fishSpeed, 0.25f, 3f)
         };
+        int uidsGenerados = 0;
         if (state.activeFish != null)
         {
             foreach (var entry in state.activeFish)
             {
-                string uid = Guid.NewGuid().ToString();
+                // ⚠ 2026-08-26 — Se ADOPTA el uid del movil. Antes se generaba uno aqui, y por eso
+                // `activePairs` no podia funcionar: referencia los uid del movil, que en la TV no
+                // existian. Un cliente viejo no manda uid -> se genera, y ese pez no se empareja.
+                bool sinUid = string.IsNullOrEmpty(entry.uid);
+                if (sinUid) uidsGenerados++;
+                string uid = sinUid ? Guid.NewGuid().ToString() : entry.uid;
                 castSave.ownedFish.Add(new OwnedFishSave { uid = uid, speciesId = entry.speciesId, nickname = entry.nickname, ageScale = entry.ageScale });
                 castSave.activeFishUids.Add(uid);
             }
@@ -123,6 +125,15 @@ public class AquariumManager : MonoBehaviour
             }
             catch (Exception e) { Debug.LogWarning($"[AquariumManager] Cast deco parse failed: {e.Message}"); }
         }
+        // Las parejas viajan por uid del movil, asi que sin uid adoptado no sirven de nada.
+        if (state.activePairs != null) castSave.activePairs = state.activePairs;
+
+        // Se reporta por el canal Cast, que es lo unico que se ve desde fuera: si el movil es
+        // viejo, `uid propios` sale distinto de 0 y ahi esta la explicacion de por que las
+        // parejas no salen, sin tener que adivinar.
+        JsBridge.Log($"peces: {castSave.activeFishUids.Count} (uid propios: {uidsGenerados})"
+                   + $" | parejas recibidas: {castSave.activePairs?.Count ?? 0}");
+
         SaveData = castSave;
 
         // Sync part: tank init + fish spawn (fast, < 1 frame typically)
@@ -188,71 +199,6 @@ public class AquariumManager : MonoBehaviour
         Debug.Log($"[AquariumManager] Aquarium ready (async). Fish: {fishSpawner?.ActiveFish?.Count ?? 0}");
         JsBridge.Log($"AQUARIUM READY: {fishSpawner?.ActiveFish?.Count ?? 0} fish active"
                    + $" | shaders reapuntados al player: {DecorationPlacer.ShadersReapuntados}");
-    }
-
-    /// <summary>
-    /// Called by TvSceneBootstrap when the Cast INIT message arrives.
-    /// Synthesizes a transient SaveData from the mobile state and initializes the aquarium.
-    /// </summary>
-    public void InitializeFromCastState(TvAquariumState state)
-    {
-        if (state == null) return;
-        Debug.Log($"[AquariumManager] InitializeFromCastState — fish:{state.activeFish?.Count ?? 0}");
-
-        var castSave = new SaveData
-        {
-            selectedTankId    = state.selectedTankId,
-            selectedBgId      = state.bgId,
-            selectedSubId     = state.subId,
-            lightPresetId     = state.lightId,
-            // El móvil protege el <= 0 en su SaveSystem; la TV recibe el número crudo por
-            // Cast y no lo comprobaba: un fishSpeed 0 (o un JSON sin el campo) dejaba TODOS
-            // los peces clavados en el sitio, sin ningún error.
-            fishSpeedMultiplier = state.fishSpeed <= 0f ? 1f : Mathf.Clamp(state.fishSpeed, 0.25f, 3f)
-        };
-
-        if (state.activeFish != null)
-        {
-            foreach (var entry in state.activeFish)
-            {
-                string uid = Guid.NewGuid().ToString();
-                castSave.ownedFish.Add(new OwnedFishSave
-                {
-                    uid       = uid,
-                    speciesId = entry.speciesId,
-                    nickname  = entry.nickname,
-                    ageScale  = entry.ageScale
-                });
-                castSave.activeFishUids.Add(uid);
-            }
-        }
-
-        if (!string.IsNullOrEmpty(state.decoJson) && state.decoJson != "{}")
-        {
-            try
-            {
-                var wrapper = JsonUtility.FromJson<DecoPlacementList>(state.decoJson);
-                if (wrapper?.items != null) castSave.decoPositions = wrapper.items;
-            }
-            catch (Exception e)
-            {
-                Debug.LogWarning($"[AquariumManager] Cast deco parse failed: {e.Message}");
-            }
-        }
-
-        SaveData = castSave;
-        InitializeAquarium();
-
-        var amb = FindFirstObjectByType<AmbientModeController>();
-        if (amb != null)
-        {
-            switch (state.ambientMode)
-            {
-                case "sunset": amb.SetSunset(); break;
-                case "night":  amb.SetNight();  break;
-                default:       amb.SetDay();    break;
-            }
-        }
     }
 
     // ── Aquarium init ─────────────────────────────────────────────────────────

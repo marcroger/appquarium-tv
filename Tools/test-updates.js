@@ -148,6 +148,39 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
     await sleep(200);
   }
 
+  // ── TESTS 10-12: uid adoptado + emparejamiento ──────────────────────────────
+  //
+  // Se anaden DOS peces con uid explicito y despues se emparejan. Esto prueba de una vez:
+  //   · que la TV ADOPTA el uid del movil en vez de generar el suyo (si no, el pairs no
+  //     encontraria a nadie y saldrian 0 cableadas);
+  //   · el handler `pairs` completo;
+  //   · y de paso la carrera, porque el `pairs` va inmediatamente detras del `add_fish` que
+  //     todavia puede estar bajando su bundle.
+  const UID_A = 'uid-test-macho', UID_B = 'uid-test-hembra';
+  console.log('TEST 10: add_fish x2 con uid explicito del movil...');
+  await sendUpdate('add_fish', JSON.stringify({ speciesId: 'fish_moorish_idol', nickname: 'Macho', uid: UID_A }));
+  await sleep(400);
+  await sendUpdate('add_fish', JSON.stringify({ speciesId: 'fish_goby_firefish', nickname: 'Hembra', uid: UID_B }));
+  const t10 = await waitForLog('add_fish: fish_goby_firefish', 15000);
+  console.log(`  ${t10 ? '✅' : '❌'} add_fish con uid`);
+  results.push({ test: 'add_fish_con_uid', pass: t10 });
+  await sleep(300);
+
+  console.log('TEST 11: pairs con los dos uid -> tiene que cablear 1...');
+  await sendUpdate('pairs', JSON.stringify({ items: [{ maleUid: UID_A, femaleUid: UID_B }] }));
+  const t11 = await waitForLog('pairs: 1 recibidas, 1 cableadas', 6000);
+  console.log(`  ${t11 ? '✅' : '❌'} pairs empareja de verdad`
+            + (t11 ? '' : '   ← si dice "0 cableadas", el uid del movil NO se esta adoptando'));
+  results.push({ test: 'pairs_cablea', pass: t11 });
+  await sleep(300);
+
+  console.log('TEST 12: pairs con un uid que no existe -> tiene que DECIRLO...');
+  await sendUpdate('pairs', JSON.stringify({ items: [{ maleUid: UID_A, femaleUid: 'uid-que-no-existe' }] }));
+  const t12 = await waitForLog('recibidas pero sólo 0 cableadas', 6000);
+  console.log(`  ${t12 ? '✅' : '❌'} pairs distingue recibidas de cableadas`);
+  results.push({ test: 'pairs_reporta_no_cableadas', pass: t12 });
+  await sleep(200);
+
   await page.screenshot({ path: 'test-updates-result.png' });
   console.log('\nScreenshot: test-updates-result.png');
   await browser.close();
