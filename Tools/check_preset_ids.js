@@ -61,7 +61,32 @@ for (const f of A_REVISAR) {
   for (const [id, lineas] of malos) { console.log(`     '${id}' NO existe — línea ${lineas.join(', ')}`); fantasmas++; }
 }
 
+// ── Las cifras del contrato, que estan escritas A MANO ───────────────────────
+//
+// CAST_CONTRACT_TV.md §3 declara "11 fondos / 12 sustratos / 7 luces" a mano, y el repo MOVIL
+// depende de esas cifras. Una lista escrita a mano que nadie comprueba es justo el bug que
+// persigue este script: si alguien anade un preset y no toca el doc, el contrato queda
+// mintiendo EN SILENCIO a otro repo.
+const CONTRATO = 'CAST_CONTRACT_TV.md';
+let desfases = 0;
+try {
+  const doc = L(CONTRATO);
+  const cuenta = pre => [...validos].filter(v => v.startsWith(pre)).length;
+  for (const [fila, pre] of [['Fondos', 'bg_'], ['Sustratos', 'sub_'], ['Luces', 'light_']]) {
+    // La fila es: | Fondos | **11** | ... — se parte por '|' y se limpia a digitos.
+    const row = doc.split(String.fromCharCode(10)).find(l => l.startsWith('| ' + fila + ' '));
+    if (!row) { console.log('   ! ' + CONTRATO + ': no encuentro la fila "' + fila + '"'); desfases++; continue; }
+    const declarado = Number(row.split('|')[2].replace(/[^0-9]/g, ''));
+    const real = cuenta(pre);
+    if (declarado !== real) {
+      console.log('   ' + CONTRATO + ' dice ' + declarado + ' ' + fila.toLowerCase() + ' y en C# hay ' + real);
+      desfases++;
+    }
+  }
+  if (desfases === 0) console.log('OK ' + CONTRATO + ': las cifras de la tabla cuadran con los arrays de C#');
+} catch (e) { console.log('   ! ' + CONTRATO + ': no se pudo comprobar (' + e.message + ')'); }
+
 console.log(fantasmas === 0
   ? '\nSin ids fantasma.'
   : `\n${fantasmas} id(s) fantasma. Un id que no existe NO da error en runtime: el preset simplemente no cambia.`);
-process.exit(fantasmas === 0 ? 0 : 1);
+process.exit(fantasmas === 0 && desfases === 0 ? 0 : 1);
