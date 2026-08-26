@@ -67,6 +67,7 @@ for (const f of A_REVISAR) {
 // depende de esas cifras. Una lista escrita a mano que nadie comprueba es justo el bug que
 // persigue este script: si alguien anade un preset y no toca el doc, el contrato queda
 // mintiendo EN SILENCIO a otro repo.
+const NL = String.fromCharCode(10);
 const CONTRATO = 'CAST_CONTRACT_TV.md';
 let desfases = 0;
 try {
@@ -74,7 +75,7 @@ try {
   const cuenta = pre => [...validos].filter(v => v.startsWith(pre)).length;
   for (const [fila, pre] of [['Fondos', 'bg_'], ['Sustratos', 'sub_'], ['Luces', 'light_']]) {
     // La fila es: | Fondos | **11** | ... — se parte por '|' y se limpia a digitos.
-    const row = doc.split(String.fromCharCode(10)).find(l => l.startsWith('| ' + fila + ' '));
+    const row = doc.split(NL).find(l => l.startsWith('| ' + fila + ' '));
     if (!row) { console.log('   ! ' + CONTRATO + ': no encuentro la fila "' + fila + '"'); desfases++; continue; }
     const declarado = Number(row.split('|')[2].replace(/[^0-9]/g, ''));
     const real = cuenta(pre);
@@ -86,7 +87,34 @@ try {
   if (desfases === 0) console.log('OK ' + CONTRATO + ': las cifras de la tabla cuadran con los arrays de C#');
 } catch (e) { console.log('   ! ' + CONTRATO + ': no se pudo comprobar (' + e.message + ')'); }
 
+// -- Que ningun tipo de UPDATE se escape del contrato ------------------------
+//
+// Idea portada de la sesion del repo MOVIL (26-ago), que hizo el test simetrico y le cazo
+// un tipo sin documentar A LA PRIMERA -- el mismo dia que lo escribio. Aqui el riesgo es el
+// espejo: anadir un `case` al switch de ApplyUpdate y no contarlo en el contrato, con lo que
+// el otro repo se queda sin saber que existe.
+let sinDocumentar = 0;
+try {
+  const src = L('Assets/Scripts/Core/TvSceneBootstrap.cs').split(NL);
+  const iSwitch = src.findIndex(l => l.includes('switch (upd.type)'));
+  if (iSwitch < 0) throw new Error('no encuentro el switch de ApplyUpdate');
+  const tipos = [];
+  for (let i = iSwitch; i < src.length; i++) {
+    if (src[i] === '    }') break;              // fin del metodo ApplyUpdate
+    const m = src[i].match(/case "([a-z_]+)":/);
+    if (m) tipos.push(m[1]);
+  }
+  const doc = L(CONTRATO);
+  const faltan = tipos.filter(t => !doc.includes('| `' + t + '` |'));
+  if (faltan.length) {
+    console.log('   ' + CONTRATO + ' no documenta ' + faltan.length + ' tipo(s) de UPDATE: ' + faltan.join(', '));
+    sinDocumentar = faltan.length;
+  } else {
+    console.log('OK ' + CONTRATO + ': los ' + tipos.length + ' tipos de UPDATE estan documentados');
+  }
+} catch (e) { console.log('   ! tipos de UPDATE: no se pudo comprobar (' + e.message + ')'); }
+
 console.log(fantasmas === 0
   ? '\nSin ids fantasma.'
   : `\n${fantasmas} id(s) fantasma. Un id que no existe NO da error en runtime: el preset simplemente no cambia.`);
-process.exit(fantasmas === 0 && desfases === 0 ? 0 : 1);
+process.exit(fantasmas === 0 && desfases === 0 && sinDocumentar === 0 ? 0 : 1);
