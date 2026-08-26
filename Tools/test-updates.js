@@ -87,17 +87,26 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
   await sleep(200);
 
   // ── TEST 3: change_bg ────────────────────────────────────────────────────────
-  console.log('TEST 3: change_bg (bg_ocean, sync — no bundle)...');
-  await sendUpdate('change_bg', 'bg_ocean');
-  const t3 = await waitForLog('change_bg: bg_ocean');
-  console.log(`  ${t3 ? '✅' : '❌'} change_bg`);
+  //
+  // ⚠⚠ 2026-08-26 — Este test llevaba MESES en verde sin cambiar el fondo: mandaba
+  // `bg_ocean`, que NO existe (los válidos salen de `TankBackground.Presets`), y comprobaba
+  // que el receiver hiciera ECO del id. El receiver confirmaba «change_bg: bg_ocean» pase lo
+  // que pase, así que el test medía el eco, no el efecto.
+  //
+  // 🧭 Regla que sale de aquí: **no comprobar que el receiver repita lo que le mandaste**.
+  // Aquí se comprueba contra `agua: … (<id>)`, que `PublicarAspectoDelAgua` imprime leyendo
+  // `bg.CurrentPresetId` — el estado REAL del fondo, no la intención.
+  console.log('TEST 3: change_bg (bg_cave, sync — no bundle)...');
+  await sendUpdate('change_bg', 'bg_cave');
+  const t3 = await waitForLog('(bg_cave)');
+  console.log(`  ${t3 ? '✅' : '❌'} change_bg (verificado contra el estado real del fondo)`);
   results.push({ test: 'change_bg', pass: t3 });
   await sleep(200);
 
   // ── TEST 4: change_sub ───────────────────────────────────────────────────────
-  console.log('TEST 4: change_sub (sub_sand, sync — no bundle)...');
-  await sendUpdate('change_sub', 'sub_sand');
-  const t4 = await waitForLog('change_sub: sub_sand');
+  console.log('TEST 4: change_sub (sub_gravel, sync — no bundle)...');
+  await sendUpdate('change_sub', 'sub_gravel');
+  const t4 = await waitForLog('change_sub: ') && !consoleLogs.some(l => l.includes('ERR change_sub'));
   console.log(`  ${t4 ? '✅' : '❌'} change_sub`);
   results.push({ test: 'change_sub', pass: t4 });
   await sleep(200);
@@ -105,7 +114,7 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
   // ── TEST 5: change_light ─────────────────────────────────────────────────────
   console.log('TEST 5: change_light (light_blue, sync — no bundle)...');
   await sendUpdate('change_light', 'light_blue');
-  const t5 = await waitForLog('change_light: light_blue');
+  const t5 = await waitForLog('change_light: ') && !consoleLogs.some(l => l.includes('ERR change_light'));
   console.log(`  ${t5 ? '✅' : '❌'} change_light`);
   results.push({ test: 'change_light', pass: t5 });
   await sleep(200);
@@ -116,6 +125,28 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
   const t6 = await waitForLog('add_fish: fish_banggai_cardinalfish');
   console.log(`  ${t6 ? '✅' : '❌'} add_fish (catalog reuse)`);
   results.push({ test: 'add_fish_catalog_reuse', pass: t6 });
+  await sleep(200);
+
+  // ── TESTS 7-9: un id que NO existe tiene que CANTAR ──────────────────────────
+  //
+  // Estos tres son la red que faltaba: convierten en fallo lo que durante meses fue un
+  // verde. ⚠ Requieren el player construido a partir del 2026-08-26 (el que valida el id
+  // contra la lista y responde `ERR ...: id desconocido`). Contra un player anterior fallan
+  // A PROPÓSITO: ese player confirma el id fantasma como si lo hubiera aplicado.
+  const FANTASMAS = [
+    { tipo: 'change_bg',    id: 'bg_ocean'    },   // id-fantasma a propósito
+    { tipo: 'change_sub',   id: 'sub_black'   },   // id-fantasma a propósito
+    { tipo: 'change_light', id: 'light_green' },   // id-fantasma a propósito
+  ];
+  for (const f of FANTASMAS) {
+    console.log(`TEST ${7 + FANTASMAS.indexOf(f)}: ${f.tipo} con un id inexistente (${f.id}) → tiene que dar ERR...`);
+    await sendUpdate(f.tipo, f.id);
+    const ok = await waitForLog(`ERR ${f.tipo}: id desconocido '${f.id}'`, 4000);
+    console.log(`  ${ok ? '✅' : '❌'} ${f.tipo} rechaza '${f.id}'`
+              + (ok ? '' : '   ← ¿player anterior al 2026-08-26? Ese confirma el id fantasma.'));
+    results.push({ test: `${f.tipo}_id_inexistente`, pass: ok });
+    await sleep(200);
+  }
 
   await page.screenshot({ path: 'test-updates-result.png' });
   console.log('\nScreenshot: test-updates-result.png');

@@ -818,15 +818,82 @@ public class TvSceneBootstrap : MonoBehaviour
         }
     }
 
+    // ── Los tres «cambiar preset»: fondo, sustrato y luz ─────────────────────
+    //
+    // ⚠⚠ 2026-08-26 — Los tres CONFIRMABAN ids que no existen. `SetPreset` y `SetSubstrate`
+    // se plantan en un `Debug.LogWarning` y vuelven sin tocar nada; el `Debug.Log` NO viaja
+    // por el canal Cast (ver CLAUDE.md), así que desde fuera sólo se veía la línea de aquí
+    // abajo — «change_sub: sub_black» — y parecía que había funcionado. Encima el id fantasma
+    // se guardaba en `SaveData`.
+    //
+    // Lo que costó: el 25-ago se dio por buena una prueba entera con `sub_black`, y
+    // `Tools/test-updates.js` llevaba meses en VERDE mandando `bg_ocean`, que tampoco existe:
+    // el test comprobaba que el receiver hacía eco del id, no que el fondo cambiara.
+    //
+    // Ahora se hacen las dos cosas que faltaban:
+    //   1. Se valida el id contra la lista ANTES, y si no está se dice cuáles valen — el
+    //      patrón que `ambient` ya usaba con day|sunset|night.
+    //   2. Se RELEE el estado después de aplicar en vez de reportar la intención (mismo
+    //      criterio que la sonda de render del 25-ago). Si algún día el setter deja de
+    //      aplicar por otro motivo, se verá aquí en vez de salir en verde.
+
+    private static string[] IdsDeFondo()
+    {
+        var ids = new string[TankBackground.Presets.Length];
+        for (int i = 0; i < ids.Length; i++) ids[i] = TankBackground.Presets[i].id;
+        return ids;
+    }
+
+    private static string[] IdsDeSustrato()
+    {
+        var ids = new string[DecorationPlacer.SubstratePresets.Length];
+        for (int i = 0; i < ids.Length; i++) ids[i] = DecorationPlacer.SubstratePresets[i].id;
+        return ids;
+    }
+
+    private static string[] IdsDeLuz()
+    {
+        var ids = new string[TankLightingController.Presets.Length];
+        for (int i = 0; i < ids.Length; i++) ids[i] = TankLightingController.Presets[i].id;
+        return ids;
+    }
+
+    /// <summary>
+    /// ¿Está `id` en la lista? Si no, lo reporta por el canal Cast CON la lista de válidos,
+    /// que es lo que convierte un «no pasó nada» en un diagnóstico.
+    /// </summary>
+    private static bool ComprobarId(string tipo, string id, string[] validos)
+    {
+        if (!string.IsNullOrEmpty(id))
+            foreach (var v in validos)
+                if (v == id) return true;
+
+        JsBridge.Log($"ERR {tipo}: id desconocido '{id}' — válidos: {string.Join("|", validos)}");
+        return false;
+    }
+
     private void ChangeBg(string bgId)
     {
         var mgr = AquariumManager.Instance;
         if (mgr == null) return;
         var bg = mgr.tankController.GetComponent<TankBackground>();
-        if (bg != null) bg.SetPreset(bgId);
+        if (bg == null) { JsBridge.Log("ERR change_bg: no hay TankBackground en la escena"); return; }
+        if (!ComprobarId("change_bg", bgId, IdsDeFondo())) return;
+
+        string previo = bg.CurrentPresetId;
+        bg.SetPreset(bgId);
+
+        if (bg.CurrentPresetId != bgId)
+        {
+            JsBridge.Log($"ERR change_bg: '{bgId}' es válido pero el fondo sigue en '{bg.CurrentPresetId}'");
+            return;
+        }
+
         if (mgr.SaveData != null) mgr.SaveData.selectedBgId = bgId;
         PublicarAspectoDelAgua();   // el color del agua sale del preset: hay que reeditarlo
-        JsBridge.Log($"change_bg: {bgId}");
+        JsBridge.Log(previo == bgId
+            ? $"change_bg: {bgId} — ya estaba puesto, sin cambio"
+            : $"change_bg: {previo} → {bgId}");
     }
 
     private void ChangeSub(string subId)
@@ -834,9 +901,22 @@ public class TvSceneBootstrap : MonoBehaviour
         var mgr = AquariumManager.Instance;
         if (mgr == null) return;
         var placer = mgr.tankController.GetComponent<DecorationPlacer>();
-        if (placer != null) placer.SetSubstrate(subId);
+        if (placer == null) { JsBridge.Log("ERR change_sub: no hay DecorationPlacer en la escena"); return; }
+        if (!ComprobarId("change_sub", subId, IdsDeSustrato())) return;
+
+        string previo = placer.CurrentSubstrateId;
+        placer.SetSubstrate(subId);
+
+        if (placer.CurrentSubstrateId != subId)
+        {
+            JsBridge.Log($"ERR change_sub: '{subId}' es válido pero el suelo sigue en '{placer.CurrentSubstrateId}'");
+            return;
+        }
+
         if (mgr.SaveData != null) mgr.SaveData.selectedSubId = subId;
-        JsBridge.Log($"change_sub: {subId}");
+        JsBridge.Log(previo == subId
+            ? $"change_sub: {subId} — ya estaba puesto, sin cambio"
+            : $"change_sub: {previo} → {subId}");
     }
 
     private void ChangeLight(string lightId)
@@ -844,9 +924,22 @@ public class TvSceneBootstrap : MonoBehaviour
         var mgr = AquariumManager.Instance;
         if (mgr == null) return;
         var lighting = mgr.tankController.GetComponent<TankLightingController>();
-        if (lighting != null) lighting.SetPreset(lightId);
+        if (lighting == null) { JsBridge.Log("ERR change_light: no hay TankLightingController en la escena"); return; }
+        if (!ComprobarId("change_light", lightId, IdsDeLuz())) return;
+
+        string previo = lighting.CurrentPresetId;
+        lighting.SetPreset(lightId);
+
+        if (lighting.CurrentPresetId != lightId)
+        {
+            JsBridge.Log($"ERR change_light: '{lightId}' es válido pero la luz sigue en '{lighting.CurrentPresetId}'");
+            return;
+        }
+
         if (mgr.SaveData != null) mgr.SaveData.lightPresetId = lightId;
-        JsBridge.Log($"change_light: {lightId}");
+        JsBridge.Log(previo == lightId
+            ? $"change_light: {lightId} — ya estaba puesta, sin cambio"
+            : $"change_light: {previo} → {lightId}");
     }
 
     /// <summary>

@@ -303,6 +303,62 @@ a los que hay desplegados (fish `b5a9bb42…` local contra `724dbae8…` en R2).
 hay que volver a cuadrarlos, la vía es un New Build de Addressables + redespliegue de los 80
 bundles, nunca subir el catálogo suelto.
 
+### ⚠⚠ Un id de preset que no existe NO da error: el receiver lo confirma (2026-08-26)
+
+`change_bg` / `change_sub` / `change_light` **confirmaban cualquier id**. `SetPreset` y
+`SetSubstrate` se plantan en un `Debug.LogWarning` —que **no viaja por el canal Cast**— y
+vuelven sin tocar nada, pero el handler logueaba `change_sub: sub_black` igual y encima
+guardaba el id fantasma en `SaveData`.
+
+Había **seis ids fantasma** repartidos por el proyecto: `bg_ocean`, `bg_reef`, `bg_sunset`,
+`sub_black`, `sub_coral` (y `light_green`, que sí es legítimo: preset retirado que
+`AquariumManager` migra a `light_white`). Consecuencias medidas:
+
+- La tecla **B** del `?devtest=1` no hacía nada en **3 de cada 6** pulsaciones, y la **S** en
+  **2 de cada 4**. Con eso se dio por buena una prueba entera el 25-ago.
+- **`Tools/test-updates.js` llevaba MESES en verde** mandando `bg_ocean`: comprobaba que el
+  receiver hiciera **eco** del id, no que el fondo cambiara. La prueba de que no cambiaba
+  estaba en la línea de al lado —`agua: … (bg_kelp)`— y nadie la miró.
+
+Lo que hay ahora:
+
+1. Los tres handlers **validan** contra el array de C# (`ERR change_bg: id desconocido 'x' —
+   válidos: …`) y **releen el estado** después de aplicar en vez de reportar la intención.
+2. `DEV_BGS`/`DEV_SUBS` del `index.html` con ids reales.
+3. `test-updates.js` comprueba el **efecto** (para el fondo, contra `agua: … (<id>)`) y añade
+   tres tests **negativos** que exigen el `ERR`. ⚠ Esos tres fallan contra un player anterior
+   al 2026-08-26 — a propósito.
+4. **`node Tools/check_preset_ids.js`** — guarda sin Unity, sin navegador y sin tele: lee los
+   ids de los arrays de C# y revisa receiver y herramientas. Sale 1 si hay fantasmas.
+
+🧭 **Regla:** no comprobar nunca que el receiver **repita** lo que le mandaste. Comprobar
+contra algo que lea el estado real.
+
+### ⚠⚠ El rig local servía un catálogo que R2 no tiene (2026-08-26)
+
+`Tools/static-server.js` + `?devtest=1` (puerto 3001) llevaba roto **desde el último build de
+player**: los 7 bundles daban **404** y el acuario salía vacío. No era el token, ni CORS, ni el
+anti-bot de Cloudflare — el Worker respondía **404 con CORS puesto y preflight 204**, o sea
+«ese bundle no está en el bucket».
+
+Es la trampa de la sección anterior mordiendo al rig local: el servidor servía
+`webgl-output/StreamingAssets/aa/catalog.bin` **del disco**, que pide hashes que un build de
+player regeneró y que **nunca se despliegan**.
+
+⚠⚠ **Los dos catálogos pesan EXACTAMENTE lo mismo (44.826 bytes)** y sólo cambian los hashes
+de dentro. Comparar por tamaño —o el «suele ser idéntico y no hace falta tocarlo» que decía
+este mismo doc— **no lo detecta**.
+
+**Arreglado:** el servidor sirve `/StreamingAssets/aa/*` **desde R2** (lo que ve la tele) y el
+resto del disco, que es justo lo que se quiere probar. `--local-catalog` vuelve a lo de antes.
+Tras el cambio: **7/7 bundles OK** y `test-updates.js` **6/6**.
+
+```bash
+node Tools/static-server.js       # deja corriendo el receiver en localhost:3001
+node Tools/test-updates.js        # los 9 tests de los handlers UPDATE
+node Tools/check_preset_ids.js    # ids fantasma
+```
+
 ### Estado actual — 2026-08-19 ⭐
 
 ⚠ **Cifras del 19-ago. El 20-ago se rebuildeó el player** (hook de auth): `.data` = **15.942.355** ·
@@ -553,7 +609,7 @@ print('OK index.html')
 | `Assets/Scripts/Stubs/` | TvStubs (stubs para clases mobile-only referenciadas indirectamente) |
 | `Assets/Settings/` | **TvRenderPipeline.asset** ⭐ + **TvUniversalRenderer.asset** — el render pipeline que faltaba (2026-08-21). Sin esto no hay post-proceso |
 | `Assets/Editor/` | **TvUrpSetup** ⭐ (crea/enciende/apaga el pipeline y verifica `postProcessData`), **TvRenderProbe** (sonda: ¿se está renderizando, y con qué?), **TvGradeSweep** (barrido de grado en el Editor — ⚠ NO fiable para elegir valores, ver `CAST_PARIDAD_VISUAL.md` §0.1), TvAddressablesSetup, TvBuildTools, SyncFromMobileMenu, **TvBuildPostprocess** (parchea settings.json tras cada build), **TvProdBuild** ⭐ (build de producción en batchmode + preflight de audio), **TvWasmOptimize** ⭐ (fuerza `DiskSizeLTO` en cualquier build), TvEmptyTestBuild, **TvAuthPreflight** ⭐ (aborta el build si falta el token de los bundles), TvShadowDiag, **TvDecoOptimize** ⭐ (pasa una deco a texturas DXT1 sueltas: −49,8 % de peso medido) |
-| `Tools/` | ~30 ficheros. Los que importan: **grade-tune.js** ⭐ (afina el grado sobre el player REAL en Chrome, mandando mensajes `GRADE`), **grade_contact_sheet.py** (hoja de contactos + luminancia/saturación por bandas, con guarda de «esto no mide nada»), **r2-auth-worker/** ⭐ (el Worker portero de los bundles + sus dos baterías de pruebas), **SyncFromMobile.ps1**, **cast-headless.js** (sender sin navegador), **cast-run.sh** (ciclo de medición completo), **restore-production-receiver.sh**, **extract_glb_textures.py** (saca las texturas embebidas de un GLB + `mapeo.txt`, paso previo a `TvDecoOptimize`), **r2_huerfanos.py** (lista/borra bundles huérfanos de R2), y los `rcv-*.html` (receivers de diagnóstico). ⚠ Varios escriben en R2 de producción. |
+| `Tools/` | ~30 ficheros. Los que importan: **grade-tune.js** ⭐ (afina el grado sobre el player REAL en Chrome, mandando mensajes `GRADE`), **grade_contact_sheet.py** (hoja de contactos + luminancia/saturación por bandas, con guarda de «esto no mide nada»), **r2-auth-worker/** ⭐ (el Worker portero de los bundles + sus dos baterías de pruebas), **SyncFromMobile.ps1**, **check_preset_ids.js** ⭐ (guarda: ningún id de preset fantasma, sin Unity ni tele), **static-server.js** (rig local en :3001 — sirve el catálogo **desde R2**, no del disco), **test-updates.js** (los 9 tests de los handlers UPDATE), **cast-headless.js** (sender sin navegador), **cast-run.sh** (ciclo de medición completo), **restore-production-receiver.sh**, **extract_glb_textures.py** (saca las texturas embebidas de un GLB + `mapeo.txt`, paso previo a `TvDecoOptimize`), **r2_huerfanos.py** (lista/borra bundles huérfanos de R2), y los `rcv-*.html` (receivers de diagnóstico). ⚠ Varios escriben en R2 de producción. |
 
 ---
 

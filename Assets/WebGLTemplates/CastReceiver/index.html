@@ -896,8 +896,14 @@
       }
       var _devBgIdx  = 0;
       var _devSubIdx = 0;
-      var DEV_BGS  = ['bg_ocean','bg_reef','bg_cave','bg_abyss','bg_sunset','bg_tropical'];
-      var DEV_SUBS = ['sub_sand','sub_gravel','sub_black','sub_coral'];
+      // ⚠⚠ 2026-08-26 — Estas dos listas tenían ids que NO EXISTEN: de los 6 fondos,
+      // 'bg_ocean', 'bg_reef' y 'bg_sunset' no están en TankBackground.Presets, y de los 4
+      // sustratos, 'sub_black' y 'sub_coral' no están en DecorationPlacer.SubstratePresets.
+      // O sea que la tecla B no hacía nada en 3 de cada 6 pulsaciones y la S en 2 de cada 4,
+      // en silencio (el receiver confirmaba el id igual). Con eso se dio por buena una prueba
+      // entera el 25-ago. Si añades uno aquí, tiene que estar en el array de C#.
+      var DEV_BGS  = ['bg_classic','bg_tropical','bg_kelp','bg_cave','bg_abyss','bg_arctic'];
+      var DEV_SUBS = ['sub_sand','sub_gravel','sub_volcanic','sub_coral_rubble'];
       var isDevTest = new URLSearchParams(window.location.search).get('devtest') === '1';
 
       window.addEventListener('keydown', function(e) {
