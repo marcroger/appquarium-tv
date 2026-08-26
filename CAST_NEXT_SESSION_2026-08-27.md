@@ -37,9 +37,23 @@ node Tools/cast-headless.js --ip <IP> --fish 12 \
 `player-desplegado-escala75/` (`.wasm` md5 `5f886ff3…`). Y `renderScale` sigue siendo ajustable
 en caliente: `--raw 'GRADE={"renderScale":0.70}@40'`.
 
-⚠ **Estado del deploy:** *(rellenar — a la hora de escribir esto el build estaba hecho y
-verificado en local, pendiente de que el user diga si se sube a R2)*. Si se sube: sólo
-`Build/` + `index.html`, **NADA de `StreamingAssets/`**.
+✅ **DESPLEGADO en R2 el 26-ago a las 10:44** (el user lo pidió; valida mañana). Subí sólo
+`Build/` (los 4 ficheros) + `index.html`, **nada de `StreamingAssets/`** y **sin `--delete`**.
+Comprobado después:
+
+| | |
+|---|---|
+| sello que sirve R2 | `rcv 2026-08-26 ids` |
+| `{{{` sin sustituir en el `index.html` | **0** — es el procesado, no el template |
+| md5 de `.wasm` / `.data` | `ba33d26a…` / `9ac8a928…`, **idénticos al local** |
+| `keepalive_black.mp4` y `silence.wav` | **siguen ahí** (la trampa del `--delete`, esquivada) |
+
+🧭 El player desplegado se probó en local **contra el catálogo de R2**, no contra el del
+disco, así que los hashes de bundle que pide son los que hay en producción.
+
+⚠ De paso, una discrepancia con `CLAUDE.md`: dice que en `Build/` viven también los rigs de
+diagnóstico (`webgl-min.*`, `webgl-output-empty.*`) y **ahí sólo hay los 4 ficheros del player**.
+No los ha borrado este deploy (`sync` sin `--delete` no puede borrar nada); ya no estaban.
 
 ---
 
