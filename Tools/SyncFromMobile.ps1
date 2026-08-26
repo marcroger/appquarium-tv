@@ -58,6 +58,20 @@ $FoldersToSync = @(
     "Assets\Resources\Data"
 )
 
+# Archivos que NUNCA se copian, aunque esten dentro de una carpeta de $FoldersToSync.
+#
+# ⚠⚠ 2026-08-26 — Las carpetas se copian ENTERAS, asi que un fichero nuevo en el movil
+# entra aqui sin que nadie lo decida. `FishStatusOverlay.cs` (nuevo en el movil el 26-ago)
+# usa cuatro miembros de `UIManager` que el stub de TV NO tiene -- `C_SEX_MALE`,
+# `C_SEX_FEMALE`, `OverlayCanvas` y `MakeLabel` -- asi que un `-Yes` a ciegas deja la TV
+# SIN COMPILAR. Es UI, y la TV no tiene UI: no hay nada que portar.
+#
+# 🧭 Antes de anadir uno aqui, comprobar si es mobile-only de verdad. La alternativa es
+# ampliar el stub de `TvStubs.cs`, que cuesta mas y arrastra codigo muerto.
+$FilesToExclude = @(
+    "Assets\Scripts\Fish\FishStatusOverlay.cs"
+)
+
 # Archivos específicos que se sincronizan individualmente (con su .meta)
 $FilesToSync = @(
     "Assets\Scripts\Core\AquariumCameraController.cs",
@@ -185,7 +199,12 @@ foreach ($folder in $FoldersToSync) {
     }
     Get-FolderFileList -Root $MobileRoot -RelFolder $folder | ForEach-Object {
         # Ignorar .meta — se copia junto al archivo principal
-        if ($_ -notlike "*.meta") { $candidates.Add($_) }
+        if ($_ -like "*.meta") { return }
+        if ($FilesToExclude -contains $_) {
+            Write-Host "  - Excluido a proposito: $_" -ForegroundColor DarkGray
+            return
+        }
+        $candidates.Add($_)
     }
 }
 foreach ($file in $FilesToSync) {
