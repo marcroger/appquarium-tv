@@ -42,6 +42,7 @@ El móvil envía el estado del tanque vía Google Cast SDK; este proyecto **rend
 | [`CAST_NEXT_SESSION_2026-08-20.md`](CAST_NEXT_SESSION_2026-08-20.md) | Estado al cierre del 19-ago, Estado al cierre del 19-ago, pendientes reales y las trampas caras (bundle local que cambia de hash, y los 3 fallos de la conversión de materiales). |
 | [`ESTADO_PRODUCCION_2026-08-19.md`](ESTADO_PRODUCCION_2026-08-19.md) | 📊 **Foto de estado y valoración para producción.** Qué está validado, y los 2 puntos que faltan antes de difundir (bucket abierto + rigs de diagnóstico servidos). |
 | [`DECOS_PESO_PARA_MOVIL.md`](DECOS_PESO_PARA_MOVIL.md) | 📄 **Para leer en el repo MÓVIL.** Las 3 palancas de peso de decos, qué se reutiliza, qué cambiar (DXT1→ASTC/ETC2) y las 7 trampas ya pagadas. |
+| [`CAST_HANDOFF_MOVIL_2026-08-26.md`](CAST_HANDOFF_MOVIL_2026-08-26.md) | 📲 **PARA LA SESIÓN DEL REPO MÓVIL.** Todo lo que cambió de su lado del contrato el 26-ago y no llegó a recibir: los **dos cambios de la Fase 2** (`/mint-token` con credencial, propiedad en modo `log`), el emparejamiento ya aceptado, la carrera del `pairs`, y lo que les toca. **Es el fichero que hay que pasarles.** |
 | [`CAST_CONTRACT_TV.md`](CAST_CONTRACT_TV.md) | 🤝 **El contrato del canal Cast, lado receiver.** Qué campos del INIT leo de verdad y qué hago si faltan, los 12 UPDATE con su conducta ante basura, y **lo que NO cumplo**. Su pareja es `CAST_CONTRACT.md` en el repo MÓVIL. Regla fijada entre los dos: **todo cambio es aditivo**. |
 | [`CAST_UPDATES.md`](CAST_UPDATES.md) | ⭐ Protocolo UPDATE en tiempo real — tipos, payloads, gestión memoria, calls mobile pendientes. |
 | [`CAST_NETFLIX_SPEC.md`](CAST_NETFLIX_SPEC.md) | Spec ejecutable para Fase A.1 — contrato del refactor Netflix. 10 secciones. |
@@ -368,6 +369,70 @@ node Tools/static-server.js       # deja corriendo el receiver en localhost:3001
 node Tools/test-updates.js        # los 9 tests de los handlers UPDATE
 node Tools/check_preset_ids.js    # ids fantasma
 ```
+
+### 🐟 El emparejamiento estaba montado y VACÍO (2026-08-26)
+
+Toda la maquinaria de parejas existía en la TV —`FishAgent.WirePairsFromSave`,
+`SaveData.activePairs`, `BreedingPair`, `SteeringController.PairBond()` con peso **1,8** en Idle y
+**1,2** en Explore— **y no se usaba nunca**: `TvAquariumState` no transportaba las parejas, así que
+`activePairs` estaba siempre vacío y la función se iba por su primera línea. Una pareja emparejada
+nadaba junta en el móvil y **suelta** en la tele. Lo encontró la sesión del repo móvil.
+
+- **El uid del móvil se ADOPTA** (INIT y `add_fish`). Antes se generaba aquí con `Guid.NewGuid()`
+  en **tres** sitios; quedan dos, ambos fallback para cliente viejo.
+  ⚠ `uid` en `TvAddFishPayload` **no es opcional**: un pez que entra a mitad de sesión con uid
+  propio **no puede emparejarse jamás**.
+- **UPDATE `pairs`** = lista **completa**, no delta: `{"items":[{maleUid,femaleUid},…]}`. Encaja
+  sin adaptador porque `WirePairsFromSave` limpia **todos** los partners antes de re-cablear.
+- ⚠⚠ **La carrera.** El móvil emite `pairs` justo detrás del `add_fish` que forma la pareja, pero
+  `AddFishAsync` **espera una descarga de bundle** y un `FishAgent` no entra en `FishAgent.All`
+  hasta su `OnEnable`. El `pairs` puede llegar **antes que el pez** → `All.Find` devuelve null →
+  la pareja se descarta **en silencio**, y como `pairs` sólo se emite al cambiar, no se reintenta.
+  **Fix:** re-emparejar tras cada `add_fish` que termine bien.
+- 🧭 **Se reporta lo CABLEADO, no lo recibido**: `pairs: 3 recibidas pero sólo 2 cableadas`. Esa
+  diferencia *es* el síntoma de la carrera.
+
+### 🔐 Fase 2 del JWT — escrita y probada, SIN desplegar (2026-08-26)
+
+El Worker sólo comparaba contra `BUNDLE_TOKENS`, así que **el bloqueo de la Fase 2 no era sólo del
+móvil**: un JWT habría recibido 401. Ya está la verificación HS256 + `POST /mint-token`
+(`Tools/r2-auth-worker/`, **42/42** en `test-local.mjs`, incluidos firma manipulada, `alg: none`,
+HS512, caducado y sin `exp`).
+
+⚠⚠ **Dos decisiones que NO estaban en el spec** y que el móvil tiene que conocer — están en
+`CAST_R2_AUTH_MOVIL.md` §1.4 y en el handoff:
+
+1. **`/mint-token` NO es abierto**: exige `Bearer <MINT_TOKENS>`, credencial propia del APK. Un
+   endpoint de emisión sin credencial dejaría pedir `isPremium` a cualquiera → la Fase 2
+   protegería **menos** que la Fase 1.
+2. **`OWNERSHIP_MODE=log`**: firma y caducidad se verifican de verdad, pero un bundle que no
+   consta como suyo **se sirve igual**, marcado `X-Aq-Ownership: would-deny`. Si los ids de los
+   claims llegaran mal, el usuario se quedaría sin **su** acuario → tele vacía, el síntoma más
+   caro de diagnosticar aquí. Se pasa a `enforce` cuando el contador sea 0.
+
+**Para desplegarlo** hacen falta dos secrets que pone el user:
+```bash
+cd Tools/r2-auth-worker
+npx wrangler secret put JWT_SECRET
+npx wrangler secret put MINT_TOKENS
+npx wrangler deploy
+```
+Es aditivo: sin ellos el camino nuevo da `503` y el token constante sigue igual.
+
+### 🧪 Guardas que se pagan solas (2026-08-26)
+
+`node Tools/check_preset_ids.js` — sin Unity, sin navegador y sin tele. Comprueba tres cosas:
+
+1. Que **ningún id de preset fantasma** ande suelto por el receiver o las herramientas (encontró
+   **cinco** el día que se escribió).
+2. Que las **cifras del contrato** (`11 fondos / 12 sustratos / 7 luces`) cuadren con los arrays
+   de C#. Un doc con listas a mano del que **depende otro repo** es el mismo bug que persigue.
+3. Que **todo tipo de UPDATE del switch esté documentado** en `CAST_CONTRACT_TV.md`. Cazó `pairs`
+   el mismo día en que se cableó. ⚠ El escáner **corta en el fin de `ApplyUpdate`**, o se cuela el
+   switch de `ApplyAmbientMode`: si cuenta 15 tipos en vez de 12, se pasó de largo.
+
+🧭 No es descuido de nadie: **la ventana entre escribir código y escribir el doc siempre existe**,
+y en esa ventana el contrato miente.
 
 ### Estado actual — 2026-08-19 ⭐
 

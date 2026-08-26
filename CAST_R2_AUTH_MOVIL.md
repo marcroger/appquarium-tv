@@ -77,6 +77,10 @@ Es decir: `decos_remote_assets_deco_coral_acropora_205d35d0….bundle` → `deco
 Si el móvil guarda los ids con otro formato (sufijos de instancia, prefijos distintos), **hay que
 normalizarlos antes de meterlos en los claims** o el usuario se quedará sin sus propias decos.
 
+> 📲 **Si eres la sesión del repo MÓVIL, lee antes**
+> [`CAST_HANDOFF_MOVIL_2026-08-26.md`](CAST_HANDOFF_MOVIL_2026-08-26.md): resume esto y todo lo
+> demás que cambió de tu lado el 26-ago.
+
 ### 1.4 El endpoint de emisión ✅ YA EXISTE (escrito el 2026-08-26, **sin desplegar**)
 
 `POST https://appquarium-assets.appquarium.workers.dev/mint-token`
