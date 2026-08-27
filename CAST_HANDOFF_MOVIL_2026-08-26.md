@@ -270,12 +270,18 @@ compilar-castear en vez de quince.
 
 ---
 
-## 7. Estado del lado TV, al cierre del 26-ago
+## 7. Estado del lado TV — actualizado el **27-ago por la tarde**
+
+⚠ El fichero se llama `…2026-08-26` porque se empezó ese día, pero **esto es del 27**.
 
 | | |
 |---|---|
-| Player desplegado | **`rcv 2026-08-26 uid+pairs`** · `.wasm` 21.684.934 · `.data` 19.505.585 |
-| Verificado sin device | `test-updates.js` **12/12** · Worker **42/42** · 0 errores CS |
-| Verificado EN device | **nada de esto todavía** — la caja estaba apagada |
-| Worker Fase 2 | escrito y probado, **sin desplegar** (faltan los secrets) |
+| Player desplegado | **`rcv 2026-08-27 rmuid`** · `.wasm` 21.687.176 · `.data` 19.506.551 |
+| Verificado **EN device** | ✅ **dos tandas limpias** (231 s y 221 s): parejas cableadas, `remove_fish` por uid, ciclo día/noche, `renderScale 0,75`, **WASM 111 MB plano**, **0 errores**. Sello leído en pantalla |
+| Verificado sin device | `test-updates.js` **16/16** · `check_preset_ids.js` limpio · Worker `test-local.mjs` **42/42** · `smoke-test.sh` contra el Worker vivo **12/12** |
+| 🔐 Worker Fase 2 | escrito y probado, **SIGUE SIN DESPLEGAR** — faltan `JWT_SECRET` y `MINT_TOKENS`, que sólo puede poner el user. **Un JWT recibiría hoy un `401`** |
 | Rama | `feat/ciclo-dia-noche`, **sin push**, `main` intacto |
+
+⚠ **Lo que NO está probado, y es vuestro:** que el emisor del móvil mande `uid`, `activePairs` y
+el `pairs` como espera este contrato. En la tele se probó con `cast-headless.js` mandando esos
+campos **a mano**.
