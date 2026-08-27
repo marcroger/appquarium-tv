@@ -11,6 +11,61 @@
 
 ---
 
+## 0.bis ✅✅✅ Y UNA TERCERA TANDA: `rcv 2026-08-27 decorot` DESPLEGADO Y VALIDADO
+
+Por la tarde entró un tramo entero más, salido de que **el repo móvil revisó nuestro contrato**.
+Tres cosas que eran nuestras y no lo sabíamos, más una herramienta nueva.
+
+| en el device (tanda de 216 s, **0 errores**, WASM 111 MB) | |
+|---|---|
+| `pairs: 1 recibidas, 1 cableadas` | ✅ |
+| `add_deco: … +rot +tilt 12°` | ✅ el cuaternión llega y se aplica |
+| `remove_fish: … uid=uid-dev-hembra (quedan 13 peces)` | ✅ |
+| `DUMP` con 14 peces y 5 decos, parseable | ✅ |
+| tras quitar la hembra: `uid-dev-macho … pareja=-` | ✅ se retira la pareja y se re-cablea |
+
+### Lo que entró
+
+1. **`add_deco` perdía datos.** Sólo llevaba 6 campos, pero tras la primera rotación la verdad
+   vive en el cuaternión `DecoPlacement.userRot`, no en `rotationY`. Reemitirlo sincronizaba
+   mover/escalar/voltear pero **no girar, inclinar ni montar** — justo los que se ven mal. Ahora
+   lleva `tiltX`, `hasUserRot`, `quat*` y `mountedOnInstanceId`, con los **mismos nombres que
+   `DecoPlacement`**. 🧭 El camino del INIT ya lo hacía bien desde siempre: se copió ése.
+2. **La ventana ciega del `pairs`.** `SaveData` no existe hasta que acaban los bundles, y el
+   `pairs` del móvil sólo se emite al cambiar: un cambio en esa ventana **se perdía para
+   siempre**. Ahora se guarda y se reaplica al terminar la carga.
+3. **Comida doble.** Su autoalimentador emite `feed` desde el 26-ago y el nuestro seguía soltando
+   lo suyo cada 240 s. Ahora se aparta mientras el sender alimente, y caduca a 1,5 intervalos.
+4. 🔬 **UPDATE `dump`** — vuelca el estado **montado** (posición del transform vivo, no del
+   payload), ordenado por id y con precisión fija, **para diffear la tele contra el móvil**.
+
+### ⚠⚠ Dos trampas que costó cazar, las dos de fallo silencioso
+
+- **El volcado salía con coma decimal**: `pos=(4,12,-1,87,0,54)`. Con coma decimal Y coma
+  separadora **no hay forma de saber dónde acaba un número**, y el volcado existe justo para que
+  alguien lo parsee. **El test pasaba en verde**: contaba líneas y comprobaba que las cuentas
+  cuadraran, no que los números se pudieran leer. **Se vio mirando la salida de verdad.**
+  Arreglado con `InvariantCulture` y un test que exige punto decimal **y que rechaza el formato
+  viejo** (idea del repo móvil, mejor que la nuestra: un patrón que acepta las dos formas no fija
+  nada).
+- **El player construido no llevaba el `dump`**: se añadió después de compilar. Desplegarlo así
+  habría hecho que su `SendUpdate("dump")` llegara a un `switch` sin `default` → **silencio**.
+  Cazado comparando el mtime del `.cs` contra el del `.wasm`.
+
+### ⚠ Una carga colgada, y cómo se diagnosticó bien
+
+La primera vuelta de la tanda **se colgó bajando el bundle 12 de 16** y nunca terminó: el volcado
+salió con `peces=0 decos=0`. No era el Worker.
+
+⚠⚠ **La primera comprobación fue la equivocada y daba un 404 engañoso**: se probó el bundle con el
+hash **del disco local**, que NO es el que pide el catálogo desplegado. Con el nombre sacado del
+catálogo de R2 responde **200 en 0,3 s, tres veces**. Repetida la tanda, cargó 16/16 en 0,6 s.
+
+🧭 **Regla:** si el acuario sale vacío o a medias, **repetir la tanda antes de tocar código**, y
+para probar un bundle sacar el nombre **del catálogo desplegado**, nunca de `ServerData/` local.
+
+---
+
 ## 0. ✅✅ LAS DOS TANDAS: HECHAS Y LIMPIAS (2026-08-27, por la tarde)
 
 El user llegó a casa y encendió la tele el mismo día. **Las dos tandas de §1 se ejecutaron y
@@ -229,9 +284,15 @@ así que no sirve para comparar. Corregido en el doc de ayer.
 
 ## 6. Pendientes
 
-- [ ] ⭐ **Las dos tandas** (§1).
-- [ ] ⭐ **La comparación de fondos con el mismo preset** (§2) — es lo que decide si queda trabajo
-      de nitidez o si lo visual está cerrado.
+- [x] ✅ **Las dos tandas** (§1) — hechas y limpias, más una tercera (§0.bis).
+- [ ] ⭐⭐ **LA SESIÓN CON EL MÓVIL REAL.** El repo móvil compila el APK con uid, parejas,
+      `remove_fish` por uid, `change_tank`, edición de decos y su propio volcado. **Una sola
+      sesión cierra las dos cosas que quedan**: su §6.5 (`peces: N (uid propios: 0)` y
+      `pairs: N recibidas, N cableadas`) **y** la comparación visual de §2, porque por fin habrá
+      el **mismo estado en las dos pantallas**. Protocolo: mismo preset de fondo y mismo modo
+      ambiente, `adb exec-out screencap` de la tele, captura del teléfono, y **diff de los dos
+      volcados** — que debería enseñar sólo las líneas de cabecera que sabemos que difieren.
+- [ ] ⭐ **La comparación de fondos con el mismo preset** (§2) — se hace en esa misma sesión.
 - [ ] 🔐 **Desplegar el Worker de la Fase 2.** Escrito, **42/42** en local y **sin desplegar**:
       faltan `JWT_SECRET` y `MINT_TOKENS`, que sólo puede poner el user. El despliegue está ahora
       también en `Tools/r2-auth-worker/README.md`. Es aditivo (sin secrets → `503`, y el token
