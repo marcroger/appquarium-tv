@@ -10,26 +10,34 @@
 
 ---
 
-## ⏳ ESTADO DE ESTE DOCUMENTO — no está cerrado
+## ✅ ESTADO DE ESTE DOCUMENTO — VALIDADO EN LA TELE el 2026-08-27
 
-Se escribió el **26-ago** y se entrega **cuando el trabajo de la TV esté validado contra el
-device**. Mientras eso no pase, lo que dice sobre la parte TV es *«construido y probado en local»*,
-que **no es lo mismo que funciona**.
+Este doc se escribió el 26-ago diciendo que lo de la TV estaba *«construido y probado en local»*,
+que **no es lo mismo que funciona**. Ya no: el **27-ago** se validó contra el device (Xiaomi TV
+Box S), con el player **`rcv 2026-08-27 rmuid`** desplegado y el sello leído **en pantalla**.
 
-Lo que hay que rellenar aquí antes de pasarlo:
+Lo que se vio, en el log del receiver y sin ningún error:
 
-- [ ] **La tanda en la tele** (ver `CAST_NEXT_SESSION_2026-08-27.md` §1). Valida de una vez el
-      ciclo día/noche, `renderScale 0,75`, los ids y el emparejamiento. Al terminar: actualizar §7
-      con lo que se vio de verdad, y **decir si `pairs` cableó en el device**, que es lo único que
-      le importa al lado móvil.
-- [ ] **Desplegar el Worker de la Fase 2**, o dejar dicho que sigue sin desplegar. Hasta entonces
-      §1 describe un endpoint que **no existe todavía en producción**, y eso tiene que quedar
-      claro o el otro lado programa contra un fantasma.
-- [ ] Si algo de §1 cambia al desplegar, **corregirlo aquí antes de entregar**, no después.
+| | en el device |
+|---|---|
+| **`pairs: 1 recibidas, 1 cableadas`** | ✅ **el emparejamiento cablea de verdad en la tele** |
+| `add_fish` con `uid` del sender | ✅ adoptado |
+| `remove_fish` con uid que no existe | ✅ `ERR … no se quita nada`, y el nº de peces **no baja** |
+| `remove_fish` por uid | ✅ `fish_goby_firefish uid=… (quedan 13 peces)` |
+| `pairs` tras quitar a la hembra | ✅ `1 recibidas pero sólo 0 cableadas` — el save se limpia |
+| `remove_fish` con cadena suelta | ✅ `por especie (cliente sin uid: quitado el primero)` |
+| ciclo día/noche, decos, `renderScale 0,75` | ✅ |
+| memoria y errores | **WASM 111 MB plano**, **0 errores**, 221 s |
 
-⚠ **Lo que NO hay que hacer:** pasar este doc diciendo que el emparejamiento «funciona». Hoy lo
-que se sabe es que **12/12 tests en local** y **0 errores de compilación**. El device no ha visto
-nada de esto.
+⚠ **Matiz honesto sobre cómo se probó:** el sender fue `Tools/cast-headless.js` mandando los uid y
+el `pairs` **a mano**, no la app. Eso demuestra que **el lado TV del contrato funciona en el
+device**; lo que **no** demuestra es que vuestro emisor mande esos campos como se espera. Esa
+parte sigue siendo vuestra.
+
+🔐 **Lo único que sigue bloqueado: el Worker de la Fase 2 NO está desplegado.** Está escrito y con
+42/42 en local, pero le faltan dos secrets que sólo puede poner el user. Hasta entonces, **§1 de
+este documento describe un endpoint que todavía no existe en producción**: un JWT recibiría `401`.
+Programad contra el contrato, pero no lo deis por vivo.
 
 ---
 

@@ -11,6 +11,59 @@
 
 ---
 
+## 0. ✅✅ LAS DOS TANDAS: HECHAS Y LIMPIAS (2026-08-27, por la tarde)
+
+El user llegó a casa y encendió la tele el mismo día. **Las dos tandas de §1 se ejecutaron y
+pasaron**, y el player `rcv 2026-08-27 rmuid` **está desplegado y validado**. La caja estaba en
+**192.168.1.37** (el DHCP la vuelve a mover; ni ping ni 8008 la identifican — hay que leer el
+nombre por `eureka_info`).
+
+| | tanda 1 (`uid+pairs`) | tanda 2 (`rmuid`, ya desplegado) |
+|---|---|---|
+| sello leído **en pantalla** | `rcv 2026-08-26 uid+pairs` | **`rcv 2026-08-27 rmuid`** |
+| `RP: … scale=` | **0.75** ✅ | **0.75** ✅ |
+| decos / shaders reapuntados | 4/4 · 4 ✅ | 4/4 · 4 ✅ |
+| ciclo día/noche | ✅ ambos sentidos | ✅ ambos sentidos |
+| WASM | **111 MB plano** (50 s → 231 s) | **111 MB plano** |
+| errores | **0** | **0** (sólo el `ERR` que se buscaba) |
+| sesión | 231 s | 221 s |
+
+### Lo que la tanda 2 probó, y que hasta hoy sólo se había visto en Chrome
+
+| | en el device |
+|---|---|
+| **`pairs: 1 recibidas, 1 cableadas`** | ✅ **el emparejamiento cablea de verdad en la tele** |
+| `add_fish` con uid del sender | ✅ adoptado (13 y 14 peces) |
+| `remove_fish` uid inexistente | ✅ `ERR … no se quita nada` **y el contador no baja** |
+| `remove_fish` por uid | ✅ `fish_goby_firefish uid=uid-dev-hembra (quedan 13 peces)` |
+| `pairs` tras quitarla | ✅ `1 recibidas pero sólo 0 cableadas` — el save se limpia |
+| `remove_fish` cadena suelta | ✅ `por especie (cliente sin uid: quitado el primero)` |
+
+🧭 **Cómo se probaron las parejas sin la app:** `--update` de `cast-headless.js` acepta un **valor
+JSON**, así que se mandaron `add_fish` con uid y el `pairs` a mano
+(`--update 'pairs={"items":[{"maleUid":"…","femaleUid":"…"}]}@84'`). ⚠ Eso valida **el lado TV**;
+que el emisor del móvil mande esos campos bien **sigue sin estar probado**.
+
+### ⚠⚠ El deploy tuvo un susto que hay que recordar
+
+`aws s3 sync` subió `.data`, `.wasm` y `framework.js` y **falló en `loader.js`** con
+`SignatureDoesNotMatch` — el bug conocido de AWS CLI con ficheros pequeños, que `CLAUDE.md`
+documenta para «<5 KB» y aquí mordió con **27 KB**. Durante unos segundos R2 sirvió un player
+**mezclado** (3 ficheros nuevos + el `loader.js` viejo).
+
+- ⚠⚠ **Y `EXIT=0`**: el fallo iba dentro de una tubería a `tail`, así que el código de salida era
+  el de `tail`. **Un deploy roto puede terminar en verde.**
+- Se arregló subiendo `loader.js` con boto3 y **verificando los 5 ficheros por md5 contra R2**.
+- 🧭 **Regla: tras cualquier deploy, comprobar md5 fichero a fichero.** El `ETag` no sirve si
+  acaba en `-N` (multiparte). Comprobado además que `keepalive_black.mp4` y `silence.wav` siguen
+  ahí y que `StreamingAssets/` no se tocó (catálogo del 20-ago intacto).
+
+**Lo que queda de este documento:** §2 (la comparación de fondos con el mismo preset en las dos
+pantallas) y los pendientes de §6, empezando por el **Worker de la Fase 2**, que sigue sin
+desplegar.
+
+---
+
 ## 1. ⭐ LO PRIMERO: dos tandas, en este orden
 
 Hay **dos** players sin validar, y conviene no mezclarlos. El de ayer lleva un mes de trabajo
