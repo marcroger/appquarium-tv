@@ -119,6 +119,122 @@ desplegar.
 
 ---
 
+## 0.ter 🌙 LA TARDE-NOCHE: la primera comparación real, y una caída de red del ISP
+
+### ✅ Por fin: móvil y tele con EL MISMO estado, medidos
+
+El repo móvil montó un build de QA (`com.appquarium.qa`, package distinto → **se instala al lado
+sin tocar la app real ni el save**) y el user casteó su acuario de verdad. Capturas por `adb` de
+las dos pantallas, mismo instante, mismo fondo, mismo sustrato (`sub_gravel`) y misma luz
+(`light_white`) — confirmado por el user.
+
+| zona | móvil | tele | diferencia |
+|---|---|---|---|
+| agua | L\* 54.4 · C\* 31.9 · tono 198° | L\* 46.0 · C\* 28.1 · tono 204° | **−8.4 L\***, tono a 6° |
+| suelo | L\* 66.6 · C\* 12.9 · tono 80° | L\* 49.2 · C\* 18.7 · tono 66° | **−17.4 L\***, **+5.8 C\***, 14° al naranja |
+
+Y contra el **PNG de origen** (`sub_gravel`: RGB 202/176/146, L\* 73.1, C\* 19.8, tono 75°):
+el **móvil lo pinta casi tal cual** (−4.7 L\*) y la **tele lo oscurece 26 puntos**.
+
+🎯 **Hipótesis principal, sin confirmar:** el **tonemapping Neutral comprime las altas luces**, y
+el suelo es la zona más clara de la escena. El `saturation +18` explicaría el croma de más.
+
+### ⚠️ Corrección a la conclusión de la mañana (§0.5)
+
+Por la mañana se midió que «la TV no apaga el color» comparando **los once fondos**: −2 L\*. Era
+cierto **para los fondos, que son oscuros**. El tonemapping comprime sobre todo lo **brillante**,
+así que medir sólo fondos **infravaloró el efecto**. En el suelo son **26 puntos, no 2**.
+
+🧭 **La lección no es «me equivoqué», es que la muestra estaba sesgada:** se midió lo oscuro y se
+concluyó sobre todo. Lo que sigue en pie de aquella medición es que **el tono se conserva** (agua
+a 6° entre pantallas): la TV no cambia los colores, **aplasta los claros**.
+
+### ✅ Lo que NO es un fallo
+
+El degradado del suelo en la tele (naranja cerca, apagado lejos: croma 8.4 → 24.7, tono 100° → 62°)
+es el shader `Appquarium/SubstrateFog` del 25-ago **haciendo su trabajo**: empuja el suelo lejano
+hacia el color del agua. Es una mejora deliberada que el móvil no tiene. **No tocarla.**
+
+### ⏸ Lo que quedó a medias
+
+El **barrido de grado sobre el suelo** —tal cual / sin tonemapping / sin tm y sat 0 / plano— con
+`--raw 'GRADE={…}'`, midiendo el suelo en cada variante. **No cuesta ningún build.** Se quedó sin
+hacer por la caída de red de abajo. Es lo primero que hay que retomar.
+
+---
+
+### ⚠⚠⚠ LA CAÍDA: no era nuestra, y costó una hora entenderlo
+
+A media tarde el acuario empezó a **colgarse bajando bundles** (primero uno suelto, luego ninguno).
+La primera lectura fue «transitorio»; la segunda, «será el device». **Las dos falsas.**
+
+Lo que era: **la ruta del ISP hacia rangos de Cloudflare se rompió**, de forma intermitente.
+
+| medición | resultado |
+|---|---|
+| `curl` al Worker | `000` tras 42 s, 0 bytes |
+| **TCP directo a `188.114.96.5` / `.97.5`** | **no abre** (`time_connect = 0`) |
+| lo mismo por **IPv6** | también falla |
+| `workers.dev`, `cloudflare.com`, `1.1.1.1`, GitHub | **OK** |
+| `tracert` a la IP del Worker | **muere en el salto 5**, dentro del ISP |
+| `tracert` a una IP de Cloudflare que sí iba | 10 saltos, 22 ms |
+
+⚠⚠ **Y reiniciar el router lo empeoró:** al reconectar salió por **otra ruta**
+(`217.11.111.124 → .106 → 80.58.78.1`, en vez de `.158 → .108 → 80.58.81.46`) y con esa **también
+se cayó R2**, que hasta entonces iba. Mismo destino, misma hora, distinta ruta, distinto
+resultado. Eso es lo que descarta del todo cualquier sospecha sobre nuestra infraestructura.
+
+🧭 **REGLA, y es la que ahorra la hora:** cuando el acuario se cuelgue bajando bundles,
+**comprobar la RUTA antes que el código**:
+
+```bash
+timeout 8 bash -c 'echo > /dev/tcp/188.114.97.5/443' && echo OK || echo "no llego"
+tracert -d -h 12 188.114.97.5
+```
+
+Veinte segundos, y distingue «se me ha roto algo» de «no llego». ⚠ Y **no fiarse del nombre**:
+hay que probar **la IP a pelo**, porque un `curl` que cuelga parece un problema de aplicación.
+
+⚠ **Lo que NO hay que hacer mientras dure:** redesplegar el Worker, rotar el token, rehacer
+builds o repetir tandas. Cualquier medición sale envenenada y no se distingue el fallo propio del
+ajeno. **Y desplegar a ciegas sobre infraestructura que no puedes verificar es la peor
+combinación posible.**
+
+ℹ El rig local **tampoco** sobrevive a esto: el `settings.json` del player pide el catálogo a
+`https://appquarium-assets.appquarium.workers.dev/bundle//catalog_1.2.1.hash`, así que sin ruta al
+Worker no hay bundles ni en local.
+
+---
+
+### 🧪 Los cuatro tipos que no tenían prueba en ningún sitio
+
+Del censo tipo a tipo salió que **`speed`, `feed`, `startle` y `remove_deco` no estaban cubiertos
+ni en el rig ni en ninguna tanda**. Llevaban meses en el player sin que nadie comprobara que
+hicieran algo. Ya tienen prueba, con negativos.
+
+⚠⚠ **Y el primer test de `speed` destapó otra coma decimal**: imprimía `speed: x1,80`. Peor que un
+typo: **el mismo build imprime distinto según la máquina** (device en inglés → punto; Windows en
+español → coma). Encima `speed` **parseaba** con `InvariantCulture` y **imprimía** con la del
+sistema.
+
+Arreglado **en la raíz**: `CultureInfo.DefaultThreadCurrentCulture = InvariantCulture` en el
+arranque, en vez de parchear los 14 `:F2` sueltos.
+
+⚠ **NO está en el player desplegado.** Entra en el siguiente build. El test de `speed` queda
+**rojo a propósito** contra `rcv 2026-08-27 decorot` hasta entonces.
+
+### 🚩 Tres veces en un día: el código de salida 0 miente
+
+1. `aws s3 sync` **falló al subir `loader.js`** y terminó en `EXIT=0` (iba en una tubería a `tail`).
+2. `compile-check.sh` terminaba **en verde si el generador reventaba**.
+3. En el repo móvil, un build de Android con **133 errores** terminó «bien», con el `.aab` de seis
+   días antes intacto.
+
+🧭 **La evidencia es el artefacto, no el código de salida:** el total del XML, la fecha del `.aab`,
+el md5 del fichero en R2, la línea `Succeeded … errores=0`.
+
+---
+
 ## 1. ⭐ LO PRIMERO: dos tandas, en este orden
 
 Hay **dos** players sin validar, y conviene no mezclarlos. El de ayer lleva un mes de trabajo
@@ -292,7 +408,17 @@ así que no sirve para comparar. Corregido en el doc de ayer.
       el **mismo estado en las dos pantallas**. Protocolo: mismo preset de fondo y mismo modo
       ambiente, `adb exec-out screencap` de la tele, captura del teléfono, y **diff de los dos
       volcados** — que debería enseñar sólo las líneas de cabecera que sabemos que difieren.
-- [ ] ⭐ **La comparación de fondos con el mismo preset** (§2) — se hace en esa misma sesión.
+- [x] ✅ **La comparación con el mismo preset** — **HECHA** (§0.ter). Ya no hay que discutirla:
+      la tele **aplasta los claros** (−26 L\* en el suelo contra el PNG de origen) pero **conserva
+      el tono** (agua a 6° entre pantallas).
+- [ ] ⭐⭐ **PRIMERO MAÑANA, y no cuesta ningún build: el barrido de grado sobre el SUELO.**
+      Cuatro variantes con `--raw 'GRADE={…}'` (tal cual / sin tonemapping / sin tm y sat 0 /
+      plano), midiendo el suelo en cada una con `Tools/analiza_grado_lab.py`. Confirma o tumba la
+      hipótesis del tonemapping. Se quedó sin hacer por la caída de red.
+- [ ] ⚠ **ANTES DE NADA: comprobar que hay ruta al Worker** (§0.ter). Un `tracert` de 20 s. Si no
+      la hay, **no medir nada** — todo saldría envenenado.
+- [ ] 🔨 **Un build pendiente**: la cultura invariante global. Con él, el test de `speed` deja de
+      estar rojo. **No desplegar hasta que el móvil termine su sesión** con `decorot`.
 - [ ] 🔐 **Desplegar el Worker de la Fase 2.** Escrito, **42/42** en local y **sin desplegar**:
       faltan `JWT_SECRET` y `MINT_TOKENS`, que sólo puede poner el user. El despliegue está ahora
       también en `Tools/r2-auth-worker/README.md`. Es aditivo (sin secrets → `503`, y el token
