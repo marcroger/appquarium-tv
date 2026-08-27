@@ -178,11 +178,21 @@ documentado como carrera conocida en los dos repos para que nadie lo «arregle»
 
 1. 🔐 **La credencial de mint en el APK** (§1.1) y llamar a `/mint-token` con ella. Bloqueado
    hasta que el user despliegue el Worker.
-2. 🐟 **`remove_fish` por uid.** Ahora es barato: los uid ya son los buenos en los dos lados, así
-   que sólo falta que mandes el `uid` en vez del `speciesId`. La TV pone un `DespawnByUid` (~1 h).
-   Hoy `DespawnOneBySpecies` quita **la primera** instancia de la especie: con 3 Banggai, quitas
-   uno concreto y desaparece otro. **Es el único hueco que produce un resultado INCORRECTO**, no
-   sólo desactualizado.
+2. 🐟 **`remove_fish` por uid — el lado TV YA ESTÁ (27-ago). Sólo falta que mandes el uid.**
+
+   Lo que la TV acepta ahora, y es **aditivo** (no hay que coordinar versiones):
+
+   | lo que mandes | qué hace la TV |
+   |---|---|
+   | `"fish_banggai"` (como hoy) | quita el primero de la especie. **El log lo dice**: `remove_fish: fish_banggai por especie (cliente sin uid: quitado el primero)` |
+   | `{"uid":"<uid>","speciesId":"fish_banggai"}` | quita **ese** pez: `remove_fish: fish_banggai uid=<uid> (quedan N peces)` |
+
+   - `speciesId` dentro del JSON es **opcional**; si no viene, la TV lo saca del propio pez.
+   - ⚠ **Un uid que no está en el tanque NO cae al camino de la especie**: responde
+     `ERR remove_fish: uid 'x' no esta en el tanque` y **no quita nada**. Quitar «alguno» sería
+     reintroducir por detrás el fallo que esto arregla (con 3 Banggai, quitabas uno concreto y
+     desaparecía otro).
+   - 🧭 **Verificado en local (`test-updates.js` 16/16), NO en la tele.** Ver §7.
 3. 🎨 **Editar una deco colocada** (§6.1 de `CAST_CONTRACT_TV.md`). 🧭 **No necesita un tipo
    `update_deco`**: `PlaceAt` ya reemplaza la instancia si el `instanceId` existe, y su firma ya
    acepta `tiltX` y `savedUserRot`. Basta ampliar `TvAddDecoPayload` (aditivo) y reemitir

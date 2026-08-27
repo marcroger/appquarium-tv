@@ -88,6 +88,18 @@ public class TvAddFishPayload
 }
 
 [Serializable]
+public class TvRemoveFishPayload
+{
+    // ⚠ 2026-08-27 — El camino nuevo. `remove_fish` aceptaba SOLO una cadena suelta con la
+    // especie, y por eso quitaba «la primera de esa especie», que casi nunca es la que el
+    // usuario quitó. Es ADITIVO: si el valor no es un JSON se sigue tratando como especie.
+    public string uid = "";
+    // Informativo: sirve para el log y para soltar el bundle sin recorrer el tanque. Si viene
+    // vacio se saca del propio pez antes de destruirlo.
+    public string speciesId = "";
+}
+
+[Serializable]
 public class TvAddDecoPayload
 {
     public string  instanceId;  // mobile instance key, e.g. "deco_coral_brain_0"

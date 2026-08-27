@@ -224,6 +224,31 @@ public class FishSpawner : MonoBehaviour
         return 0;
     }
 
+    /// <summary>
+    /// Quita EL pez con ese uid. Devuelve el agente que quitó, o null si no estaba.
+    ///
+    /// ⚠ 2026-08-27 — Es el camino bueno, y el que evita el fallo que documenta
+    /// `DespawnOneBySpecies` justo aquí arriba: con 3 Banggai en el tanque, quitar uno
+    /// concreto en el móvil hacía desaparecer OTRO en la tele, porque el protocolo sólo
+    /// transportaba la especie. Ahora que el uid del móvil se adopta (add_fish e INIT),
+    /// las dos partes hablan del mismo pez.
+    ///
+    /// Devuelve el agente y no un contador a propósito: quien llama necesita su `Data.itemId`
+    /// para saber si puede soltar el bundle, y ese dato se pierde al destruirlo.
+    /// </summary>
+    public FishAgent DespawnByUid(string uid)
+    {
+        if (string.IsNullOrEmpty(uid)) return null;
+        foreach (var f in _activeFish)
+        {
+            if (f == null || f.Uid != uid) continue;
+            _activeFish.Remove(f);
+            Destroy(f.gameObject);
+            return f;
+        }
+        return null;
+    }
+
     /// <summary>Quita TODOS los peces de la especie. Devuelve cuántos quitó.</summary>
     public int DespawnBySpecies(string speciesId)
     {

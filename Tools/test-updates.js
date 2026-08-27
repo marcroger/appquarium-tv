@@ -59,10 +59,20 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
   }
 
   // Wait for a string to appear in the collected console logs
-  async function waitForLog(pattern, timeoutMs = 10000) {
+  // ⚠⚠ 2026-08-27 — `waitForLog` mira TODO el log acumulado desde el arranque, asi que una
+  // linea de un test ANTERIOR da el test por bueno sin que haya pasado nada. No es teorico:
+  // el TEST 16 espera «remove_fish: fish_moorish_idol por especie» y el TEST 2 ya la imprime,
+  // y el TEST 15 espera «0 cableadas», que el TEST 12 ya dejo escrita. Es la misma familia de
+  // trampa que tuvo este fichero meses en verde con `bg_ocean`.
+  //
+  // `desde()` marca el punto del log y `waitForLog(pat, ms, marca)` solo mira de ahi en
+  // adelante. Los tests viejos siguen llamando sin marca — su comportamiento no cambia.
+  const desde = () => consoleLogs.length;
+
+  async function waitForLog(pattern, timeoutMs = 10000, marca = 0) {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
-      if (consoleLogs.some(l => l.includes(pattern))) return true;
+      if (consoleLogs.slice(marca).some(l => l.includes(pattern))) return true;
       await sleep(200);
     }
     return false;
@@ -179,6 +189,48 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
   const t12 = await waitForLog('recibidas pero sólo 0 cableadas', 6000);
   console.log(`  ${t12 ? '✅' : '❌'} pairs distingue recibidas de cableadas`);
   results.push({ test: 'pairs_reporta_no_cableadas', pass: t12 });
+  await sleep(200);
+
+  // ── remove_fish por uid (2026-08-27) ─────────────────────────────────────────
+  // Llegados aqui el tanque tiene a UID_A (moorish idol) y UID_B (goby firefish), y el
+  // TEST 12 dejo `activePairs` con una pareja rota a proposito. Los tests de abajo se
+  // apoyan en ese estado — si se reordenan, revisar.
+
+  console.log('TEST 13: remove_fish con un uid que NO existe -> no debe quitar nada...');
+  const m13 = desde();
+  await sendUpdate('remove_fish', JSON.stringify({ uid: 'uid-que-no-existe' }));
+  const t13 = await waitForLog("ERR remove_fish: uid 'uid-que-no-existe' no esta en el tanque", 6000, m13);
+  console.log(`  ${t13 ? '✅' : '❌'} remove_fish no cae al camino de la especie`
+            + (t13 ? '' : '   ← si quita un pez cualquiera, es EL fallo que esto arregla'));
+  results.push({ test: 'remove_fish_uid_inexistente', pass: t13 });
+  await sleep(300);
+
+  console.log('TEST 14: remove_fish por uid -> tiene que quitar ESE pez...');
+  const m14 = desde();
+  await sendUpdate('remove_fish', JSON.stringify({ uid: UID_B, speciesId: 'fish_goby_firefish' }));
+  const t14 = await waitForLog(`remove_fish: fish_goby_firefish uid=${UID_B}`, 6000, m14);
+  console.log(`  ${t14 ? '✅' : '❌'} remove_fish por uid`);
+  results.push({ test: 'remove_fish_por_uid', pass: t14 });
+  await sleep(300);
+
+  // El pez de UID_B ya no esta, asi que su entrada del save tampoco deberia: si `pairs`
+  // vuelve a mandar la pareja, tiene que reportar 0 cableadas y NO resucitar nada.
+  console.log('TEST 15: el save olvido al pez -> pairs con su uid da 0 cableadas...');
+  const m15 = desde();
+  await sendUpdate('pairs', JSON.stringify({ items: [{ maleUid: UID_A, femaleUid: UID_B }] }));
+  const t15 = await waitForLog('recibidas pero sólo 0 cableadas', 6000, m15);
+  console.log(`  ${t15 ? '✅' : '❌'} el pez quitado ya no cablea`);
+  results.push({ test: 'remove_fish_limpia_el_save', pass: t15 });
+  await sleep(300);
+
+  // Camino viejo: cadena suelta con la especie. Tiene que seguir funcionando (aditivo) pero
+  // decir por donde fue, para que nadie lea el log y crea que quito el pez que pidio.
+  console.log('TEST 16: remove_fish con una cadena suelta (cliente viejo)...');
+  const m16 = desde();
+  await sendUpdate('remove_fish', 'fish_moorish_idol');
+  const t16 = await waitForLog('remove_fish: fish_moorish_idol por especie', 6000, m16);
+  console.log(`  ${t16 ? '✅' : '❌'} remove_fish por especie sigue vivo y se identifica`);
+  results.push({ test: 'remove_fish_por_especie_aun_vale', pass: t16 });
   await sleep(200);
 
   await page.screenshot({ path: 'test-updates-result.png' });

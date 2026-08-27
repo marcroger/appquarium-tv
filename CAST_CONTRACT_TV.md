@@ -87,7 +87,7 @@ Estado **tras los commits `458c217` y `2dbac4c` del 26-ago** (player `rcv 2026-0
 | `startle` | `:230` | ídem |
 | `refresh` | `:236` | **no-op que sólo logea** — ver §5.4 |
 | `add_fish` | `AddFishAsync` (`:707`) | payload no-objeto → `ERR payload: …` · sin `speciesId` → `ERR add_fish: el payload no trae speciesId` · bundle que no carga → `ERR add_fish: load failed x` · **spawn nulo → `ERR add_fish: … SpawnFish devolvió null`**. ✅ Acepta `uid` (26-ago) — sin él, el pez **no puede emparejarse nunca** |
-| `remove_fish` | `:750` | **id desconocido → `remove_fish: x (removed=0)`**. Ya reportaba el efecto real. Quita **una** instancia (`FishSpawner.DespawnOneBySpecies`, `:215`) |
+| **`remove_fish`** ⭐ | `:750` | **Acepta las dos formas (27-ago).** `{"uid":"…","speciesId":"…"}` quita **ese** pez (`FishSpawner.DespawnByUid`); una cadena suelta sigue quitando **el primero de la especie** y el log lo dice: `remove_fish: x por especie (cliente sin uid: quitado el primero)`. ⚠ uid que no está en el tanque → `ERR remove_fish: uid 'x' no esta en el tanque` y **no se quita nada** — no cae al camino de la especie a propósito |
 | `add_deco` | `AddDecoAsync` (`:775`) | sin `itemId` → `ERR add_deco: el payload no trae itemId` · bundle → `ERR add_deco: load failed x` · **`PlaceAt` que rechaza → `ERR add_deco: … PlaceAt lo rechazó`** |
 | `remove_deco` | `:820` | `remove_deco: x (ok=False)` si no existía |
 | `change_bg` | `:899` | **`ERR change_bg: id desconocido 'x' — válidos: bg_classic\|…`** |
@@ -213,16 +213,33 @@ Verificado desde este lado, contra el código de los dos repos.
 3. 🟡 **«un id nuevo llega y la TV lo rechaza»** (§5 del móvil) es cierto **sólo por la ruta
    UPDATE**. En INIT no. Ver §4.3.
 
-### 5.3 `uid` — adoptado ✅, pero `remove_fish` sigue yendo por especie
+### 5.3 `uid` — adoptado ✅, y `remove_fish` ya lo acepta ✅ (falta el móvil)
 
-El uid del móvil **ya se adopta** (§4.4), que era el bloqueo del emparejamiento. Lo que **no**
-está hecho es usarlo en `remove_fish`: sigue llegando un `speciesId` y `DespawnOneBySpecies`
-(`FishSpawner.cs:215`) quita **la primera** instancia de esa especie. Con 3 Banggai en el tanque,
-quitas uno concreto y desaparece otro.
+El uid del móvil **ya se adopta** (§4.4) y desde el **27-ago** `remove_fish` **ya sabe usarlo**.
+Lo que falta es de vuestro lado: **mandarlo**.
 
-Ahora es barato: los uid ya son los buenos en los dos lados, así que sólo falta que el móvil mande
-el uid en `remove_fish` y que aquí haya un `DespawnByUid`. **~1 h**, y es aditivo: mientras llegue
-un `speciesId` se sigue usando el camino de hoy.
+**Antes:** llegaba sólo un `speciesId` y `DespawnOneBySpecies` quitaba **la primera** instancia de
+esa especie. Con 3 Banggai en el tanque, quitabas uno concreto y desaparecía otro — sin ningún
+error, con el log diciendo que todo bien.
+
+**Lo que hay ahora, y es ADITIVO** (el camino viejo sigue vivo, no hace falta coordinar versiones):
+
+| lo que mandéis | qué hace la TV |
+|---|---|
+| `"fish_banggai"` (como hoy) | quita el primero de la especie. **El log lo dice**: `remove_fish: fish_banggai por especie (cliente sin uid: quitado el primero)` |
+| `{"uid":"<uid>","speciesId":"fish_banggai"}` | quita **ese** pez. Log: `remove_fish: fish_banggai uid=<uid> (quedan N peces)` |
+
+- `speciesId` en el JSON es **opcional**: si no viene, la TV lo saca del propio pez. Va sólo para
+  el log y para poder soltar el bundle sin recorrer el tanque.
+- ⚠ **Un uid que no está en el tanque NO cae al camino de la especie**: responde
+  `ERR remove_fish: uid 'x' no esta en el tanque` y **no quita nada**. Quitar «alguno» sería
+  reintroducir el mismo fallo por la puerta de atrás.
+- De paso se arregló una contabilidad que llevaba rota desde siempre: `remove_fish` destruía el
+  pez pero **no lo sacaba de `ownedFish`/`activeFishUids`**, así que el save transitorio sólo
+  crecía. Ahora se limpia, y si el pez estaba emparejado **la pareja se retira y se re-cablea**
+  (si no, `pairs` la contaría para siempre como «recibida pero no cableada»).
+
+🧭 **Verificado en local (`Tools/test-updates.js`, 16/16), NO en la tele todavía.**
 
 ### 5.4 `refresh`: qué hace de verdad
 
@@ -263,16 +280,18 @@ transporte.
   colocadas se remapearon con el valor viejo**: hay que recolocarlas todas con el factor nuevo, o
   media escena queda desplazada. Eso es un `RepositionAll` que hoy no existe. ~3 h.
 
-### 6.3 ~~`uid` + `activePairs`~~ ✅ HECHO (26-ago)
+### 6.3 ~~`uid` + `activePairs`~~ ✅ HECHO (26-ago) · ~~`remove_fish` por uid~~ ✅ HECHO (27-ago)
 
-Coste real: **~3 h**, clavado en la estimación. Falta `remove_fish` por uid (§5.3, ~1 h) y el
-`DespawnByUid`.
+Coste real: **~3 h**, clavado en la estimación. El `DespawnByUid` y el handler de `remove_fish`
+entraron el **27-ago** (§5.3): **~40 min**, dentro de la estimación de 1 h. **Lo que queda del
+punto es vuestro**: mandar el uid en el payload.
 
 ### 6.4 Orden preferido
 
-1. **`remove_fish` por uid** — es el único de los tres que produce hoy un resultado **incorrecto
-   y visible** (quitas un Banggai concreto y desaparece otro). Los otros dos producen algo
-   *desactualizado*, que es menos grave.
+1. **`remove_fish` por uid** — 🟡 **el lado TV ya está** (§5.3). Os queda mandar el uid, que es
+   un campo en el payload que ya construís. Sigue siendo el primero porque es el único que
+   produce hoy un resultado **incorrecto y visible** (quitas un Banggai concreto y desaparece
+   otro); los otros dos producen algo *desactualizado*, que es menos grave.
 2. **Editar una deco colocada** — el que más se nota al usarlo, y ha resultado barato.
 3. **`change_tank`** — el más caro y el menos frecuente.
 

@@ -852,27 +852,121 @@ public class TvSceneBootstrap : MonoBehaviour
         return cableadas;
     }
 
-    private void RemoveFish(string speciesId)
+    /// <summary>
+    /// Quita UN pez. Acepta las dos formas del valor, y es ADITIVO a proposito:
+    ///
+    ///   · `"fish_banggai"` — cliente viejo. Quita el PRIMERO de esa especie, que casi nunca
+    ///     es el que el usuario quito en el movil. Se sigue soportando, pero ahora el log
+    ///     **dice por que camino fue**, en vez de dar a entender que quito ese pez.
+    ///   · `{"uid":"…","speciesId":"…"}` — el camino bueno (2026-08-27). Los uid ya son los
+    ///     mismos en los dos lados desde que se adoptan en INIT y `add_fish`.
+    ///
+    /// ⚠ Si viene uid y ese pez NO esta en el tanque, **no se cae al camino de la especie**:
+    /// eso quitaria un pez cualquiera, que es exactamente el fallo que esto viene a arreglar.
+    /// Se reporta ERR y no se toca nada.
+    /// </summary>
+    private void RemoveFish(string value)
     {
         var mgr = AquariumManager.Instance;
         if (mgr == null) return;
 
-        int count = mgr.fishSpawner.DespawnOneBySpecies(speciesId);
-        JsBridge.Log($"remove_fish: {speciesId} (removed={count})");
+        string uid = "", speciesId = value ?? "";
 
-        // Release bundle only if it was runtime-loaded and no instances remain
-        if (_runtimeFishHandles.TryGetValue(speciesId, out var h))
+        if (speciesId.TrimStart().StartsWith("{"))
         {
-            bool anyLeft = false;
-            foreach (var f in mgr.fishSpawner.ActiveFish)
-                if (f != null && f.Data?.itemId == speciesId) { anyLeft = true; break; }
-            if (!anyLeft)
+            var payload = SafeFromJson<TvRemoveFishPayload>(value);
+            if (payload == null) return;                      // SafeFromJson ya lo ha dicho
+            uid       = payload.uid ?? "";
+            speciesId = payload.speciesId ?? "";
+            if (string.IsNullOrEmpty(uid))
             {
-                Addressables.Release(h);
-                _runtimeFishHandles.Remove(speciesId);
-                mgr.allFishCatalog.RemoveAll(d => d.itemId == speciesId);
+                JsBridge.Log("ERR remove_fish: el payload es JSON pero no trae uid");
+                return;
             }
         }
+
+        if (!string.IsNullOrEmpty(uid))
+        {
+            var quitado = mgr.fishSpawner.DespawnByUid(uid);
+            if (quitado == null)
+            {
+                JsBridge.Log($"ERR remove_fish: uid '{uid}' no esta en el tanque — no se quita nada");
+                return;
+            }
+            // `Destroy` es diferido al final del frame, asi que el agente aun se puede leer.
+            if (string.IsNullOrEmpty(speciesId)) speciesId = quitado.Data?.itemId ?? "";
+            OlvidarPezDelSave(mgr, uid);
+            JsBridge.Log($"remove_fish: {speciesId} uid={uid}"
+                       + $" (quedan {mgr.fishSpawner.ActiveFish?.Count ?? -1} peces)");
+        }
+        else
+        {
+            if (string.IsNullOrEmpty(speciesId))
+            {
+                JsBridge.Log("ERR remove_fish: valor vacio");
+                return;
+            }
+            // Mismo criterio que `DespawnOneBySpecies` —el primero de la lista— pero mirado
+            // ANTES de quitarlo, para saber que uid hay que olvidar del save.
+            string uidVictima = null;
+            foreach (var f in mgr.fishSpawner.ActiveFish)
+                if (f != null && f.Data?.itemId == speciesId) { uidVictima = f.Uid; break; }
+
+            if (mgr.fishSpawner.DespawnOneBySpecies(speciesId) == 0)
+            {
+                JsBridge.Log($"ERR remove_fish: no hay ningun '{speciesId}' en el tanque");
+                return;
+            }
+            OlvidarPezDelSave(mgr, uidVictima);
+            JsBridge.Log($"remove_fish: {speciesId} por especie (cliente sin uid: quitado el primero)"
+                       + $" — quedan {mgr.fishSpawner.ActiveFish?.Count ?? -1} peces");
+        }
+
+        SoltarBundleSiNoQuedaNinguno(mgr, speciesId);
+    }
+
+    /// <summary>
+    /// Saca el pez del save transitorio.
+    ///
+    /// ⚠ 2026-08-27 — Antes NADIE lo hacia: `add_fish` alimentaba `ownedFish`/`activeFishUids`
+    /// (`:809`) y `remove_fish` destruia el agente y se olvidaba del save, asi que las dos
+    /// listas solo crecian y divergian del tanque segun avanzaba la sesion. Hoy solo se leen
+    /// en el arranque, pero el emparejamiento ya consume uid de ahi y el proximo consumidor
+    /// los dara por buenos igual.
+    /// </summary>
+    private static void OlvidarPezDelSave(AquariumManager mgr, string uid)
+    {
+        var save = mgr?.SaveData;
+        if (save == null || string.IsNullOrEmpty(uid)) return;
+
+        save.ownedFish?.RemoveAll(f => f != null && f.uid == uid);
+        save.activeFishUids?.Remove(uid);
+
+        // Si estaba emparejado, la pareja deja de existir: mientras siga en la lista, `pairs`
+        // la contaria eternamente como «recibida pero no cableada» — el mismo sintoma que la
+        // carrera del `add_fish`, y ahi si es un fallo. Re-cablear ademas limpia el PartnerUid
+        // colgando del que se queda vivo.
+        int antes = save.activePairs?.Count ?? 0;
+        save.activePairs?.RemoveAll(p => p != null && (p.maleUid == uid || p.femaleUid == uid));
+        if ((save.activePairs?.Count ?? 0) != antes) FishAgent.WirePairsFromSave(save);
+    }
+
+    /// <summary>
+    /// Suelta el bundle de la especie si ya no queda ningun pez suyo y lo habia cargado el
+    /// runtime (no el INIT). Estaba embebido en `RemoveFish`; sale aqui porque ahora hay dos
+    /// caminos que terminan igual.
+    /// </summary>
+    private void SoltarBundleSiNoQuedaNinguno(AquariumManager mgr, string speciesId)
+    {
+        if (string.IsNullOrEmpty(speciesId)) return;
+        if (!_runtimeFishHandles.TryGetValue(speciesId, out var h)) return;
+
+        foreach (var f in mgr.fishSpawner.ActiveFish)
+            if (f != null && f.Data?.itemId == speciesId) return;   // aun queda alguno
+
+        Addressables.Release(h);
+        _runtimeFishHandles.Remove(speciesId);
+        mgr.allFishCatalog.RemoveAll(d => d.itemId == speciesId);
     }
 
     private IEnumerator AddDecoAsync(string jsonValue)
