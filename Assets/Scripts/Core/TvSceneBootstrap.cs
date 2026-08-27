@@ -1119,6 +1119,15 @@ public class TvSceneBootstrap : MonoBehaviour
     //      es exacto solo si el movil manda uno de los cuatro valores discretos.
     //
     // Formato pensado para diff: una entidad por linea, ordenadas por id, precision fija.
+    // ⚠⚠ 2026-08-27 — `INV` NO es cosmetico. La primera version formateaba con la cultura del
+    // sistema (español), asi que salia `pos=(4,12,-1,87,0,54)`: con coma decimal Y coma
+    // separadora es IMPOSIBLE saber donde acaba un numero y empieza el siguiente. El volcado
+    // existe para diffear contra el movil, o sea para que alguien lo PARSEE, asi que eso lo
+    // invalidaba entero. Y el test pasaba en verde: comprobaba que las cuentas cuadraran, no
+    // que los numeros se pudieran leer. Se vio mirando la salida de verdad.
+    private static readonly System.Globalization.CultureInfo INV =
+        System.Globalization.CultureInfo.InvariantCulture;
+
     private void VolcarEstado()
     {
         var mgr = AquariumManager.Instance;
@@ -1135,8 +1144,13 @@ public class TvSceneBootstrap : MonoBehaviour
 
         JsBridge.Log("DUMP ini"
             + $" tanque={mgr.SaveData?.selectedTankId ?? "?"}"
-            + $" bounds=({b.min.x:F2},{b.max.x:F2} | {b.min.y:F2},{b.max.y:F2} | {b.min.z:F2},{b.max.z:F2})"
-            + $" anchoMovil={mediaAnchoMovil:F2} remapX={remapX:F3}"
+            // ⚠ `extents` (medias medidas) va porque es la convencion que eligio el emisor del
+            // movil para su propio volcado. Sin un campo con la MISMA semantica en los dos, el
+            // diff mete ruido en cada comparacion. Los min/max se quedan porque dicen mas: con
+            // solo extents, un tanque descentrado parece igual que uno centrado.
+            + $" extents=({b.extents.x.ToString("F2", INV)},{b.extents.y.ToString("F2", INV)},{b.extents.z.ToString("F2", INV)})"
+            + $" bounds=({b.min.x.ToString("F2", INV)},{b.max.x.ToString("F2", INV)} | {b.min.y.ToString("F2", INV)},{b.max.y.ToString("F2", INV)} | {b.min.z.ToString("F2", INV)},{b.max.z.ToString("F2", INV)})"
+            + $" anchoMovil={mediaAnchoMovil.ToString("F2", INV)} remapX={remapX.ToString("F3", INV)}"
             + (mediaAnchoMovil <= 0.1f ? " (SIN REMAPEO: el sender no mando tankHalfWidth)" : "")
             + $" bg={bg?.CurrentPresetId ?? "?"} sub={placer?.CurrentSubstrateId ?? "?"}"
             + $" luz={luz?.CurrentPresetId ?? "?"} ambiente={amb?.CurrentMode.ToString() ?? "?"}");
@@ -1149,8 +1163,8 @@ public class TvSceneBootstrap : MonoBehaviour
         {
             // localScale ya es baseSize * AgeScaleFactor(grupo): el tamaño REAL en pantalla.
             JsBridge.Log($"DUMP pez {f.Uid ?? "-"} {f.Data?.itemId ?? "?"}"
-                + $" escala={f.transform.localScale.x:F3}"
-                + $" pos=({f.transform.position.x:F2},{f.transform.position.y:F2},{f.transform.position.z:F2})"
+                + $" escala={f.transform.localScale.x.ToString("F3", INV)}"
+                + $" pos=({f.transform.position.x.ToString("F2", INV)},{f.transform.position.y.ToString("F2", INV)},{f.transform.position.z.ToString("F2", INV)})"
                 + $" pareja={(string.IsNullOrEmpty(f.PartnerUid) ? "-" : f.PartnerUid)}");
         }
 
@@ -1162,9 +1176,9 @@ public class TvSceneBootstrap : MonoBehaviour
             bool alBorde = Mathf.Abs(p.position.x - (b.min.x + 0.3f)) < 0.01f
                         || Mathf.Abs(p.position.x - (b.max.x - 0.3f)) < 0.01f;
             JsBridge.Log($"DUMP deco {p.instanceId} {p.itemId}"
-                + $" pos=({p.position.x:F2},{p.position.y:F2},{p.position.z:F2})"
-                + $" escala={p.scaleFactor:F3} flip={(p.flipped ? 1 : 0)}"
-                + $" quat=({p.quatX:F3},{p.quatY:F3},{p.quatZ:F3},{p.quatW:F3})"
+                + $" pos=({p.position.x.ToString("F2", INV)},{p.position.y.ToString("F2", INV)},{p.position.z.ToString("F2", INV)})"
+                + $" escala={p.scaleFactor.ToString("F3", INV)} flip={(p.flipped ? 1 : 0)}"
+                + $" quat=({p.quatX.ToString("F3", INV)},{p.quatY.ToString("F3", INV)},{p.quatZ.ToString("F3", INV)},{p.quatW.ToString("F3", INV)})"
                 + $" sobre={(string.IsNullOrEmpty(p.mountedOnInstanceId) ? "-" : p.mountedOnInstanceId)}"
                 // ⚠ Se avisa del recorte: si no, una deco movida por el Clamp parece bien puesta.
                 + (alBorde ? " ⚠RECORTADA-AL-BORDE" : ""));

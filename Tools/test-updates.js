@@ -267,6 +267,45 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
   results.push({ test: 'add_deco_sin_rot_no_miente', pass: sinRot });
   await sleep(200);
 
+  // ── dump: el volcado del estado montado (2026-08-27) ────────────────────────
+  // Es la herramienta con la que se va a comparar la tele contra el movil, asi que tiene que
+  // volcar de verdad: cabecera, una linea por pez, una por deco, y cierre con las cuentas.
+  // ⚠ No basta con que responda: se exige que el numero de decos del cierre cuadre con las
+  // lineas `DUMP deco` que ha impreso. Un volcado que diga "decos=4" y liste 2 seria peor que
+  // ninguno, porque se usa para decidir si las dos pantallas coinciden.
+
+  console.log('TEST 19: dump vuelca el estado montado y sus cuentas cuadran...');
+  const m19 = desde();
+  await sendUpdate('dump', '');
+  const abre  = await waitForLog('DUMP ini', 8000, m19);
+  const cierra = await waitForLog('DUMP fin', 8000, m19);
+  const lineas = consoleLogs.slice(m19);
+  const nDecos = lineas.filter(l => l.includes('DUMP deco ')).length;
+  const nPeces = lineas.filter(l => l.includes('DUMP pez ')).length;
+  const fin    = lineas.find(l => l.includes('DUMP fin')) || '';
+  const mDecos = /decos=(\d+)/.exec(fin), mPeces = /peces=(\d+)/.exec(fin);
+  const cuadra = !!(mDecos && mPeces
+                    && parseInt(mDecos[1], 10) === nDecos
+                    && parseInt(mPeces[1], 10) === nPeces);
+  console.log(`  ${abre && cierra && cuadra ? '✅' : '❌'} dump vuelca y cuadra`
+            + `  (lineas: ${nPeces} peces / ${nDecos} decos · cierre: ${fin.split('DUMP fin')[1] || '-'})`);
+  results.push({ test: 'dump_vuelca_y_cuadra', pass: abre && cierra && cuadra });
+  await sleep(200);
+
+  // ⚠⚠ Y que sea PARSEABLE, que es distinto de que responda. La primera version formateaba
+  // con la cultura del sistema y salia `pos=(4,12,-1,87,0,54)`: con coma decimal Y coma
+  // separadora no hay forma de saber donde acaba un numero. El test de arriba pasaba en verde
+  // igual, porque contaba lineas. Esto exige punto decimal y el numero exacto de campos.
+  console.log('TEST 20: el volcado se puede parsear (punto decimal, no coma)...');
+  const RE_PEZ  = /DUMP pez \S+ \S+ escala=-?\d+\.\d{3} pos=\(-?\d+\.\d{2},-?\d+\.\d{2},-?\d+\.\d{2}\) pareja=\S+/;
+  const RE_DECO = /DUMP deco \S+ \S+ pos=\(-?\d+\.\d{2},-?\d+\.\d{2},-?\d+\.\d{2}\) escala=-?\d+\.\d{3} flip=[01] quat=\(-?\d+\.\d{3},-?\d+\.\d{3},-?\d+\.\d{3},-?\d+\.\d{3}\)/;
+  const pezOk  = lineas.some(l => RE_PEZ.test(l));
+  const decoOk = lineas.some(l => RE_DECO.test(l));
+  console.log(`  ${pezOk && decoOk ? '✅' : '❌'} lineas parseables (pez:${pezOk} deco:${decoOk})`
+            + (pezOk && decoOk ? '' : '   <- ¿coma decimal? falta InvariantCulture'));
+  results.push({ test: 'dump_es_parseable', pass: pezOk && decoOk });
+  await sleep(200);
+
   await page.screenshot({ path: 'test-updates-result.png' });
   console.log('\nScreenshot: test-updates-result.png');
   await browser.close();
