@@ -306,6 +306,19 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
   results.push({ test: 'dump_es_parseable', pass: pezOk && decoOk });
   await sleep(200);
 
+  // ⚠⚠ Y —idea de la sesion del repo movil, que es mejor que la mia— el patron tiene que
+  // RECHAZAR el formato viejo. Un regex que acepta las dos formas no fija nada: el dia que
+  // alguien rompa el formato hacia algo que el patron tolere por casualidad, el test sigue en
+  // verde. Aqui la comprobacion iba fuera del test (se verifico a mano que fallaba contra el
+  // player anterior); asi queda dentro y no depende de que nadie se acuerde.
+  console.log('TEST 21: el patron RECHAZA el formato con coma decimal...');
+  const VIEJO_PEZ  = 'DUMP pez abc fish_x escala=0,750 pos=(4,12,-1,87,0,54) pareja=-';
+  const VIEJO_DECO = 'DUMP deco d0 deco_x pos=(4,12,-1,87,0,54) escala=1,000 flip=0 quat=(0,000,0,383,0,000,0,924)';
+  const rechaza = !RE_PEZ.test(VIEJO_PEZ) && !RE_DECO.test(VIEJO_DECO);
+  console.log(`  ${rechaza ? '✅' : '❌'} el patron no traga el formato viejo`);
+  results.push({ test: 'dump_regex_rechaza_el_viejo', pass: rechaza });
+  await sleep(100);
+
   await page.screenshot({ path: 'test-updates-result.png' });
   console.log('\nScreenshot: test-updates-result.png');
   await browser.close();
