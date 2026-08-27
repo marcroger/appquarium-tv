@@ -283,6 +283,9 @@ public class TvSceneBootstrap : MonoBehaviour
 
             case "feed":
                 mgr.FeedAll();
+                // Que el automatico de la TV se aparte mientras el movil alimente: si no, la
+                // tele come lo suyo MAS lo del sender. Ver `FoodManager._ultimoFeedDelSender` (en TvFoodManager.cs).
+                FoodManager.Instance?.FeedDelSender();
                 JsBridge.Log($"feed: comida soltada ({mgr.fishSpawner?.ActiveFish?.Count ?? -1} peces en el tanque)");
                 break;
 
@@ -419,6 +422,10 @@ public class TvSceneBootstrap : MonoBehaviour
         // Aspecto del agua: se publica AQUI, con el acuario ya montado, porque el color de la
         // niebla sale del preset de fondo y antes de esto TankBackground puede no existir.
         PublicarAspectoDelAgua();
+
+        // Aqui ya existen `SaveData` y los `FishAgent`, asi que un `pairs` que hubiera llegado
+        // durante la carga (la ventana ciega, ver `AplicarParejas`) ya se puede aplicar.
+        ReaplicarParejasPendientes();
 
         HideLoadingOverlay();
     }
@@ -1010,16 +1017,44 @@ public class TvSceneBootstrap : MonoBehaviour
 
         // ⚠ 2026-08-26 — `PlaceAt` DEVUELVE bool y se estaba tirando: una deco rechazada
         // (sin sitio, fuera del tanque) se confirmaba como colocada.
-        bool colocada = placer.PlaceAt(data, payload.position,
-            flipped:     payload.flipped,
-            rotationY:   payload.rotationY,
-            scaleFactor: payload.scaleFactor > 0f ? payload.scaleFactor : 1f,
-            fromSave:    true,
-            instanceId:  string.IsNullOrEmpty(payload.instanceId) ? null : payload.instanceId);
+        // ⚠⚠ 2026-08-27 — Se hace lo MISMO que el camino del INIT, que lleva funcionando desde
+        // siempre: `DecorationPlacer.LoadFromSaveAsync` (:1167-1175) reconstruye el cuaternion
+        // desde `hasUserRot` + `quat*` y monta despues. Este camino se habia quedado atras y
+        // perdia giro, inclinacion y montaje — los tres que MAS se notan al editar una deco.
+        // Copiar el camino que ya funciona es mas seguro que inventar otro.
+        Quaternion? rotUsuario = payload.hasUserRot
+            ? (Quaternion?)new Quaternion(payload.quatX, payload.quatY, payload.quatZ, payload.quatW)
+            : null;
 
-        JsBridge.Log(colocada
-            ? $"add_deco: {payload.itemId} at {payload.position:F1}"
-            : $"ERR add_deco: {payload.itemId} cargó pero PlaceAt lo rechazó (¿sin sitio en el tanque?)");
+        bool colocada = placer.PlaceAt(data, payload.position,
+            flipped:      payload.flipped,
+            rotationY:    payload.rotationY,
+            tiltX:        payload.tiltX,
+            scaleFactor:  payload.scaleFactor > 0f ? payload.scaleFactor : 1f,
+            fromSave:     true,
+            instanceId:   string.IsNullOrEmpty(payload.instanceId) ? null : payload.instanceId,
+            savedUserRot: rotUsuario);
+
+        if (!colocada)
+        {
+            JsBridge.Log($"ERR add_deco: {payload.itemId} cargó pero PlaceAt lo rechazó (¿sin sitio en el tanque?)");
+            yield break;
+        }
+
+        // El montaje va DESPUES de colocar, como en el INIT: necesita que la deco exista.
+        string montaje = "";
+        if (!string.IsNullOrEmpty(payload.mountedOnInstanceId) && !string.IsNullOrEmpty(payload.instanceId))
+        {
+            placer.MountDecoOnTarget(payload.instanceId, payload.mountedOnInstanceId);
+            montaje = $" montada sobre {payload.mountedOnInstanceId}";
+        }
+
+        // Se reporta lo que se APLICO, no lo que llego: si el sender manda una rotacion y aqui
+        // no aparece, es que venia sin `hasUserRot` y hay que mirar el emisor.
+        JsBridge.Log($"add_deco: {payload.itemId} at {payload.position:F1}"
+                   + (rotUsuario.HasValue ? " +rot" : "")
+                   + (Mathf.Abs(payload.tiltX) > 0.01f ? $" +tilt {payload.tiltX:F0}°" : "")
+                   + montaje);
     }
 
     private void RemoveDeco(string instanceId)
@@ -1059,11 +1094,47 @@ public class TvSceneBootstrap : MonoBehaviour
     /// cuyo pez aun se esta descargando no se cablea, y ese hueco es justo la carrera que
     /// documenta `AddFishAsync`. Si el log dice «3 recibidas, 2 cableadas», ahi esta.
     /// </summary>
+    /// <summary>
+    /// El ultimo `pairs` que llego antes de que existiera el acuario. Ver la ventana ciega en
+    /// `AplicarParejas`. Es de REEMPLAZO, como el propio mensaje: solo interesa el ultimo.
+    /// </summary>
+    private string _parejasPendientes;
+
+    /// <summary>
+    /// Aplica el `pairs` que se quedo esperando, si lo hubo. Se llama al terminar la carga,
+    /// cuando ya existen `SaveData` y los `FishAgent`.
+    /// </summary>
+    private void ReaplicarParejasPendientes()
+    {
+        if (string.IsNullOrEmpty(_parejasPendientes)) return;
+        var pendiente = _parejasPendientes;
+        _parejasPendientes = null;          // antes de aplicar, o un fallo lo dejaria en bucle
+        JsBridge.Log("pairs: aplicando las que llegaron durante la carga");
+        AplicarParejas(pendiente);
+    }
+
     private void AplicarParejas(string jsonValue)
     {
         var mgr = AquariumManager.Instance;
         if (mgr == null) return;
-        if (mgr.SaveData == null) { JsBridge.Log("ERR pairs: todavia no hay acuario (llego antes del INIT)"); return; }
+
+        // ⚠⚠ 2026-08-27 — LA VENTANA CIEGA, que encontro la sesion del repo movil.
+        // `SaveData` no existe hasta que termina la descarga de bundles: segundos, mas en frio.
+        // Y el `pairs` del movil es *edge-triggered* —solo se emite cuando CAMBIA, sin tick
+        // periodico—, asi que un cambio de parejas que caiga en esa ventana se perdia PARA
+        // SIEMPRE, y no volvia hasta la siguiente reconexion. Esto no lo cubria el arreglo de
+        // la carrera del 26-ago: aquel re-empareja tras cada `add_fish`, pero si el acuario ni
+        // siquiera existe no hay nada que re-emparejar.
+        //
+        // 🧭 Se guarda aqui en vez de pedirle al movil que lo reemita: asi deja de perderse sin
+        // depender de que publiquen un APK. Lo aplica `ReaplicarParejasPendientes()` al final
+        // de la carga.
+        if (mgr.SaveData == null)
+        {
+            _parejasPendientes = jsonValue;
+            JsBridge.Log("pairs: aun no hay acuario — guardadas para aplicarlas al terminar la carga");
+            return;
+        }
 
         var payload = SafeFromJson<TvPairList>(jsonValue);
         if (payload == null) return;                      // SafeFromJson ya lo ha dicho

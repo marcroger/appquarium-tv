@@ -88,12 +88,12 @@ Estado **tras los commits `458c217` y `2dbac4c` del 26-ago** (player `rcv 2026-0
 | `refresh` | `:236` | **no-op que sólo logea** — ver §5.4 |
 | `add_fish` | `AddFishAsync` (`:707`) | payload no-objeto → `ERR payload: …` · sin `speciesId` → `ERR add_fish: el payload no trae speciesId` · bundle que no carga → `ERR add_fish: load failed x` · **spawn nulo → `ERR add_fish: … SpawnFish devolvió null`**. ✅ Acepta `uid` (26-ago) — sin él, el pez **no puede emparejarse nunca** |
 | **`remove_fish`** ⭐ | `:750` | **Acepta las dos formas (27-ago).** `{"uid":"…","speciesId":"…"}` quita **ese** pez (`FishSpawner.DespawnByUid`); una cadena suelta sigue quitando **el primero de la especie** y el log lo dice: `remove_fish: x por especie (cliente sin uid: quitado el primero)`. ⚠ uid que no está en el tanque → `ERR remove_fish: uid 'x' no esta en el tanque` y **no se quita nada** — no cae al camino de la especie a propósito |
-| `add_deco` | `AddDecoAsync` (`:775`) | sin `itemId` → `ERR add_deco: el payload no trae itemId` · bundle → `ERR add_deco: load failed x` · **`PlaceAt` que rechaza → `ERR add_deco: … PlaceAt lo rechazó`** |
+| **`add_deco`** ⭐ | `AddDecoAsync` (`:775`) | sin `itemId` → `ERR add_deco: el payload no trae itemId` · bundle → `ERR add_deco: load failed x` · **`PlaceAt` que rechaza → `ERR add_deco: … PlaceAt lo rechazó`**. **Desde el 27-ago acepta `tiltX`, `hasUserRot` + `quatX/Y/Z/W` y `mountedOnInstanceId`** (los mismos nombres que `DecoPlacement`), y **reporta lo que aplicó**: `add_deco: x at … +rot +tilt 12° montada sobre y` |
 | `remove_deco` | `:820` | `remove_deco: x (ok=False)` si no existía |
 | `change_bg` | `:899` | **`ERR change_bg: id desconocido 'x' — válidos: bg_classic\|…`** |
 | `change_sub` | `:923` | ídem con los 12 sustratos |
 | `change_light` | `:946` | ídem con las 7 luces |
-| **`pairs`** ⭐ | `AplicarParejas` (`:909`) | Lista **completa** de parejas, no un delta. Payload `{"items":[{maleUid,femaleUid},…]}`. Reporta `pairs: N recibidas, M cableadas` — y **N≠M se dice** |
+| **`pairs`** ⭐ | `AplicarParejas` (`:909`) | Lista **completa** de parejas, no un delta. Payload `{"items":[{maleUid,femaleUid},…]}`. Reporta `pairs: N recibidas, M cableadas` — y **N≠M se dice**. ⚠ Si llega **antes de que exista el acuario** ya no se pierde: se **guarda y se reaplica** al terminar la carga (`pairs: aun no hay acuario — guardadas…`) |
 
 **Los tres `change_*` releen el estado** después de aplicar (`bg.CurrentPresetId`,
 `placer.CurrentSubstrateId`, `lighting.CurrentPresetId`) y sólo entonces confirman, con la

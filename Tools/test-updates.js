@@ -233,6 +233,40 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
   results.push({ test: 'remove_fish_por_especie_aun_vale', pass: t16 });
   await sleep(200);
 
+  // ── add_deco con giro e inclinacion (2026-08-27) ─────────────────────────────
+  // Hasta hoy `add_deco` sólo llevaba 6 campos y PERDIA el giro, la inclinacion y el montaje:
+  // tras la primera rotacion la verdad vive en el cuaternion `DecoPlacement.userRot`, no en
+  // `rotationY`. Lo encontro la sesion del repo movil. Aqui se comprueba que el receiver los
+  // aplica Y que lo dice — el log reporta lo APLICADO, no lo recibido.
+
+  console.log('TEST 17: add_deco con cuaternion + tilt -> el log tiene que decir que los aplico...');
+  const m17 = desde();
+  await sendUpdate('add_deco', JSON.stringify({
+    instanceId: 'deco_anchor_test_rot', itemId: 'deco_anchor',
+    position: { x: -1.2, y: -2.8, z: 2.0 }, scaleFactor: 1.0, flipped: false, rotationY: 0,
+    tiltX: 12, hasUserRot: true, quatX: 0, quatY: 0.3826834, quatZ: 0, quatW: 0.9238795,
+  }));
+  const t17 = await waitForLog('+rot', 20000, m17);
+  const t17b = await waitForLog('+tilt', 20000, m17);
+  console.log(`  ${t17 && t17b ? '✅' : '❌'} add_deco aplica y reporta giro e inclinacion`
+            + (t17 && t17b ? '' : '   <- si falta, el payload no lleva los campos nuevos'));
+  results.push({ test: 'add_deco_rot_y_tilt', pass: t17 && t17b });
+  await sleep(400);
+
+  // Negativo: sin los campos nuevos, el log NO debe decir "+rot". Sin esto, un log que
+  // imprimiera "+rot" siempre pasaria el test de arriba sin aplicar nada.
+  console.log('TEST 18: add_deco SIN giro -> el log NO debe decir "+rot"...');
+  const m18 = desde();
+  await sendUpdate('add_deco', JSON.stringify({
+    instanceId: 'deco_anchor_test_plano', itemId: 'deco_anchor',
+    position: { x: 1.2, y: -2.8, z: 2.0 }, scaleFactor: 1.0, flipped: false, rotationY: 0,
+  }));
+  const colocada18 = await waitForLog('add_deco: deco_anchor', 20000, m18);
+  const sinRot = colocada18 && !consoleLogs.slice(m18).some(l => l.includes('+rot'));
+  console.log(`  ${sinRot ? '✅' : '❌'} el log distingue con giro de sin giro`);
+  results.push({ test: 'add_deco_sin_rot_no_miente', pass: sinRot });
+  await sleep(200);
+
   await page.screenshot({ path: 'test-updates-result.png' });
   console.log('\nScreenshot: test-updates-result.png');
   await browser.close();

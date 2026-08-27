@@ -46,6 +46,20 @@ public class FoodManager : MonoBehaviour
 
     private const float AutoFeedInterval = 240f; // 4 minutes between auto-feeds
 
+    /// <summary>
+    /// ⚠⚠ 2026-08-27 — El autoalimentador del MOVIL tambien emite `feed` (lo cerraron el 26-ago
+    /// en su `FoodManager`), y este de aqui no se enteraba: la tele comia lo suyo MAS lo del
+    /// movil. No rompe nada, pero es comida doble y no lo pidio nadie. Lo encontro la sesion del
+    /// repo movil revisando el contrato.
+    ///
+    /// 🧭 Manda el sender: en cuanto llega un `feed` de fuera, el automatico de aqui se calla.
+    /// No se apaga para siempre —si el movil se desconecta, la tele se queda sola y tiene que
+    /// seguir dando de comer—, sino que caduca: si pasa mas de un intervalo y medio sin recibir
+    /// ninguno, se vuelve a encender solo.
+    /// </summary>
+    private float _ultimoFeedDelSender = -999f;
+    private const float MargenSenderVivo = AutoFeedInterval * 1.5f;
+
     // ── Lifecycle ──────────────────────────────────────────────────────────────
 
     void Awake()
@@ -133,13 +147,27 @@ public class FoodManager : MonoBehaviour
         yield return new WaitForSeconds(AutoFeedInterval);
         while (true)
         {
-            var fishList = AquariumManager.Instance?.fishSpawner?.ActiveFish;
-            if (fishList != null && fishList.Count > 0)
-                SpawnBatch(Mathf.Clamp(fishList.Count, 2, 6));
+            if (Time.time - _ultimoFeedDelSender < MargenSenderVivo)
+            {
+                // El movil esta alimentando: aqui no se toca. Se dice, o desde fuera parece
+                // que el automatico se ha muerto.
+                JsBridge.Log("auto-feed: lo salta el sender (el movil esta alimentando)");
+            }
+            else
+            {
+                var fishList = AquariumManager.Instance?.fishSpawner?.ActiveFish;
+                if (fishList != null && fishList.Count > 0)
+                    SpawnBatch(Mathf.Clamp(fishList.Count, 2, 6));
+            }
 
             yield return new WaitForSeconds(AutoFeedInterval);
         }
     }
+
+    /// <summary>
+    /// Avisa de que ha llegado un `feed` del sender. Ver `_ultimoFeedDelSender`.
+    /// </summary>
+    public void FeedDelSender() => _ultimoFeedDelSender = Time.time;
 
     /// <summary>Spawna `count` items en posiciones X/Z aleatorias en la superficie del tanque.</summary>
     private void SpawnBatch(int count)

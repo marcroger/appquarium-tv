@@ -108,4 +108,22 @@ public class TvAddDecoPayload
     public float   scaleFactor;
     public bool    flipped;
     public float   rotationY;
+
+    // ⚠⚠ 2026-08-27 — Los seis campos de arriba PIERDEN datos en cuanto el usuario gira una
+    // deco. Tras la primera rotacion la verdad ya no esta en `rotationY`: esta en el cuaternion
+    // acumulado `DecoPlacement.userRot`, y `rotationY` queda como legacy. Lo encontro la sesion
+    // del repo movil (DecorationPlacer.cs:590, :608, :2386).
+    //
+    // Consecuencia: reemitir `add_deco` con los seis de arriba sincroniza mover, escalar y
+    // voltear, pero NO girar, inclinar ni montar — justo los que se ven mal en la tele. Una
+    // version parcial seria PEOR que nada: arregla lo que no se nota y deja lo que si.
+    //
+    // 🧭 Los nombres NO son inventados: son los de `DecoPlacement`, la clase del save que los
+    // dos repos comparten, asi que el movil solo tiene que serializar lo que ya tiene en `pd`.
+    // Y el camino del INIT (`DecorationPlacer.LoadFromSaveAsync`, :1167-1175) ya los aplica
+    // todos desde `decoJson`: esto solo pone al dia el camino del UPDATE, que iba por detras.
+    public float   tiltX;
+    public bool    hasUserRot;
+    public float   quatX, quatY, quatZ, quatW;
+    public string  mountedOnInstanceId;
 }
