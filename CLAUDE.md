@@ -419,6 +419,46 @@ npx wrangler deploy
 ```
 Es aditivo: sin ellos el camino nuevo da `503` y el token constante sigue igual.
 
+### 🐟 `remove_fish` por uid (2026-08-27) — y una contabilidad rota desde siempre
+
+`remove_fish` sólo transportaba la **especie**, así que `DespawnOneBySpecies` quitaba **el
+primero** de esa especie. Con 3 Banggai en el tanque, quitabas uno concreto en el móvil y en la
+tele desaparecía otro — sin error, con el log diciendo que todo bien. Ahora que el uid del móvil
+se adopta (26-ago), el arreglo era barato.
+
+**Es aditivo, y el camino viejo se identifica en el log:**
+
+| llega | qué hace |
+|---|---|
+| `"fish_banggai"` | `remove_fish: fish_banggai por especie (cliente sin uid: quitado el primero)` |
+| `{"uid":"…","speciesId":"…"}` | `remove_fish: fish_banggai uid=… (quedan N peces)` |
+| uid que no está en el tanque | `ERR remove_fish: uid 'x' no esta en el tanque` — y **no quita nada** |
+
+⚠ Ese último punto es deliberado: **caer al camino de la especie sería reintroducir el fallo por
+la puerta de atrás**. `speciesId` en el JSON es opcional (se saca del propio pez si no viene).
+
+⚠⚠ **De paso salió otra**: `remove_fish` destruía el pez pero **no lo sacaba de
+`ownedFish`/`activeFishUids`**. `add_fish` los alimentaba y nadie los limpiaba, así que el save
+transitorio sólo crecía y divergía del tanque según avanzaba la sesión. Hoy sólo se leen en el
+arranque —por eso no se notaba— pero el emparejamiento ya consume uid de ahí. Ahora se limpian, y
+si el pez estaba emparejado **se retira la pareja y se re-cablea** (si no, `pairs` la contaría
+para siempre como «recibida pero no cableada», que es el síntoma de la carrera del `add_fish` y
+ahí sí es un fallo).
+
+**Falta el lado móvil:** mandar el uid en el payload. Contrato en `CAST_CONTRACT_TV.md` §5.3.
+
+### ⚠⚠ `waitForLog` miraba TODO el log acumulado (2026-08-27)
+
+En `Tools/test-updates.js`, `waitForLog(patrón)` buscaba en el log **desde el arranque**, así que
+**una línea de un test anterior daba por bueno un test posterior sin que pasara nada**. No es
+teórico: los dos tests nuevos de `remove_fish` habrían pasado con líneas de los tests 2 y 12.
+
+Ahora hay `desde()`, que marca el punto del log, y `waitForLog(patrón, ms, marca)` sólo mira de
+ahí en adelante. Los tests viejos siguen llamando sin marca.
+
+🧭 Misma familia que el `bg_ocean` que tuvo este fichero meses en verde: **el test pasaba, y no
+comprobaba nada**.
+
 ### 🧪 Guardas que se pagan solas (2026-08-26)
 
 `node Tools/check_preset_ids.js` — sin Unity, sin navegador y sin tele. Comprueba tres cosas:
@@ -433,6 +473,48 @@ Es aditivo: sin ellos el camino nuevo da `503` y el token constante sigue igual.
 
 🧭 No es descuido de nadie: **la ventana entre escribir código y escribir el doc siempre existe**,
 y en esa ventana el contrato miente.
+### ⚠⚠ El MCP de Unity puede estar hablando con OTRO proyecto (2026-08-27)
+
+El puerto **8091** lo sirve **el Editor que esté abierto**, sea cual sea el proyecto. Ese día
+había un Unity abierto con `D:\dev\Distill` y ninguno con éste: `recompile_scripts` se quedó
+**7 minutos «working»**, `Library/ScriptAssemblies/Assembly-CSharp.dll` seguía siendo del día
+anterior, y el `Editor.log` que se leía era el del otro proyecto.
+
+⚠ Lo peligroso no es el cuelgue, es que **una Console vacía porque no ha compilado se parece a
+una Console limpia**. Comprobar antes de fiarse:
+
+```powershell
+Get-CimInstance Win32_Process -Filter "Name='Unity.exe'" | Select-Object ProcessId,CommandLine
+```
+
+### 🧰 Comprobar que el C# compila SIN Unity y sin build (2026-08-27)
+
+```bash
+bash Tools/compile-check.sh          # Assembly-CSharp (runtime)
+bash Tools/compile-check.sh Editor   # Assembly-CSharp-Editor
+```
+
+**~15 s.** Usa el Roslyn y el host de .NET que trae Unity, y saca las 308 referencias y los
+~2.500 caracteres de `define` del `.csproj` que Unity genera para el IDE. Hasta ahora la única
+forma de saber si un cambio compilaba era la Console del Editor o gastarse un build.
+
+- ⚠ **Comprueba SÓLO que compila.** Ni runtime, ni stripping, ni que el shader exista, ni que el
+  bundle cargue. Es el escalón más bajo: encima siguen `static-server.js` + `test-updates.js`, y
+  encima de todo, la tele.
+- ⚠ Depende de que el `.csproj` esté al día (lo regenera Unity al reimportar). Un `.cs` **recién
+  creado** que no esté en el csproj **no se compila y sale verde**. Mirar la cuenta de fuentes
+  que imprime (hoy: 35 runtime / 15 editor).
+- 🧭 Se validó **en los dos sentidos**: verde con el código bueno y rojo con un `CS0029` metido a
+  propósito. Una herramienta de verificación que sólo se ha visto en verde no está verificada.
+
+Tres trampas que costó montarlo, todas de fallo silencioso:
+1. La versión inicial terminaba con **éxito si el generador reventaba** (el bucle no iteraba y
+   `CODE` seguía a 0). Ahora aborta si no hay ficheros de respuesta.
+2. `python` en Windows escribe el salto de línea como **CR+LF**, y `$(cat orden.txt)` **no parte
+   por CR**: el nombre salía `Assembly-CSharp<CR>` y `csc` daba `CS2011` sobre un fichero que
+   existía y que se abría a mano. Va con `newline=''`.
+3. Con rutas de MSYS (`/tmp/…`) python resolvía contra `D:\tmp` y `csc` buscaba en
+   `C:\Users\…\Temp`. La ruta de trabajo es **relativa** (`Temp/compile-check`) a propósito.
 
 ### Estado actual — 2026-08-19 ⭐
 
@@ -684,7 +766,7 @@ print('OK index.html')
 | `Assets/Scripts/Stubs/` | TvStubs (stubs para clases mobile-only referenciadas indirectamente) |
 | `Assets/Settings/` | **TvRenderPipeline.asset** ⭐ + **TvUniversalRenderer.asset** — el render pipeline que faltaba (2026-08-21). Sin esto no hay post-proceso |
 | `Assets/Editor/` | **TvUrpSetup** ⭐ (crea/enciende/apaga el pipeline y verifica `postProcessData`), **TvRenderProbe** (sonda: ¿se está renderizando, y con qué?), **TvGradeSweep** (barrido de grado en el Editor — ⚠ NO fiable para elegir valores, ver `CAST_PARIDAD_VISUAL.md` §0.1), TvAddressablesSetup, TvBuildTools, SyncFromMobileMenu, **TvBuildPostprocess** (parchea settings.json tras cada build), **TvProdBuild** ⭐ (build de producción en batchmode + preflight de audio), **TvWasmOptimize** ⭐ (fuerza `DiskSizeLTO` en cualquier build), TvEmptyTestBuild, **TvAuthPreflight** ⭐ (aborta el build si falta el token de los bundles), TvShadowDiag, **TvDecoOptimize** ⭐ (pasa una deco a texturas DXT1 sueltas: −49,8 % de peso medido) |
-| `Tools/` | ~30 ficheros. Los que importan: **grade-tune.js** ⭐ (afina el grado sobre el player REAL en Chrome, mandando mensajes `GRADE`), **grade_contact_sheet.py** (hoja de contactos + luminancia/saturación por bandas, con guarda de «esto no mide nada»), **r2-auth-worker/** ⭐ (el Worker portero de los bundles + sus dos baterías de pruebas), **SyncFromMobile.ps1**, **check_preset_ids.js** ⭐ (guarda: ningún id de preset fantasma, sin Unity ni tele), **static-server.js** (rig local en :3001 — sirve el catálogo **desde R2**, no del disco), **test-updates.js** (los 9 tests de los handlers UPDATE), **cast-headless.js** (sender sin navegador), **cast-run.sh** (ciclo de medición completo), **restore-production-receiver.sh**, **extract_glb_textures.py** (saca las texturas embebidas de un GLB + `mapeo.txt`, paso previo a `TvDecoOptimize`), **r2_huerfanos.py** (lista/borra bundles huérfanos de R2), y los `rcv-*.html` (receivers de diagnóstico). ⚠ Varios escriben en R2 de producción. |
+| `Tools/` | ~30 ficheros. Los que importan: **grade-tune.js** ⭐ (afina el grado sobre el player REAL en Chrome, mandando mensajes `GRADE`), **grade_contact_sheet.py** (hoja de contactos + luminancia/saturación por bandas, con guarda de «esto no mide nada»), **r2-auth-worker/** ⭐ (el Worker portero de los bundles + sus dos baterías de pruebas), **SyncFromMobile.ps1**, **check_preset_ids.js** ⭐ (guarda: ningún id de preset fantasma, sin Unity ni tele), **compile-check.sh** ⭐ (¿compila el C#? en ~15 s, sin Unity y sin build), **static-server.js** (rig local en :3001 — sirve el catálogo **desde R2**, no del disco), **test-updates.js** (los tests de los handlers UPDATE — **16** desde el 27-ago), **cast-headless.js** (sender sin navegador), **cast-run.sh** (ciclo de medición completo), **restore-production-receiver.sh**, **extract_glb_textures.py** (saca las texturas embebidas de un GLB + `mapeo.txt`, paso previo a `TvDecoOptimize`), **r2_huerfanos.py** (lista/borra bundles huérfanos de R2), y los `rcv-*.html` (receivers de diagnóstico). ⚠ Varios escriben en R2 de producción. |
 
 ---
 

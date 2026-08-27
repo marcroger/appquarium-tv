@@ -47,7 +47,7 @@ Comprobado después:
 |---|---|
 | sello que sirve R2 | `rcv 2026-08-26 uid+pairs` |
 | `{{{` sin sustituir en el `index.html` | **0** — es el procesado, no el template |
-| md5 de `.wasm` / `.data` | `ba33d26a…` / `9ac8a928…`, **idénticos al local** |
+| md5 de `.wasm` / `.data` | **`566334a9…`**, idéntico al local — ⚠ **los dos números que puso aquí esta sesión el 26-ago eran falsos**; comprobado el 27-ago bajando el fichero entero de R2. El `ETag` que devuelve R2 acaba en `-3` (subida multiparte) y **no es el md5**, así que no sirve para comparar |
 | `keepalive_black.mp4` y `silence.wav` | **siguen ahí** (la trampa del `--delete`, esquivada) |
 
 🧭 El player desplegado se probó en local **contra el catálogo de R2**, no contra el del

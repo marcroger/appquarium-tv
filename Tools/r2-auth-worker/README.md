@@ -41,6 +41,35 @@ node test-local.mjs                     # lógica, sin red
 receiver con token nuevo sin dejar fuera al que ya está en la tele. El token viejo se retira
 del secret cuando el nuevo esté validado.
 
+## Desplegar la FASE 2 (JWT por usuario) — escrita y probada, SIN desplegar
+
+El codigo ya esta en `src/` y `test-local.mjs` lo cubre (42/42). Lo que falta son **dos secrets
+que solo puede poner el user**:
+
+```bash
+cd Tools/r2-auth-worker
+npx wrangler secret put JWT_SECRET      # aleatorio largo; solo lo conoce el Worker
+npx wrangler secret put MINT_TOKENS     # el que hornea el APK; admite varios por coma
+npx wrangler deploy
+```
+
+Es **aditivo**: sin esos secrets el camino nuevo devuelve `503` y el token constante de la Fase 1
+sigue funcionando igual, asi que la tele no se entera. Aun asi toca infraestructura viva.
+
+⚠ **`OWNERSHIP_MODE` arranca en `log`** (`wrangler.toml`): firma y caducidad se verifican de
+verdad, pero un bundle que no consta como del usuario **se sirve igual**, marcado
+`X-Aq-Ownership: would-deny`. Se pasa a `enforce` cuando ese contador sea 0. Si los ids de los
+claims llegaran mal, `enforce` deja al usuario sin **su** acuario — tele vacia, que es el sintoma
+mas caro de diagnosticar en este proyecto.
+
+⚠ **`/mint-token` no es abierto**: exige `Bearer <MINT_TOKENS>`. Un endpoint de emision sin
+credencial dejaria pedir `isPremium` a cualquiera, y entonces la Fase 2 protegeria **menos** que
+la Fase 1.
+
+El contrato completo para el lado movil esta en [`../../CAST_R2_AUTH_MOVIL.md`](../../CAST_R2_AUTH_MOVIL.md) §1.4 y §7.
+
+---
+
 ## Generar un token
 
 ```bash
