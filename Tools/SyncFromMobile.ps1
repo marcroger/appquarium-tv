@@ -87,7 +87,13 @@ $FilesToSync = @(
 #   PostProcessingSetup.cs   bloom OFF + Tonemapping Neutral + sat/contrast -> vuelven los 7 fps
 #   DecorationPlacer.cs      tint dual _Color/_BaseColor, BioLumEmissionScale 0.25, remap X,
 #                            RemoveAllDecos, GetFloorSurfaceY (de ahí cuelgan las sombras)
-#   FishSpawner.cs           DespawnOneBySpecies (lo llama TvSceneBootstrap -> no compila)
+#   FishSpawner.cs           DespawnOneBySpecies Y DespawnByUid (2026-08-27). Los llama
+#                            TvSceneBootstrap -> sin ellos no compila. DespawnByUid es lo que
+#                            permite quitar EL pez que el usuario quito, y no otro de su especie.
+#   CastDataTypes.cs         (2026-08-27) TvRemoveFishPayload, y los campos de giro/inclinacion/
+#                            montaje de TvAddDecoPayload: tiltX, hasUserRot, quat*, mountedOn...
+#   TvSceneBootstrap.cs      es TV-only de facto, pero ojo: handlers de remove_fish por uid, el
+#                            buffer de `pairs` y el volcado `dump` viven aqui.
 #   AmbientModeController.cs la versión móvil llama a CastManager -> no compila
 #   TankBackground.cs        orden de shaders para el color space de WebGL
 #   WaterSurface.cs          idem
