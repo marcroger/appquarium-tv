@@ -141,6 +141,6 @@ que mantiene viva la sesión. Borrar por **lista explícita**.
 |---|---|
 | `src/index.js` | El Worker. Sin dependencias. |
 | `wrangler.toml` | Binding R2 + `ALLOWED_ORIGINS`. El token va como *secret*, no aquí. |
-| `test-local.mjs` | 20 comprobaciones de la lógica con mocks. `node test-local.mjs`. |
+| `test-local.mjs` | **42** comprobaciones de la lógica con mocks (20 de la Fase 1 + 22 de la Fase 2: firma manipulada, `alg: none`, HS512, caducado, sin `exp`, `/mint-token` sin credencial). `node test-local.mjs`. |
 | `smoke-test.sh` | Matriz contra el Worker ya desplegado, incluido md5 de los bytes contra el bundle local. |
 | `TvBundleAuthSecret.cs.sample` | Plantilla del fichero con el token que **no** va a git. |
