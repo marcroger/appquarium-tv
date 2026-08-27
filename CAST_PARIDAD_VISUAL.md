@@ -360,7 +360,12 @@ tonemapping Neutral que el móvil no tiene, que comprime los altos.
 ⚠ **Hipótesis, no medición:** que esto explique el «blanco y negro» del fondo es lo más probable,
 pero no está comprobado en pantalla. Ver §4 antes de tocar un solo valor.
 
-### 2.2 🎯 Los fondos van a la TV a 1/16 de píxeles
+### 2.2 ~~🎯 Los fondos van a la TV a 1/16 de píxeles~~ ⚠ **DESFASADO — ver §0.5**
+
+> ⚠⚠ **Esta sección dice 512 y «9×», y las dos cifras son falsas desde el 21-ago.** Ese día,
+> `de033c9` subió los 11 fondos de **512 a 1024** en el override de WebGL y el doc no se
+> enteró. La diferencia real con el móvil es **2,25× en píxeles (1,5× lineal)**, no 9×. Lo
+> que sigue vale como historia de cómo se llegó aquí, no como estado.
 
 El PNG de origen es **el mismo fichero** en los dos repos (`bg_abyss.png`, 1.935.615 bytes en
 ambos). Lo que cambia es el import:
@@ -516,8 +521,19 @@ todas las combinaciones en la tele y capturar cada una. Sin eso, cada variante e
 
 ---
 
-## 5. Estado
+## 5. Estado — 2026-08-27
 
-- [ ] Nada tocado. Ninguna medición hecha en pantalla todavía.
-- [ ] Decisión del user pendiente en dos frentes: **cuánto FPS está dispuesto a pagar** por
-      acercarse al look del móvil, y **qué debe hacer la sombra** de una deco del fondo.
+- [x] ✅ **URP encendido y desplegado** (21-ago, §0.3). El grado se aplica de verdad.
+- [x] ✅ **Medido en el player real** (27-ago, §0.5): el grado **no** es la causa de lo que se
+      reporta, copiar el del móvil **perdería** un 35 % de croma, y la TV **no apaga el color**
+      (croma conservado en 4 fondos que van de L* 0.9 a L* 63.4).
+- [x] ✅ **Explicado el «fondo casi en B/N»**: 7 de los 11 fondos están por debajo de croma 12
+      **en el PNG de origen**. Es el arte.
+- [ ] ⭐ **Pendiente, y es lo ÚNICO que queda de este doc: la nitidez** (1024 contra los 1536
+      del móvil, 2,25× en píxeles). Dos vías en §3.1; la de Addressables sigue siendo la buena.
+- [ ] ⚠ **Pendiente de una comparación honesta con el móvil**: con **el mismo preset de fondo
+      en las dos pantallas** (§4, punto 1). Sin eso, comparar no dice nada — un `bg_classic`
+      tiene **15× más croma** que un `bg_abyss`.
+- [ ] **El bloom, remedirlo en un fondo vivo.** En `bg_kelp` no aporta nada (±0.1 L*), pero es
+      un fondo oscuro y el bloom necesita altas luces.
+- [ ] Decisión del user: **qué debe hacer la sombra** de una deco del fondo.
