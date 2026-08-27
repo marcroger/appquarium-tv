@@ -137,7 +137,7 @@ Contexto por si no lo tienes: **toda la maquinaria de parejas existía en la TV 
 nunca**, porque `TvAquariumState` no transportaba las parejas. Una pareja emparejada nadaba junta
 en el móvil y **suelta** en la tele. Lo encontró la sesión móvil del 26-ago barriendo su app.
 
-Lo que la TV acepta ya (player `rcv 2026-08-26 uid+pairs`, en R2):
+Lo que la TV acepta ya (player **`rcv 2026-08-27 rmuid`**, desplegado en R2 y validado en el device el 27-ago):
 
 | campo / tipo | forma | notas |
 |---|---|---|
