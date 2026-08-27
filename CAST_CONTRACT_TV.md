@@ -93,6 +93,7 @@ Estado **tras los commits `458c217` y `2dbac4c` del 26-ago** (player `rcv 2026-0
 | `change_bg` | `:899` | **`ERR change_bg: id desconocido 'x' — válidos: bg_classic\|…`** |
 | `change_sub` | `:923` | ídem con los 12 sustratos |
 | `change_light` | `:946` | ídem con las 7 luces |
+| **`dump`** 🔬 | `VolcarEstado` | **Diagnóstico, no cambia nada.** No lleva valor. Vuelca por el canal el estado **montado**: cabecera con `bounds`, `remapX`, `bg/sub/luz/ambiente`; una línea `DUMP pez <uid> <especie> escala= pos= pareja=`; y una `DUMP deco <instanceId> <itemId> pos= escala= flip= quat= sobre=`. Ordenado por id y con precisión fija, **para poder hacer diff contra el móvil**. Marca `⚠RECORTADA-AL-BORDE` la deco que el `Clamp` haya movido |
 | **`pairs`** ⭐ | `AplicarParejas` (`:909`) | Lista **completa** de parejas, no un delta. Payload `{"items":[{maleUid,femaleUid},…]}`. Reporta `pairs: N recibidas, M cableadas` — y **N≠M se dice**. ⚠ Si llega **antes de que exista el acuario** ya no se pierde: se **guarda y se reaplica** al terminar la carga (`pairs: aun no hay acuario — guardadas…`) |
 
 **Los tres `change_*` releen el estado** después de aplicar (`bg.CurrentPresetId`,

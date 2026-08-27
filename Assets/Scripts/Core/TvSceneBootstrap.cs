@@ -309,6 +309,7 @@ public class TvSceneBootstrap : MonoBehaviour
             case "change_sub":  ChangeSub(upd.value);                      break;
             case "change_light":ChangeLight(upd.value);                    break;
             case "pairs":       AplicarParejas(upd.value);                 break;
+            case "dump":        VolcarEstado();                            break;
         }
     }
 
@@ -1094,6 +1095,84 @@ public class TvSceneBootstrap : MonoBehaviour
     /// cuyo pez aun se esta descargando no se cablea, y ese hueco es justo la carrera que
     /// documenta `AddFishAsync`. Si el log dice «3 recibidas, 2 cableadas», ahi esta.
     /// </summary>
+    // ── Volcado del estado resuelto (2026-08-27) ──────────────────────────────
+    //
+    // POR QUE EXISTE: el objetivo del proyecto es que lo que se castea se vea IGUAL que en el
+    // movil — tamaño del pez, donde esta cada deco, a que escala, girada como, y de quien
+    // cuelga. Comparar eso a ojo entre dos pantallas es justo el error que este proyecto lleva
+    // un mes pagando. Esto lo convierte en un DIFF.
+    //
+    // 🧭 Se vuelca lo que la escena tiene MONTADO, no lo que llego por el canal: la posicion
+    // sale del transform vivo (`GetCurrentPlacements`, DecorationPlacer.cs:1257) y la escala del
+    // pez de su `localScale`. Si el emisor manda una cosa y aqui se ve otra, la diferencia
+    // aparece — que es todo el proposito.
+    //
+    // ⚠⚠ Las tres transformaciones que ESTE LADO aplica y que pueden separar las dos pantallas
+    // aunque el dato llegue bien (por eso van en la cabecera del volcado):
+    //   1. `remapX` — la X de las decos se re-escala por `bounds.x / tankHalfWidth`, y SOLO la
+    //      X. Si el movil no manda `tankHalfWidth` vale 0 y NO hay remapeo: las posiciones se
+    //      usan crudas. La escala de la deco no se re-escala, asi que con remapX != 1 la
+    //      separacion relativa a su propio tamaño cambia.
+    //   2. El `Clamp` a los bordes (DecorationPlacer.cs:365-366) mueve en SILENCIO una deco
+    //      pegada al borde. Por eso se vuelca la posicion final y los bounds: se ve.
+    //   3. El tamaño del pez esta CUANTIZADO a 4 escalones (TvStubs.cs:60-64). El round-trip
+    //      es exacto solo si el movil manda uno de los cuatro valores discretos.
+    //
+    // Formato pensado para diff: una entidad por linea, ordenadas por id, precision fija.
+    private void VolcarEstado()
+    {
+        var mgr = AquariumManager.Instance;
+        if (mgr == null) { JsBridge.Log("ERR dump: no hay acuario"); return; }
+
+        var placer = mgr.tankController != null ? mgr.tankController.GetComponent<DecorationPlacer>() : null;
+        var bg     = FindFirstObjectByType<TankBackground>();
+        var luz    = FindFirstObjectByType<TankLightingController>();
+        var amb    = FindFirstObjectByType<AmbientModeController>();
+
+        var b = mgr.tankController != null ? mgr.tankController.GetTankBounds() : new Bounds();
+        float mediaAnchoMovil = placer != null ? placer.MobileTankHalfWidth : 0f;
+        float remapX = (mediaAnchoMovil > 0.1f && b.extents.x > 0.1f) ? b.extents.x / mediaAnchoMovil : 1f;
+
+        JsBridge.Log("DUMP ini"
+            + $" tanque={mgr.SaveData?.selectedTankId ?? "?"}"
+            + $" bounds=({b.min.x:F2},{b.max.x:F2} | {b.min.y:F2},{b.max.y:F2} | {b.min.z:F2},{b.max.z:F2})"
+            + $" anchoMovil={mediaAnchoMovil:F2} remapX={remapX:F3}"
+            + (mediaAnchoMovil <= 0.1f ? " (SIN REMAPEO: el sender no mando tankHalfWidth)" : "")
+            + $" bg={bg?.CurrentPresetId ?? "?"} sub={placer?.CurrentSubstrateId ?? "?"}"
+            + $" luz={luz?.CurrentPresetId ?? "?"} ambiente={amb?.CurrentMode.ToString() ?? "?"}");
+
+        // ── Peces, ordenados por uid ──────────────────────────────────────────
+        var peces = new List<FishAgent>();
+        foreach (var f in FishAgent.All) if (f != null) peces.Add(f);
+        peces.Sort((x, y) => string.CompareOrdinal(x.Uid ?? "", y.Uid ?? ""));
+        foreach (var f in peces)
+        {
+            // localScale ya es baseSize * AgeScaleFactor(grupo): el tamaño REAL en pantalla.
+            JsBridge.Log($"DUMP pez {f.Uid ?? "-"} {f.Data?.itemId ?? "?"}"
+                + $" escala={f.transform.localScale.x:F3}"
+                + $" pos=({f.transform.position.x:F2},{f.transform.position.y:F2},{f.transform.position.z:F2})"
+                + $" pareja={(string.IsNullOrEmpty(f.PartnerUid) ? "-" : f.PartnerUid)}");
+        }
+
+        // ── Decos, ordenadas por instanceId ───────────────────────────────────
+        var decos = placer != null ? placer.GetCurrentPlacements() : new List<DecoPlacement>();
+        decos.Sort((x, y) => string.CompareOrdinal(x.instanceId ?? "", y.instanceId ?? ""));
+        foreach (var p in decos)
+        {
+            bool alBorde = Mathf.Abs(p.position.x - (b.min.x + 0.3f)) < 0.01f
+                        || Mathf.Abs(p.position.x - (b.max.x - 0.3f)) < 0.01f;
+            JsBridge.Log($"DUMP deco {p.instanceId} {p.itemId}"
+                + $" pos=({p.position.x:F2},{p.position.y:F2},{p.position.z:F2})"
+                + $" escala={p.scaleFactor:F3} flip={(p.flipped ? 1 : 0)}"
+                + $" quat=({p.quatX:F3},{p.quatY:F3},{p.quatZ:F3},{p.quatW:F3})"
+                + $" sobre={(string.IsNullOrEmpty(p.mountedOnInstanceId) ? "-" : p.mountedOnInstanceId)}"
+                // ⚠ Se avisa del recorte: si no, una deco movida por el Clamp parece bien puesta.
+                + (alBorde ? " ⚠RECORTADA-AL-BORDE" : ""));
+        }
+
+        JsBridge.Log($"DUMP fin peces={peces.Count} decos={decos.Count}");
+    }
+
     /// <summary>
     /// El ultimo `pairs` que llego antes de que existiera el acuario. Ver la ventana ciega en
     /// `AplicarParejas`. Es de REEMPLAZO, como el propio mensaje: solo interesa el ultimo.
