@@ -232,6 +232,92 @@ día se enciende el bloom, hay que volver a ponerlo ON.
 
 ---
 
+## 0.5 ✅✅ MEDIDO EN LOCAL (2026-08-27) — no es el grado, y el fondo está pintado así
+
+Barrido de las 8 variantes de `Tools/grade-tune.js` sobre el **player real** (`rcv 2026-08-27
+rmuid`) y medido en **L\* / C\*** con `Tools/analiza_grado_lab.py`. Escena: `bg_kelp`, 1 pez,
+6 decos, día.
+
+⚠ **Primero, por qué las cifras de antes no valían.** `grade_contact_sheet.py` informa **media de
+canales RGB** y **saturación HSV**, y las dos se equivocan justo en esto:
+
+- La media RGB **sube** al desaturar un verde saturado (`0,150,0` → gris `107`): la variante de
+  control `Z`, que desatura del todo, salió **la más clara de las ocho** sin serlo.
+- La saturación HSV de un verde **oscuro** es alta, así que el fondo en penumbra puntuaba más
+  «saturado» que el suelo vivo — al revés de lo que se ve en la captura.
+
+### El barrido, en unidades que no engañan
+
+| variante | fondo alto | fondo medio | suelo |
+|---|---|---|---|
+| **A** el build tal cual | L\* 20.8 · C\* 21.0 | L\* 8.4 · C\* 7.9 | L\* 34.3 · C\* 38.6 |
+| **B** grado del móvil exacto | L\* 21.4 · C\* 15.2 | L\* 9.0 · C\* 7.0 | L\* 34.7 · C\* **25.1** |
+| **F** sin bloom, sat +18 | L\* 20.8 · C\* 21.0 | L\* 8.2 · C\* 7.8 | L\* 34.3 · C\* 38.6 |
+| **Z** control extremo | L\* 21.6 · C\* **0.0** | L\* 9.1 · C\* 0.0 | L\* 35.1 · C\* 0.0 |
+
+- 🧭 **`F` reproduce `A` clavado** (±0.0 en las tres bandas). `F` son los valores que la escena ya
+  tiene, así que esto demuestra que la ruta `GRADE` y el build dicen lo mismo: **el barrido mide**.
+- ⚠⚠ **Copiar el grado del móvil PIERDE color**: −13.5 de croma en el suelo (**−35 %**) y −5.8 en
+  el fondo alto (**−28 %**), a cambio de **+0.5 L\*** de claridad. Es exactamente lo contrario de
+  lo que se buscaba. **No hacerlo.**
+- **El bloom no aporta nada en escena oscura**: entre 1.2, 0.6, 0.35 y apagado la claridad varía
+  **±0.1 L\***. Lo único que mueve el croma es el parámetro de saturación. ⚠ Reserva honesta:
+  `bg_kelp` es oscuro y el bloom necesita zonas brillantes — **falta remedirlo en un fondo vivo**
+  antes de dar el bloom por inútil.
+- **El tonemapping es casi irrelevante aquí**: `G` (sin él) contra `F` = −0.6 L\*, croma igual.
+
+### ⚠⚠ Y lo que de verdad cambia el diagnóstico: la TV NO apaga el color
+
+Comparando el **PNG de origen** contra el **render del player**, en cuatro fondos que van de casi
+negro a muy vivo (`Tools/medir-fondos.js`):
+
+| fondo | PNG (banda alta) | render (banda alta) | diferencia |
+|---|---|---|---|
+| `bg_abyss` | L\* 0.9 · C\* 1.6 | L\* 1.1 · C\* 2.7 | +0.2 L\* · **+1.1 C\*** |
+| `bg_kelp` | L\* 23.5 · C\* 19.3 | L\* 20.8 · C\* 21.0 | −2.7 L\* · **+1.6 C\*** |
+| `bg_tropical` | L\* 63.4 · C\* 36.0 | L\* 60.8 · C\* 35.9 | −2.5 L\* · −0.1 C\* |
+| `bg_classic` | L\* 55.4 · C\* 39.3 | L\* 53.4 · C\* 40.1 | −2.0 L\* · +0.8 C\* |
+
+**El croma se conserva entero** —incluso sube un poco, que es el `sat +18` trabajando— y la
+claridad baja de forma **constante** ~2 L\* en los cuatro. Eso no es «apagado»: es un velo
+pequeño y uniforme, coherente con la viñeta.
+
+### 🎨 «El fondo casi en blanco y negro» es el arte, no el pipeline
+
+Croma del **PNG de origen** de los 11 fondos:
+
+| fondo | L\* | C\* | | fondo | L\* | C\* |
+|---|---|---|---|---|---|---|
+| `bg_abyss` | 1.4 | **2.4** | | `bg_wreck` | 13.9 | 11.2 |
+| `bg_cave` | 5.0 | 3.6 | | `bg_deep` | 7.0 | 15.4 |
+| `bg_jungle` | 7.3 | 5.5 | | `bg_arctic` | 25.0 | 17.4 |
+| `bg_volcanic` | 6.4 | 6.7 | | `bg_tropical` | 48.5 | 29.3 |
+| `bg_night` | 3.8 | 9.9 | | `bg_classic` | 37.7 | **37.2** |
+| `bg_kelp` | 12.7 | 10.9 | | | | |
+
+**Siete de once están por debajo de croma 12 en el fichero.** Son cuevas, abismos y noche: están
+pintados así. `bg_classic` tiene **15× más croma** que `bg_abyss`.
+
+🧭 **Consecuencia para la comparación con el móvil:** si las dos pantallas no tenían **el mismo
+preset**, la comparación no dice nada sobre el pipeline. Es el punto 1 del protocolo de §4, y es
+el que hay que asegurar antes de tocar nada.
+
+### Lo que queda vivo de este documento
+
+Sólo la **nitidez**, y es independiente del color:
+
+| | resolución | píxeles |
+|---|---|---|
+| Móvil | 1536×1024 | 1,57 Mpx |
+| TV | 1024×683 | 0,70 Mpx |
+
+**2,25× en píxeles (1,5× lineal).** ⚠ §2.2 decía 512 y «9×»: **falso desde el 21-ago**, cuando
+`de033c9` subió los 11 fondos de 512 a 1024 y este doc no se enteró. La conclusión de §3.1 (ir por
+Addressables y no por subir el import) **sigue siendo la buena**, pero el premio es menor de lo
+que se creía y ahora compite con un refactor de carga asíncrona.
+
+---
+
 ## 1. Lo que se ve (reportado por el user)
 
 1. **Los colores no se ven tan nítidos ni tan bonitos como en la app.** El fondo en concreto se
