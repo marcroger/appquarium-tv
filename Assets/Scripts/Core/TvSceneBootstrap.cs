@@ -65,6 +65,26 @@ public class TvSceneBootstrap : MonoBehaviour
         if (Instance != null && Instance != this) { Destroy(gameObject); return; }
         Instance = this;
 
+        // ⚠⚠ 2026-08-27 — CULTURA INVARIANTE PARA TODO EL RECEIVER.
+        //
+        // Todo lo que sale por el canal Cast se formateaba con la cultura de la maquina, asi que
+        // el MISMO build imprimia cosas distintas segun donde corriera: en el device (locale
+        // ingles) `speed: x1.80`, y en el Chrome de un Windows en español `speed: x1,80`. Eso es
+        // lo peor posible para lineas que alguien parsea — y el movil esta a punto de parsear
+        // este canal (su R2), ademas de que el volcado `dump` existe justo para eso.
+        //
+        // Se vio porque `speed` NO TENIA NINGUNA PRUEBA: el handler llevaba meses imprimiendo la
+        // coma y nadie lo habia mirado. Al contar tipo a tipo cuales estaban cubiertos salieron
+        // cuatro sin prueba en ningun sitio (`speed`, `feed`, `startle`, `remove_deco`).
+        //
+        // 🧭 Se pone aqui, una vez, en vez de parchear los 14 `:F2` sueltos: asi tambien queda
+        // arreglado el codigo que se escriba manana. La TV no tiene UI localizada (asume idioma
+        // fijo, ver CLAUDE.md), asi que no hay nada que se vea afectado por el cambio.
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        System.Globalization.CultureInfo.DefaultThreadCurrentCulture   = inv;
+        System.Globalization.CultureInfo.DefaultThreadCurrentUICulture = inv;
+        System.Threading.Thread.CurrentThread.CurrentCulture           = inv;
+
         // Los bundles ya no salen de un bucket público: los sirve el Worker desde uno
         // privado y sin cabecera devuelve 401. Va aquí, en Awake, porque tiene que estar
         // puesto antes del primer LoadAssetAsync (que ocurre al llegar el INIT de Cast).

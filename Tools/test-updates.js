@@ -319,6 +319,50 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
   results.push({ test: 'dump_regex_rechaza_el_viejo', pass: rechaza });
   await sleep(100);
 
+  // ── Los cuatro que no estaban cubiertos EN NINGUN SITIO (2026-08-27) ─────────
+  // Salio de contar, tipo a tipo, cuales tenian prueba: `speed`, `feed`, `startle` y
+  // `remove_deco` no la tenian ni aqui ni en ninguna tanda contra la tele. Los handlers
+  // llevaban meses en el player y nadie habia comprobado que hicieran algo.
+  // 🧭 Todos comprueban el EFECTO (nº de peces afectados, ok=True/False), no el eco.
+
+  console.log('TEST 22: speed aplica y reporta a cuantos peces...');
+  const m22 = desde();
+  await sendUpdate('speed', '1.8');
+  const t22 = await waitForLog('speed: x1.80 aplicado a', 6000, m22);
+  console.log(`  ${t22 ? '✅' : '❌'} speed`);
+  results.push({ test: 'speed', pass: t22 });
+  await sleep(300);
+
+  console.log('TEST 23: speed con un valor ilegible -> ERR...');
+  const m23 = desde();
+  await sendUpdate('speed', 'no-soy-un-numero');
+  const t23 = await waitForLog("ERR speed: valor ilegible 'no-soy-un-numero'", 6000, m23);
+  console.log(`  ${t23 ? '✅' : '❌'} speed rechaza basura`);
+  results.push({ test: 'speed_valor_ilegible', pass: t23 });
+  await sleep(300);
+
+  console.log('TEST 24: feed y startle confirman con el nº de peces...');
+  const m24 = desde();
+  await sendUpdate('feed', '');
+  const t24a = await waitForLog('feed: comida soltada', 6000, m24);
+  await sendUpdate('startle', '');
+  const t24b = await waitForLog('peces espantados desde', 6000, m24);
+  console.log(`  ${t24a && t24b ? '✅' : '❌'} feed:${t24a} startle:${t24b}`);
+  results.push({ test: 'feed_y_startle', pass: t24a && t24b });
+  await sleep(300);
+
+  // remove_deco: el positivo usa la deco que planto el TEST 18, y el negativo exige ok=False.
+  // Sin el negativo, un handler que dijera "ok=True" siempre pasaria el positivo.
+  console.log('TEST 25: remove_deco distingue quitar de no encontrar...');
+  const m25 = desde();
+  await sendUpdate('remove_deco', 'deco_anchor_test_plano');
+  const t25a = await waitForLog('remove_deco: deco_anchor_test_plano (ok=True)', 8000, m25);
+  await sendUpdate('remove_deco', 'deco_que_no_existe_0');
+  const t25b = await waitForLog('remove_deco: deco_que_no_existe_0 (ok=False)', 8000, m25);
+  console.log(`  ${t25a && t25b ? '✅' : '❌'} remove_deco (quita:${t25a} no-existe:${t25b})`);
+  results.push({ test: 'remove_deco', pass: t25a && t25b });
+  await sleep(200);
+
   await page.screenshot({ path: 'test-updates-result.png' });
   console.log('\nScreenshot: test-updates-result.png');
   await browser.close();
