@@ -292,7 +292,7 @@
         }
       };
 
-      var _fraseTimer = null, _fraseUltima = -1, _fraseDatos = null;
+      var _fraseTimer = null, _fraseUltima = -1, _fraseDatos = null, _fraseIdioma = 'es';
 
       // Extrae del INIT lo que hace falta para personalizar. Se llama desde el listener de
       // mensajes, con el JSON CRUDO, antes de que Unity exista.
@@ -311,8 +311,13 @@
               motes.push(String(nk).trim());
             }
           }
+          // ⚠ El idioma va en el log a proposito: es la unica forma de confirmar desde el
+          // emisor que el campo `lang` llega. Sin esto, "¿os llega el lang?" no tiene respuesta.
+          var lang = (payload && payload.lang) ? String(payload.lang) : '';
+          _fraseIdioma = lang ? lang.slice(0, 2).toLowerCase() : 'es';
           _fraseDatos = { motes: motes, total: peces.length };
-          dbg('frases: ' + peces.length + ' peces, ' + motes.length + ' con mote');
+          dbg('frases: ' + peces.length + ' peces, ' + motes.length + ' con mote, lang='
+              + (lang ? lang + ' -> ' + _fraseIdioma : 'AUSENTE (cliente viejo) -> es'));
         } catch (e) {
           // No se traga: si el INIT cambia de forma, esto lo dice en vez de quedarse mudo
           // con las frases genéricas para siempre.
