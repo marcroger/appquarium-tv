@@ -254,6 +254,48 @@ no hay que hacer es anunciarlo como «resync», porque no lo es.
 
 ---
 
+### 5.5 ⚠⚠ CORRECCIÓN AL §11.2 DE `CAST_CONTRACT.md` (2026-08-28): el receptor SÍ monta
+
+El doc del móvil añadió el 27-ago una §11.2 titulada **«Por qué no se pudo: el receptor no
+sobrevive a su propio arranque»**, con esta traza y este veredicto:
+
+```
+[1.5s] Sender CONNECTED …    ← 1,5s es SU tiempo de vida: se recarga entero cada vez
+[1.7s] Cast msg: INIT
+[1.7s]   buffered (1)        ← su Unity aún no está listo, encola
+                             ← y nunca llega el AQUARIUM READY
+Livelock: cae → reconectamos → el receptor reinicia → … Encaja con la hipótesis de OOM.
+```
+
+**Es falso, y se midió el 28-ago.** Con esa misma traza en su logcat, la tele estaba renderizando:
+
+| medida | resultado |
+|---|---|
+| dos `adb exec-out screencap` consecutivos (sesión C) | **103.088 px de 2.073.600 cambiando** → escena viva |
+| lo mismo tras un arranque en frío (sesión D) | **134.270 px** → escena viva |
+| lo que se veía | cañón, estatua, ~7 peces **y sus sombras** — o sea bundles bajados y shaders reapuntados |
+
+**Lo que de verdad pasa:** el receptor monta y renderiza; lo que muere es el **relay de logs** del
+receiver hacia el sender, a los ~45 ms de que el emisor haga su `RemoteMediaClient.load()` del
+`silence.wav` (4 sesiones de 4, Δ entre +3 y +57 ms). Con `cast-headless` **solo**, el mismo relay
+emite **135 y 139 líneas** a lo largo de sesiones de 147 s; con el APK delante, **4 líneas y mudo a
+los 4,2 s**.
+
+⇒ **`AQUARIUM READY` sí se emite. No llega.** Y como el `dump` del móvil cuelga en exclusiva de esa
+línea, el volcado era estructuralmente inalcanzable — que es lo que se leía como «no monta».
+
+🧭 **La regla, y es la tercera vez que muerde en este proyecto:** *ausencia de líneas en un log no
+es ausencia de eventos.* Hay que separar «no pasó» de «no me llegó», y aquí el desempate barato es
+**mirar la pantalla** (`screencap`), no razonar sobre el log.
+
+⚠ El §11.1 del mismo doc marca el `silence.wav` con un **✅ «la carga tiene éxito»**. Es cierto y no
+significa nada: mide que el `load()` no da error, **no** que suprima el timeout — que es lo único
+que ese truco pretendía. Y hoy sabemos que además tiene un coste que nadie había visto.
+
+ℹ Los dos apuntes son del intercambio con la sesión del repo móvil, que fue quien encontró la §11.2
+y quien pidió corregirla. **El fichero es suyo**; aquí queda la medición para que este lado no
+construya encima del diagnóstico viejo.
+
 ## 6. Coste de los huecos, desde este lado
 
 Estimación de trabajo **en el repo TV** (no incluye el móvil). Ninguno implementado: el user aún

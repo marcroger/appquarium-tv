@@ -32,7 +32,8 @@ El móvil envía el estado del tanque vía Google Cast SDK; este proyecto **rend
 
 | Doc | Cuándo |
 |---|---|
-| [`CAST_NEXT_SESSION_2026-08-28.md`](CAST_NEXT_SESSION_2026-08-28.md) | ⭐⭐ **EMPEZAR AQUÍ.** Cierre del 27-ago (segundo día sin tele): `remove_fish` **por uid**, un chequeo de compilación **sin Unity y sin build**, y la **paridad visual medida** — no era el grado: copiar el del móvil *perdería* un 35 % de croma, la TV **no apaga el color**, y el «fondo en B/N» es el arte (7 de 11 fondos por debajo de croma 12 en el fichero). Mañana: **dos tandas** y comparar con **el mismo preset** en las dos pantallas. |
+| [`CAST_NEXT_SESSION_2026-08-29.md`](CAST_NEXT_SESSION_2026-08-29.md) | ⭐⭐ **EMPEZAR AQUÍ.** Cierre del 28-ago, **el día que las dos sesiones de Claude se hablaron** (`ListAgents` + `SendMessage` con el repo móvil). El user **aprobó mirando la tele** un ajuste visual que iguala la claridad del teléfono (agua alta 75.9 contra 76.0) — horneado y **pendiente de build**. El **bloom no cuesta fps** (el «7 fps» era el framerate absoluto de junio). La **nitidez estaba del revés**: la tele no es más borrosa, es más dura. Y un **relay de logs que moría en silencio**, con HUD ya desplegado y **una lectura a medias que cuesta una captura** (§1). |
+| [`CAST_NEXT_SESSION_2026-08-28.md`](CAST_NEXT_SESSION_2026-08-28.md) | Cierre del 27-ago (segundo día sin tele): `remove_fish` **por uid**, un chequeo de compilación **sin Unity y sin build**, y la **paridad visual medida** — no era el grado: copiar el del móvil *perdería* un 35 % de croma, la TV **no apaga el color**, y el «fondo en B/N» es el arte (7 de 11 fondos por debajo de croma 12 en el fichero). Mañana: **dos tandas** y comparar con **el mismo preset** en las dos pantallas. |
 | [`CAST_NEXT_SESSION_2026-08-27.md`](CAST_NEXT_SESSION_2026-08-27.md) | Cierre del 26-ago (día sin tele): tres handlers que **confirmaban lo que no había pasado**, seis ids de preset fantasma, y el **rig local roto** desde el último build. Player nuevo `rcv 2026-08-26 ids` construido y verificado en local (9/9), **pendiente de una tanda** que valide también el `renderScale 0,75` de ayer. |
 | [`CAST_NEXT_SESSION_2026-08-26.md`](CAST_NEXT_SESSION_2026-08-26.md) | Cierre del 25-ago: la escena deja de verse como assets separados (niebla de agua, tono de peces, `renderScale` 1:1). Todo desplegado y validado **menos `renderScale 0,75`**, que se quedó sin tanda. Trae las 3 trampas del día y 2 afirmaciones mías que resultaron falsas. |
 | [`CAST_NEXT_SESSION_2026-08-25.md`](CAST_NEXT_SESSION_2026-08-25.md) | Cierre del 24-ago: Cierre del 24-ago: el ciclo día/noche por fin llega a decos y peces. **Construido y verificado, NO desplegado.** Trae la trampa del shader horneado en el bundle y por qué el deploy va sólo con `Build/`. |
@@ -834,6 +835,65 @@ que es el grupo local de verdad; `Default Local Group` tiene 0 entradas y no pro
 **LZ4 compression** confirmado. **NonRecursiveBuilding=true** — ⚠ NO cambiar a `false` (causa 47 min/bundle, builds de 30h+). Ver `feedback_nonrecursivebuilding.md`.
 
 ---
+
+### 📡 El relay de logs del receiver puede morir en silencio (2026-08-28)
+
+Cada línea de `dbg()` del `index.html` viaja al sender por el canal Cast (`_logSink` →
+`ctx.sendCustomMessage`). **Ese relay se muere y no queda rastro en ninguna parte**, porque había
+dos `try/catch` que se comían el fallo y el único informe de contadores salía… **por el mismo canal
+roto**:
+
+```
+index.html:136   if (_logSink) { try { _logSink(line); } catch(e) {} }   ← tragadero
+index.html:492   _logSink = …  catch (e2) { _logFail++; … }             ← sólo cuenta
+index.html:522   dbg('… 📡 stream sent='+_logSent+' fail='+_logFail)     ← ¡por el canal roto!
+```
+
+**Medido el 28-ago**, cruzando el logcat del móvil con nuestro log:
+
+| sender | líneas del receiver que llegan | última |
+|---|---|---|
+| `cast-headless` **solo** | **135 · 139 · 202+** | toda la sesión |
+| APK del móvil delante | **3-4** | **a los ~45 ms** de su `RemoteMediaClient.load()` |
+
+Cuatro sesiones de cuatro, Δ entre +3 y +57 ms tras el `load()` del `silence.wav` del emisor.
+⚠⚠ **Y el acuario seguía renderizando**: se comprobó con dos `adb exec-out screencap` consecutivos
+(103.088 y 134.270 píxeles cambiando de 2.073.600). La escena montaba; lo que no llegaba eran los
+logs. Eso tuvo a la sesión del repo móvil media mañana concluyendo «el receptor no arranca» y llegó
+a escribirse en su `CAST_CONTRACT.md` §11.2 como diagnóstico establecido — corregido desde este
+lado en `CAST_CONTRACT_TV.md` §5.5.
+
+**Lo que hay ahora (desplegado y verificado en el device):** un HUD `#relay-meter` que pinta
+`RLY env:N fallos:M snd:K off:<motivo>@<s>` **EN PANTALLA**.
+
+- 🧭 **En pantalla a propósito:** un instrumento no puede reportar su propia muerte por el conducto
+  que ha muerto. Y aquí la pantalla se lee con `adb exec-out screencap`, así que es un canal de
+  verdad, no un consuelo.
+- **Los tres números juntos son el diagnóstico**, y decide de un vistazo entre cuatro causas:
+
+| lo que se lee | causa |
+|---|---|
+| `env` sube · `fallos:0` · `snd:1` | el mensaje se pierde **dentro del SDK**, sin lanzar |
+| `fallos` sube | **excepción** en `sendCustomMessage` |
+| `env` congelado · `fallos:0` · **`snd:0`** | `_logSink` sale por `if (senderCount <= 0) return;` **antes del `try`** → el receptor cree que no hay nadie escuchando |
+| `env` congelado · `fallos:0` · `snd:1` | no es el relay: **`dbg()` ha dejado de llamarse** |
+
+  ⚠ El tercer caso lo aportó la sesión del repo móvil, y es el más probable: encaja con que el
+  relay muera **con la página viva**, siempre en el mismo punto y 45 ms después de una operación
+  del emisor que toca la capa de sesión. `off:` dice **quién bajó `snd` y cuándo`.
+- **El HUD se repinta solo cada 2 s**, no cuando alguien llama a `dbg()`: si dependiera de `dbg()`
+  se congelaría justo en el caso que existe para diagnosticar.
+- ⚠ Y si el propio repintado revienta, **lo escribe en su hueco** (`RLY HUD ROTO: …`). La primera
+  versión del parche llevaba un `catch {}` mudo ahí dentro — un tragadero **dentro del parche que
+  quita tragaderos**.
+- **Oculto en producción salvo que haya un fallo** (es un indicador de error), y visible siempre
+  con `DIAG`.
+
+⚠ El parche va **al template Y al procesado**, aplicado por separado — **nunca copiando uno sobre
+otro** (ver la sección de abajo).
+
+🧭 **La regla que sale de aquí:** *ausencia de líneas en un log no es ausencia de eventos.* Separar
+«no pasó» de «no me llegó», y el desempate barato en este proyecto es **mirar la pantalla**.
 
 ## ⚠ index.html — template vs procesado
 
