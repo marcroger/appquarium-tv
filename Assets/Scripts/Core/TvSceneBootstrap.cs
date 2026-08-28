@@ -667,9 +667,26 @@ public class TvSceneBootstrap : MonoBehaviour
     // ⚠ La niebla usa el `surfaceTint` del preset de fondo activo, asi que se vuelve a
     // publicar en cada `change_bg`: cada fondo tiene su agua y con un color fijo la niebla
     // desentonaria en 10 de los 11 fondos.
-    private const float TonoDesat  = 0.32f;   // elegido sobre el device
-    private const float TonoDim    = 0.16f;
-    private const float NieblaDens = 0.30f;   // suelo y peces
+    // ⚠⚠ 2026-08-28 — BAJADOS A LA MITAD. El user reporto que la tele se veia "apagada" al
+    // lado del movil, y medido en las dos pantallas a la vez la niebla era la que se comia el
+    // COLOR (el tonemapping se comia la LUZ). Con estos valores + tonemapping OFF + viñeta 0:
+    //   suelo cercano  L* 66.3 -> 72.4  (el movil pinta 73.7)   croma 14.6 -> 22.0
+    //   agua alta      L* 67.9 -> 75.9  (el movil pinta 76.0)   croma 38.8 -> 45.1
+    // Aprobado por el user mirandolo en la tele con el telefono al lado.
+    // ⚠ Peaje medido: el agua honda se oscurece ~13 L*. Eso es quitar el tonemapping.
+    //
+    // ⚠⚠ CONTRA QUE SE CALIBRO, Y CADUCA: la referencia fue el movil DEL 28-ago-2026, que
+    // tiene su `saturation: -15` MUERTO — su `TankLightingController` hace
+    // `Add<ColorAdjustments>(true)` a priority 11 y pisa toda la ColorAdjustments de su
+    // PostProcessingSetup (aqui esta arreglado desde el 21-ago, alli no). O sea que estos
+    // valores igualan la tele a «el movil CON el bug», no a «el movil».
+    // 🧭 El dia que en el repo movil pasen ese `(true)` a `(false)`, su croma BAJARA y este
+    // ajuste se descuadrara solo: el suelo y el agua alta de la tele pasarian de «un poco
+    // por encima» a «bastante por encima». Si eso pasa, hay que REMEDIR, no parchear a ojo.
+    // Lo levanto la sesion del repo movil el mismo dia. Detalle en CAST_PARIDAD_VISUAL §0.6.4.bis.
+    private const float TonoDesat  = 0.16f;   // era 0.32
+    private const float TonoDim    = 0.08f;   // era 0.16
+    private const float NieblaDens = 0.15f;   // era 0.30 — suelo y peces
     // ⚠ 0 = las decos NO reciben niebla. Decision del user viendo la tele: con niebla
     // "pierden demasiado" (un ancla negra salia turquesa). No se puede resolver acotando el
     // rango de Z porque las decos se colocan a cualquier profundidad hasta ZDecoBack=+3,0.
@@ -679,7 +696,9 @@ public class TvSceneBootstrap : MonoBehaviour
     // fisicamente correcto, pero sigue siendo negra.
     // 🧭 El efecto depende MUCHO del color de la deco: la estrella azul cobalto apenas se
     // inmuta ni con niebla completa (14,6 → 12,3) porque su color ya esta cerca del agua.
-    private const float DecoNiebla = 0.25f;
+    // ⚠ 2026-08-28: 0.25 -> 0.12. Va en la MISMA direccion que eligio el user en su dia
+    // (menos niebla en decos, para que el ancla no se lea turquesa), no en contra.
+    private const float DecoNiebla = 0.12f;   // era 0.25
 
     public void PublicarAspectoDelAgua()
     {

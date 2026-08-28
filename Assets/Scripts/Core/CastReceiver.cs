@@ -142,6 +142,12 @@ public class CastReceiver : MonoBehaviour
         {
             bloom          = pp.enableBloom,
             bloomIntensity = pp.bloomIntensity,
+            bloomThreshold = pp.bloomThreshold,
+            bloomScatter   = pp.bloomScatter,
+            bloomHQ        = pp.bloomHQ,
+            bloomDownscale = pp.bloomDownscale,
+            bloomMaxIterations  = pp.bloomMaxIterations,
+            bloomSkipIterations = pp.bloomSkipIterations,
             tonemapping    = pp.enableTonemapping,
             saturation     = pp.saturation,
             contrast       = pp.contrast,
@@ -156,6 +162,12 @@ public class CastReceiver : MonoBehaviour
 
         pp.enableBloom       = g.bloom;
         pp.bloomIntensity    = g.bloomIntensity;
+        pp.bloomThreshold    = Mathf.Clamp01(g.bloomThreshold);
+        pp.bloomScatter      = Mathf.Clamp01(g.bloomScatter);
+        pp.bloomHQ           = g.bloomHQ;
+        pp.bloomDownscale    = Mathf.Clamp(g.bloomDownscale, 0, 1);
+        pp.bloomMaxIterations  = Mathf.Clamp(g.bloomMaxIterations, 2, 8);
+        pp.bloomSkipIterations = Mathf.Clamp(g.bloomSkipIterations, 0, 4);
         pp.enableTonemapping = g.tonemapping;
         pp.saturation        = g.saturation;
         pp.contrast          = g.contrast;
@@ -223,6 +235,12 @@ public class CastReceiver : MonoBehaviour
             }
         }
 
+        // ⚠ El umbral y la piramide SIEMPRE en el log, aunque el bloom este OFF: son
+        // exactamente los campos cuya ausencia hizo que un barrido entero midiera otra cosa.
+        JsBridge.Log($"BLOOM: thr={pp.bloomThreshold:F2} scatter={pp.bloomScatter:F2} " +
+                     $"hq={(pp.bloomHQ ? "ON" : "off")} " +
+                     $"downscale={(pp.bloomDownscale == 0 ? "Half" : "Quarter")} " +
+                     $"maxIt={pp.bloomMaxIterations} skipIt={pp.bloomSkipIterations}");
         JsBridge.Log($"GRADE: bloom={(g.bloom ? g.bloomIntensity.ToString("F2") : "OFF")} " +
                      $"tm={(g.tonemapping ? "Neutral" : "OFF")} sat={g.saturation:F0} " +
                      $"con={g.contrast:F0} exp={g.exposure:F2} vig={g.vignette:F2}");
@@ -312,6 +330,15 @@ public class CastReceiver : MonoBehaviour
     {
         public bool  bloom;
         public float bloomIntensity;
+        // ⚠ 2026-08-28 — sin estos, `grade-tune.js` barria el bloom SIN TOCAR EL UMBRAL:
+        // las ocho variantes corrian a 0.92, que en escena submarina no cruza casi ningun
+        // pixel. La conclusion «el bloom no aporta nada» medía el umbral, no el bloom.
+        public float bloomThreshold;
+        public float bloomScatter;
+        public bool  bloomHQ;
+        public int   bloomDownscale;       // 0 = Half, 1 = Quarter
+        public int   bloomMaxIterations;
+        public int   bloomSkipIterations;
         public bool  tonemapping;
         public float saturation;
         public float contrast;
