@@ -92,10 +92,17 @@
     <!-- Sello de versión del receiver — esquina inf. derecha, discreto.
          Sirve para confirmar QUÉ index.html está corriendo en el device (el Cast
          puede mantener cacheado el viejo con disableIdleTimeout). Bump en cada deploy. -->
+    <!-- ⚠⚠ 2026-08-28 — OCULTO EN PRODUCCION. Llevaba visible desde siempre y el user lo
+         pidió fuera: «sin ese debug, es pro normal; no debería verse nada del número de
+         versión ni fps ni nada». Se enciende con el mensaje DIAG, igual que el resto.
+         🧭 El coste es real y conviene saberlo: hoy este cartel fue lo ÚNICO que permitió
+         saber qué index.html corría el device sin ser sender. Con DIAG hace falta emitir un
+         mensaje — que va por el canal de IDA, el que nunca se rompió, así que sigue siendo
+         alcanzable incluso con el relay muerto. -->
     <div id="rcv-tag" style="
       position:fixed;bottom:1vh;right:1vw;z-index:10001;
       color:rgba(255,255,255,0.40);font:bold 12px monospace;
-      pointer-events:none;letter-spacing:1px;
+      pointer-events:none;letter-spacing:1px;display:none;
     ">rcv 2026-08-28 bloom</div>
 
     <!-- FPS meter — esquina sup. derecha, legible desde el sofá.
@@ -822,7 +829,14 @@
         // mismo error que ya se cometio ocultandolo salvo con DIAG.
         var reciente = _ultimaConexion > 0 && (mono() - _ultimaConexion) < 60000;
         var roto = (_logFail + _relayFail) > 0 || senderCount <= 0 || atascado;
-        el.style.display = (window.__diag || roto || reciente) ? 'block' : 'none';
+        // ⚠⚠ 2026-08-28 — SOLO con DIAG. Antes salia tambien con `roto || reciente`, o sea
+        // que en produccion aparecia en los primeros 60 s y ante cualquier fallo. El user lo
+        // quiere limpio: «el acuario productivo».
+        // 🧭 La contrapartida es que una averia del relay ya NO se anuncia sola. Se asume: el
+        // que diagnostica es quien castea, y encender DIAG va por el canal de IDA, que nunca
+        // se rompio. `roto` y `reciente` siguen calculandose porque pintan el color y el
+        // ATASCADO cuando el HUD SI esta encendido.
+        el.style.display = window.__diag ? 'block' : 'none';
         if (el.style.display === 'none') return;
         el.style.color = roto ? '#f66' : '#fa6';
         var marca = atascado ? ' ATASCADO' : '';
@@ -1051,6 +1065,8 @@
           var sp = document.getElementById('stats-panel');
           if (fm) fm.style.display = enc ? 'block' : 'none';
           if (sp) sp.style.display = enc ? 'block' : 'none';
+          var tg = document.getElementById('rcv-tag');
+          if (tg) tg.style.display = enc ? 'block' : 'none';
           _pintarRelay();   // el HUD del relay sigue a DIAG (y se enciende solo si falla)
           dbg('DIAG ' + (enc ? 'ON' : 'OFF'));
           return;
