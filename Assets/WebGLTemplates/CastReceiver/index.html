@@ -259,6 +259,67 @@
             'Bajando peces del estante…',
             'Casi listo, no te vayas…'
           ]
+        },
+        en: {
+          ambiente: [
+            'Cleaning the filters\u2026',
+            'Checking the water pH\u2026',
+            'Talking the fish into posing\u2026',
+            'Polishing the glass\u2026',
+            'Counting bubbles\u2026',
+            'Putting the rocks back where they belong\u2026',
+            'Negotiating with the most territorial fish\u2026',
+            'Straightening the seaweed\u2026',
+            'Warming the water a couple of degrees\u2026',
+            'Looking for the fish that always hides\u2026',
+            'Wiping a fingerprint off the glass\u2026',
+            'Raking the sand\u2026',
+            'Making sure nobody jumped out\u2026',
+            'Winding up the currents\u2026',
+            'Adjusting the light for the photo\u2026',
+            'Combing the corals\u2026',
+            'Rescuing an upside-down snail\u2026',
+            'Shaking out the net, just in case\u2026',
+            'Telling the fish you are coming\u2026',
+            'Syncing the sway of the seaweed\u2026',
+            'Asking who ate yesterday\u0027s leftovers\u2026',
+            'Serving breakfast\u2026',
+            'Polishing the anchor\u2026',
+            'Shooing away a curious crab\u2026',
+            'Testing the temperature with an elbow\u2026',
+            'Putting on some music for the fish\u2026',
+            'Looking for the diving goggles\u2026',
+            'Levelling the sandbanks\u2026',
+            'Nudging the lazier bubbles\u2026',
+            'Repositioning the sunken treasure\u2026'
+          ],
+          info: [
+            'Did you know you can change the background, substrate and lighting?',
+            'Earn pearls by taking part in events.',
+            'Breeding fish unlocks new species.',
+            'Every fish grows over time: fry, juvenile, adult and senior.',
+            'Pair two compatible fish and they will swim together.',
+            'The tank has a day and night cycle \u2014 try it at sunset.',
+            'You can rotate, tilt and flip your decorations.',
+            'Some decorations glow in the dark.',
+            'Feed your fish and watch them swim over to eat.',
+            'You can place decorations on top of other decorations.',
+            'Each species swims differently \u2014 watch them for a while.',
+            'Give your fish names from the app.',
+            'Young fish are smaller than adults.',
+            'Try changing the lighting: the tank changes character.',
+            'The more different species, the more alive the tank feels.',
+            'Bonded pairs seek each other out as they swim.',
+            'Change the tank size to get more room.',
+            'Night mode dims the lights and brings out the bioluminescence.'
+          ],
+          espera: [
+            'This takes a little longer the first time\u2026',
+            'Almost there\u2026',
+            'One moment, they are settling in\u2026',
+            'Getting the fish down off the shelf\u2026',
+            'Nearly ready \u2014 do not go away\u2026'
+          ]
         }
       };
       // ⚠ `biolumniscencia` — dejar el typo NO, corregido abajo en el propio array al cargar.
@@ -288,6 +349,30 @@
             'Colocando a tus {c} peces…',
             'Tus {c} peces ya vienen.',
             '{c} peces esperándote.'
+          ]
+        },
+        en: {
+          unPez: [
+            '{n} cannot wait for you to see her.',
+            '{n} has been showing off her colours all day.',
+            '{n} saved you the best spot.',
+            '{n} is already swimming in circles with excitement.',
+            '{n} wants to know if you brought food.',
+            '{n} is combing her fins.',
+            '{n} says she is looking good today.',
+            '{n} is hiding behind a rock. Again.',
+            'Waking {n} up\u2026',
+            '{n} wants to show you something.'
+          ],
+          dosPeces: [
+            '{n} and {a} are meeting in the middle of the tank.',
+            '{n} will not leave {a} alone for a second.',
+            '{n} and {a} have been together all day.'
+          ],
+          cuenta: [
+            'Getting your {c} fish into place\u2026',
+            'Your {c} fish are on their way.',
+            '{c} fish waiting for you.'
           ]
         }
       };
@@ -361,7 +446,7 @@
       }
 
       function _personalizadas() {
-        var P = PLANTILLAS.es;
+        var P = _plant();
         var bolsa = [];
         var d = _fraseDatos;
         if (!d) return bolsa;
@@ -385,8 +470,14 @@
 
       // Fuentes por tipo. `personal` puede venir vacía (acuario sin motes) y entonces su
       // cuota se reparte sola entre las otras dos.
+      // ⚠⚠ Sin esto, el idioma se leia, se logueaba… y se ignoraba. Un usuario en ingles
+      // habria visto castellano: infraestructura multiidioma con contenido de uno solo, que
+      // es peor que no tenerla porque parece que funciona.
+      function _banco()  { return FRASES[_fraseIdioma]     || FRASES.es; }
+      function _plant()  { return PLANTILLAS[_fraseIdioma] || PLANTILLAS.es; }
+
       function _fuentes() {
-        var L = FRASES.es;
+        var L = _banco();
         var f = { ambiente: L.ambiente, info: L.info, personal: _personalizadas() };
         if (_fraseT0 >= 0 && (mono() - _fraseT0) > 25000) f.ambiente = f.ambiente.concat(L.espera);
         return f;

@@ -109,6 +109,53 @@ const tarde = [];
 for (let i = 0; i < 60; i++) { api.siguiente(); tarde.push(api.el.textContent); }
 ok('a los 30 s SÍ salen las de espera', tarde.some(t => api.FRASES.es.espera.indexOf(t) >= 0));
 
+// ── 7) ⭐ EL IDIOMA (se validó `lang=es -> es` en device el 28-ago) ──────────
+// ⚠ Estos tests existen porque durante un rato el idioma se LEÍA, se LOGUEABA y se IGNORABA:
+// `_fuentes()` usaba `FRASES.es` a pelo. Un usuario en inglés habría visto castellano, y el
+// log habría dicho `lang=en -> en` tan tranquilo. El síntoma perfecto: parece que funciona.
+function conIdioma(lang) {
+  api.leer(JSON.stringify({ type: 'INIT', payload: JSON.stringify(Object.assign({ lang: lang }, estado)) }));
+  api.reset();
+  const out = [];
+  for (let i = 0; i < 60; i++) { api.siguiente(); out.push(api.el.textContent); }
+  return out;
+}
+let sal = conIdioma('en');
+ok('lang=en → salen frases en INGLÉS', sal.some(t => api.FRASES.en.ambiente.indexOf(t) >= 0), sal[0]);
+ok('lang=en → NINGUNA en castellano', !sal.some(t => api.FRASES.es.ambiente.indexOf(t) >= 0));
+ok('lang=en → las personalizadas también', sal.some(t => /cannot wait|showing off|brought food/.test(t)));
+
+sal = conIdioma('es');
+ok('lang=es → salen en CASTELLANO', sal.some(t => api.FRASES.es.ambiente.indexOf(t) >= 0));
+ok('lang=es → ninguna en inglés', !sal.some(t => api.FRASES.en.ambiente.indexOf(t) >= 0));
+
+sal = conIdioma('fr');
+ok('idioma desconocido → cae a castellano', sal.some(t => api.FRASES.es.ambiente.indexOf(t) >= 0));
+ok('idioma desconocido → sin marcadores sueltos', !sal.some(t => /\{[nac]\}/.test(t)));
+
+// El locale completo debe recortarse a dos letras (lo pedimos así al repo móvil a propósito).
+sal = conIdioma('en-GB');
+ok('locale completo (en-GB) → inglés', sal.some(t => api.FRASES.en.ambiente.indexOf(t) >= 0));
+
+// Los dos bancos deben tener la MISMA estructura, o un idioma tendrá menos variedad sin avisar.
+for (const k of ['ambiente', 'info', 'espera']) {
+  ok('banco es/en con el mismo nº de "' + k + '"',
+     api.FRASES.es[k].length === api.FRASES.en[k].length,
+     api.FRASES.es[k].length + ' vs ' + api.FRASES.en[k].length);
+}
+for (const k of ['unPez', 'dosPeces', 'cuenta']) {
+  ok('plantillas es/en con el mismo nº de "' + k + '"',
+     api.PLANT.es[k].length === api.PLANT.en[k].length,
+     api.PLANT.es[k].length + ' vs ' + api.PLANT.en[k].length);
+}
+// Y las plantillas inglesas deben llevar sus marcadores, o no se sustituiría nada.
+ok('las plantillas en inglés llevan {n}', api.PLANT.en.unPez.every(t => t.indexOf('{n}') >= 0));
+ok('las de pareja llevan {n} y {a}', api.PLANT.en.dosPeces.every(t => t.indexOf('{n}') >= 0 && t.indexOf('{a}') >= 0));
+ok('las de cuenta llevan {c}', api.PLANT.en.cuenta.every(t => t.indexOf('{c}') >= 0));
+
+// Volver a castellano para los tests de contenido de abajo.
+api.leer(JSON.stringify({ type: 'INIT', payload: JSON.stringify(estado) }));
+
 // ── 6) Contenido ─────────────────────────────────────────────────────────────
 const todas = api.FRASES.es.ambiente.concat(api.FRASES.es.info, api.FRASES.es.espera);
 ok('ninguna frase vacía', todas.every(f => f && f.trim().length > 3));
