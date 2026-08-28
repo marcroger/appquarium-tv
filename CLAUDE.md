@@ -768,7 +768,7 @@ print('OK index.html')
 | `Assets/Scripts/Stubs/` | TvStubs (stubs para clases mobile-only referenciadas indirectamente) |
 | `Assets/Settings/` | **TvRenderPipeline.asset** ⭐ + **TvUniversalRenderer.asset** — el render pipeline que faltaba (2026-08-21). Sin esto no hay post-proceso |
 | `Assets/Editor/` | **TvUrpSetup** ⭐ (crea/enciende/apaga el pipeline y verifica `postProcessData`), **TvRenderProbe** (sonda: ¿se está renderizando, y con qué?), **TvGradeSweep** (barrido de grado en el Editor — ⚠ NO fiable para elegir valores, ver `CAST_PARIDAD_VISUAL.md` §0.1), TvAddressablesSetup, TvBuildTools, SyncFromMobileMenu, **TvBuildPostprocess** (parchea settings.json tras cada build), **TvProdBuild** ⭐ (build de producción en batchmode + preflight de audio), **TvWasmOptimize** ⭐ (fuerza `DiskSizeLTO` en cualquier build), TvEmptyTestBuild, **TvAuthPreflight** ⭐ (aborta el build si falta el token de los bundles), TvShadowDiag, **TvDecoOptimize** ⭐ (pasa una deco a texturas DXT1 sueltas: −49,8 % de peso medido) |
-| `Tools/` | ~30 ficheros. Los que importan: **grade-tune.js** ⭐ (afina el grado sobre el player REAL en Chrome, mandando mensajes `GRADE`), **grade_contact_sheet.py** (hoja de contactos + luminancia/saturación por bandas, con guarda de «esto no mide nada»), **r2-auth-worker/** ⭐ (el Worker portero de los bundles + sus dos baterías de pruebas), **SyncFromMobile.ps1**, **check_preset_ids.js** ⭐ (guarda: ningún id de preset fantasma, sin Unity ni tele), **compile-check.sh** ⭐ (¿compila el C#? en ~15 s, sin Unity y sin build), **static-server.js** (rig local en :3001 — sirve el catálogo **desde R2**, no del disco), **test-updates.js** (los tests de los handlers UPDATE — **16** desde el 27-ago), **cast-headless.js** (sender sin navegador), **cast-run.sh** (ciclo de medición completo), **restore-production-receiver.sh**, **extract_glb_textures.py** (saca las texturas embebidas de un GLB + `mapeo.txt`, paso previo a `TvDecoOptimize`), **r2_huerfanos.py** (lista/borra bundles huérfanos de R2), y los `rcv-*.html` (receivers de diagnóstico). ⚠ Varios escriben en R2 de producción. |
+| `Tools/` | ~30 ficheros. Los que importan: **grade-tune.js** ⭐ (afina el grado sobre el player REAL en Chrome, mandando mensajes `GRADE`), **grade_contact_sheet.py** (hoja de contactos + luminancia/saturación por bandas, con guarda de «esto no mide nada»), **r2-auth-worker/** ⭐ (el Worker portero de los bundles + sus dos baterías de pruebas), **SyncFromMobile.ps1**, **check_preset_ids.js** ⭐ (guarda: ningún id de preset fantasma, sin Unity ni tele), **compile-check.sh** ⭐ (¿compila el C#? en ~15 s, sin Unity y sin build), **static-server.js** (rig local en :3001 — sirve el catálogo **desde R2**, no del disco), **test-updates.js** (los tests de los handlers UPDATE — **16** desde el 27-ago), **test-frases.js** ⭐ (las frases de la pantalla de carga: reparto por tipo, sin repeticiones, idioma y caída a castellano — 29 comprobaciones, sin device ni navegador), **cast-headless.js** (sender sin navegador), **cast-run.sh** (ciclo de medición completo), **restore-production-receiver.sh**, **extract_glb_textures.py** (saca las texturas embebidas de un GLB + `mapeo.txt`, paso previo a `TvDecoOptimize`), **r2_huerfanos.py** (lista/borra bundles huérfanos de R2), y los `rcv-*.html` (receivers de diagnóstico). ⚠ Varios escriben en R2 de producción. |
 
 ---
 
@@ -863,6 +863,30 @@ logs. Eso tuvo a la sesión del repo móvil media mañana concluyendo «el recep
 a escribirse en su `CAST_CONTRACT.md` §11.2 como diagnóstico establecido — corregido desde este
 lado en `CAST_CONTRACT_TV.md` §5.5.
 
+### ✅ LA CAUSA, y el arreglo es UNA LÍNEA: `gms_cast_mrp`
+
+```
+12:13:52.860  Sender CONNECTED #1: …:com.appquarium.qa-43
+12:13:52.861  Sender CONNECTED #2: …:gms_cast_mrp-42      ← 1 ms después
+```
+
+Cuando el emisor abre la sesión de media (`RemoteMediaClient.load()`), **GMS registra su Media Route
+Provider como un segundo sender**. `_lastSenderId` pasaba a apuntarle y **todas** las líneas se
+enviaban a un sender **vivo y válido que NO escucha nuestro namespace**. Enviar ahí **no lanza**.
+
+```js
+ctx.sendCustomMessage(NAMESPACE, undefined, payload);   // era _lastSenderId || undefined
+```
+
+**Medido: 134 líneas en 120 s contra 1-4 antes**, y 603 con 0 fallos en una sesión de 15 min.
+
+🧭 **Por qué llevaba tanto oculto: el bug se escondía a sí mismo.** El `dbg('Sender CONNECTED #2…')`
+se emite **después** de reasignar `_lastSenderId`, así que **el aviso de que había un segundo sender
+viajaba al segundo sender**. La primera vez que se vio ese `#2` fue al curarlo.
+
+⚠ **Cualquier receptor Cast que guarde `_lastSenderId` y tenga un emisor que use `RemoteMediaClient`
+tiene el mismo bug esperando.** No es específico de este proyecto.
+
 **Lo que hay ahora (desplegado y verificado en el device):** un HUD `#relay-meter` que pinta
 `RLY env:N fallos:M snd:K off:<motivo>@<s>` **EN PANTALLA**.
 
@@ -891,6 +915,54 @@ lado en `CAST_CONTRACT_TV.md` §5.5.
 
 ⚠ El parche va **al template Y al procesado**, aplicado por separado — **nunca copiando uno sobre
 otro** (ver la sección de abajo).
+
+### 🧹 Producción va LIMPIA: todo el debug sólo con `DIAG` (2026-08-28)
+
+Petición del user: *«sin ese debug es pro normal; no debería verse nada del número de versión ni fps
+ni nada que hemos puesto de debug; el acuario productivo»*.
+
+| elemento | cuándo se ve |
+|---|---|
+| `#fps-meter` · `#stats-panel` | sólo con `DIAG` (ya era así) |
+| **`#rcv-tag`** (el sello de la esquina) | **sólo con `DIAG`** — antes salía SIEMPRE |
+| **`#relay-meter`** | **sólo con `DIAG`** — antes salía también los primeros 60 s y ante cualquier fallo |
+
+⚠⚠ **Esto cambia el protocolo de diagnóstico**: «mándame una captura» ya no vale a secas, hay que
+castear con `--diag`. 🧭 Lo bueno: `DIAG` viaja por el **canal de IDA**, el único que no se rompe,
+así que sigue siendo alcanzable justo cuando el retorno falla.
+
+### 🖼 La splash espera al ACUARIO, y rota frases (2026-08-28)
+
+`hideSplash()` colgaba de que arrancara **Unity** (~24 s), no de que montara el acuario (~41 s):
+eran **~17 s de tanque vacío a la vista**, reportados por el user. Ahora espera a `AQUARIUM READY` y
+la barra avanza con las líneas **`BDL i/N`** que el receptor ya emitía por cada bundle.
+⚠ Con red de seguridad a 90 s: **una carga que no se va nunca es peor que un tanque vacío.**
+
+Y `#splash-tip` rota frases mientras tanto: **53 fijas en `es` y `en`** (ambiente · info · espera)
+más 16 plantillas personalizadas con `activeFish[].nickname`, que el móvil ya mandaba y **no se
+pintaba en ningún sitio**. Cuotas por tipo, cola sin repetición, 7,5 s, cursiva.
+
+- **Idioma:** campo **`lang`** de `TvAquariumState` (dos letras o locale completo, se recorta).
+  Validado en device: `lang=es -> es`. Sin él, castellano.
+- ⚠⚠ **Las frases viven en el `index.html` A PROPÓSITO**, no en el emisor: cambiarlas es un deploy de
+  minutos en vez de un build de Android de días.
+- ⚠ Un idioma sin banco **cae a castellano**. Los dos bancos deben tener el **mismo número de frases
+  por tipo**, o uno tendrá menos variedad sin que nadie lo note — lo comprueba `Tools/test-frases.js`.
+
+### 🌸 El mensaje `GRADE` ya expone el BLOOM entero (2026-08-28)
+
+```
+bloom · bloomIntensity · bloomThreshold · bloomScatter · bloomHQ
+bloomDownscale (0=Half,1=Quarter) · bloomMaxIterations · bloomSkipIterations
+```
+
+⚠⚠ **Sin el umbral, un barrido del bloom mide otra cosa.** `grade-tune.js` nunca lo mandaba, así que
+las ocho variantes de agosto corrieron a **0.92** —invisible en escena submarina— y de ahí salió el
+«el bloom no aporta nada», que costó meses. A **0.60** la escena sube **+8 L\*** sin coste medible,
+y es lo que hay desplegado.
+
+Y la línea `BLOOM: thr=… scatter=… hq=… downscale=… maxIt=… skipIt=…` sale **siempre, aunque el
+bloom esté OFF**: 🧭 *el estado que determina un resultado tiene que viajar CON el resultado.*
 
 🧭 **La regla que sale de aquí:** *ausencia de líneas en un log no es ausencia de eventos.* Separar
 «no pasó» de «no me llegó», y el desempate barato en este proyecto es **mirar la pantalla**.

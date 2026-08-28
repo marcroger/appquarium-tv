@@ -104,6 +104,12 @@ El user: *«sin ese debug es pro normal; no debería verse nada del número de v
 🧭 Lo bueno: `DIAG` viaja por el **canal de ida**, el único que no se rompió en todo el día, así que
 el diagnóstico sigue siendo alcanzable justo cuando el retorno falla.
 
+### 🧹 Y producción quedó limpia
+
+El **sello** y el **HUD del relay** sólo salen con `DIAG` (antes el sello salía siempre y el HUD los
+primeros 60 s y ante cualquier fallo). ⚠ Eso cambia el protocolo: «mándame una captura» ya no vale a
+secas. 🧭 Pero `DIAG` va por el **canal de ida**, así que sigue alcanzable cuando el retorno falla.
+
 ### ⚠ Dos avisos operativos que salieron de la tarde
 
 - **Volcados: hace falta ARRANQUE EN FRÍO**, no una reconexión — hasta que su disparador de respaldo
