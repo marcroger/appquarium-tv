@@ -220,6 +220,30 @@ desde hace tiempo. **Es un cambio de aspecto y lo decide el user.**
 
 ---
 
+## 2.bis ⚠⚠ SI HAY QUE REPETIR UNA SESIÓN DE VOLCADOS: ARRANQUE EN FRIO, NO RECONEXIÓN
+
+Su `DumpRoutine` cuelga **en exclusiva** de ver `AQUARIUM READY`, y esa línea sólo se emite cuando
+la TV **construye** el acuario. ⇒ **En cualquier reconexión a un receptor ya montado, su volcado es
+inalcanzable por diseño.** El 28-ago funcionó porque se forzaron tres arranques en frío.
+
+**Hasta que arreglen el disparador** (es su tarea, ya en su lista):
+
+```bash
+node Tools/cast-headless.js --stop --ip <IP>    # cierra el receptor -> arranque en frio
+# y que el móvil reconecte: su APK se reengancha solo en ~3-5 s
+```
+
+⚠ Desconectar el móvil **no basta**: si la caída fue de menos de 30 s, el receiver **descarta el
+INIT** a propósito (`index.html`, «Quick reconnect») y no reconstruye → no hay `AQUARIUM READY` → no
+hay volcado. Ver [[reconexion_pierde_estado_y_logs]].
+
+⚠⚠ **Y desde el 28-ago, con producción limpia, «mandadme una captura» ya no vale a secas**: el
+sello y el HUD del relay sólo salen con `DIAG`. Hay que castear con `--diag`.
+🧭 Lo bueno: `DIAG` viaja por el **canal de ida**, que es el único que no se rompió en todo el día,
+así que el diagnóstico sigue siendo alcanzable justo cuando el retorno falla.
+
+---
+
 ## 3. 🤝 Lo que le toca al repo MÓVIL (se lo plantean ellos)
 
 1. **Compilar el tope de reconexión** de `768964a` — previene un livelock documentado ayer, y de
