@@ -156,6 +156,25 @@ ok('las de cuenta llevan {c}', api.PLANT.en.cuenta.every(t => t.indexOf('{c}') >
 // Volver a castellano para los tests de contenido de abajo.
 api.leer(JSON.stringify({ type: 'INIT', payload: JSON.stringify(estado) }));
 
+// ── 6bis) GENERO ─────────────────────────────────────────────────────────────
+// AVISO: el sexo del pez NO viaja por el canal Cast. `TvFishEntry` trae speciesId,
+// nickname, uid y ageScale, y nada mas. El movil lo tiene en su save (OwnedFishSave.sex)
+// pero no lo manda, y `pairs` (maleUid/femaleUid) solo cubre peces EMPAREJADOS y ademas
+// llega DESPUES del INIT, o sea cuando la splash ya lleva rato rotando frases.
+// => Mientras no llegue el campo, NINGUNA plantilla personalizada puede marcar genero, o
+//    un pez macho sale como "Nemo esta deseando que LA veas".
+const MARCAS = {
+  es: /(que la veas|que lo veas|favorecid[oa]|junt[oa]s\b|guap[oa]\b|solit[oa]\b)/i,
+  en: /\b(her|hers|she|his|him|he)\b/i,
+};
+for (const idioma of ['es', 'en']) {
+  const P = api.PLANT[idioma];
+  const todasP = P.unPez.concat(P.dosPeces, P.cuenta);
+  const malas = todasP.filter(t => MARCAS[idioma].test(t));
+  ok('plantillas ' + idioma + ' sin marca de genero'
+     + (malas.length ? ' -> ' + JSON.stringify(malas) : ''), malas.length === 0);
+}
+
 // ── 6) Contenido ─────────────────────────────────────────────────────────────
 const todas = api.FRASES.es.ambiente.concat(api.FRASES.es.info, api.FRASES.es.espera);
 ok('ninguna frase vacía', todas.every(f => f && f.trim().length > 3));

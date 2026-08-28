@@ -250,5 +250,14 @@ public class PostProcessingSetup : MonoBehaviour
 
         TvLayerDebug.Set("PostFX", $"bloom={(enableBloom ? bloomIntensity.ToString("F2") : "OFF")} tm={(enableTonemapping?"Neutral":"OFF")} sat={saturation:F0} con={contrast:F0}");
         Debug.Log($"[PostFX] ✅ Bloom + Color + Vignette activos ({profile.components.Count} efectos). [P]=toggle [O]=estado");
+
+        // AVISO: esta linea va por JsBridge (canal Cast) A PROPOSITO, no por Debug.Log:
+        // un Debug.Log NO viaja al sender, asi que el grado horneado era invisible desde fuera.
+        // Sirve ademas de PRUEBA DE ARTEFACTO: su texto cambia cuando cambia el grado del
+        // build, asi que verla en el log del sender demuestra que corre el binario nuevo --
+        // que es justo lo que fallo dos veces el 28-ago (un commit no implica un artefacto).
+        JsBridge.Log($"HORNEADO: bloom={(enableBloom ? bloomIntensity.ToString("F2") : "OFF")} " +
+                     $"thr={bloomThreshold:F2} tm={(enableTonemapping ? "Neutral" : "OFF")} " +
+                     $"sat={saturation:F0} con={contrast:F0} exp={postExposure:F2} vig={vignetteIntensity:F2}");
     }
 }

@@ -67,7 +67,12 @@ for (const f of A_REVISAR) {
 // depende de esas cifras. Una lista escrita a mano que nadie comprueba es justo el bug que
 // persigue este script: si alguien anade un preset y no toca el doc, el contrato queda
 // mintiendo EN SILENCIO a otro repo.
-const NL = String.fromCharCode(10);
+// AVISO 2026-08-28: partir por el salto de linea A SECAS deja un retorno de carro al final
+// de cada linea si el fichero es CRLF, y entonces la comparacion con el cierre del metodo
+// NUNCA corta: el escaner se comia el switch de ApplyAmbientMode y reportaba `sunset` y
+// `night` como tipos de UPDATE sin documentar. Contaba 17 en vez de 12.
+// Una guarda que grita en falso acaba ignorandose.
+const NL = new RegExp(String.fromCharCode(13) + "?" + String.fromCharCode(10));
 const CONTRATO = 'CAST_CONTRACT_TV.md';
 let desfases = 0;
 try {
