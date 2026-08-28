@@ -32,7 +32,7 @@ El móvil envía el estado del tanque vía Google Cast SDK; este proyecto **rend
 
 | Doc | Cuándo |
 |---|---|
-| [`CAST_NEXT_SESSION_2026-08-29.md`](CAST_NEXT_SESSION_2026-08-29.md) | ⭐⭐ **EMPEZAR AQUÍ.** Cierre del 28-ago, **el día que las dos sesiones de Claude se hablaron** (`ListAgents` + `SendMessage` con el repo móvil). El user **aprobó mirando la tele** un ajuste visual que iguala la claridad del teléfono (agua alta 75.9 contra 76.0) — horneado y **pendiente de build**. El **bloom no cuesta fps** (el «7 fps» era el framerate absoluto de junio). La **nitidez estaba del revés**: la tele no es más borrosa, es más dura. Y un **relay de logs que moría en silencio**, con HUD ya desplegado y **una lectura a medias que cuesta una captura** (§1). |
+| [`CAST_NEXT_SESSION_2026-08-29.md`](CAST_NEXT_SESSION_2026-08-29.md) | ⭐⭐ **EMPEZAR AQUÍ** (§0.ter y «⏭ MAÑANA SE EMPIEZA AQUÍ»). ⚠⚠ El ajuste visual de la mañana **reventó el suelo** (53,68 % clavado al blanco): se aprobó mirando el agua. Arreglado y desplegado la misma noche (`bloom 0.30 + tonemapping`, sello `rcv 2026-08-28 tmA`). Falta el **casteo con la app real**; producción **parada**. Cierre del 28-ago: Cierre del 28-ago, **el día que las dos sesiones de Claude se hablaron** (`ListAgents` + `SendMessage` con el repo móvil). El user **aprobó mirando la tele** un ajuste visual que iguala la claridad del teléfono (agua alta 75.9 contra 76.0) — horneado y **pendiente de build**. El **bloom no cuesta fps** (el «7 fps» era el framerate absoluto de junio). La **nitidez estaba del revés**: la tele no es más borrosa, es más dura. Y un **relay de logs que moría en silencio**, con HUD ya desplegado y **una lectura a medias que cuesta una captura** (§1). |
 | [`CAST_NEXT_SESSION_2026-08-28.md`](CAST_NEXT_SESSION_2026-08-28.md) | Cierre del 27-ago (segundo día sin tele): `remove_fish` **por uid**, un chequeo de compilación **sin Unity y sin build**, y la **paridad visual medida** — no era el grado: copiar el del móvil *perdería* un 35 % de croma, la TV **no apaga el color**, y el «fondo en B/N» es el arte (7 de 11 fondos por debajo de croma 12 en el fichero). Mañana: **dos tandas** y comparar con **el mismo preset** en las dos pantallas. |
 | [`CAST_NEXT_SESSION_2026-08-27.md`](CAST_NEXT_SESSION_2026-08-27.md) | Cierre del 26-ago (día sin tele): tres handlers que **confirmaban lo que no había pasado**, seis ids de preset fantasma, y el **rig local roto** desde el último build. Player nuevo `rcv 2026-08-26 ids` construido y verificado en local (9/9), **pendiente de una tanda** que valide también el `renderScale 0,75` de ayer. |
 | [`CAST_NEXT_SESSION_2026-08-26.md`](CAST_NEXT_SESSION_2026-08-26.md) | Cierre del 25-ago: la escena deja de verse como assets separados (niebla de agua, tono de peces, `renderScale` 1:1). Todo desplegado y validado **menos `renderScale 0,75`**, que se quedó sin tanda. Trae las 3 trampas del día y 2 afirmaciones mías que resultaron falsas. |
@@ -966,6 +966,149 @@ bloom esté OFF**: 🧭 *el estado que determina un resultado tiene que viajar C
 
 🧭 **La regla que sale de aquí:** *ausencia de líneas en un log no es ausencia de eventos.* Separar
 «no pasó» de «no me llegó», y el desempate barato en este proyecto es **mirar la pantalla**.
+
+### ⚠⚠ Quitar el TONEMAPPING en un pipeline LDR revienta las altas luces (2026-08-28, noche)
+
+El ajuste visual aprobado por la mañana (tonemapping OFF + viñeta 0 + niebla a la mitad) dejó **el
+suelo del acuario clavado al blanco**: **53,68 %** de la banda del suelo con L\* > 95, contra
+**0,00 %** el día anterior. Se aprobó **mirando el agua**; nadie miró el suelo.
+
+Aislado en caliente con `GRADE`, misma escena y misma sesión:
+
+```
+bloom ON  · tm OFF   53,68 % clavado     <- lo que se desplego por la mañana
+bloom OFF · tm OFF    3,81 %
+bloom ON  · tm ON     0,00 %
+bloom OFF · tm ON     0,00 %
+```
+
+- **No son dos culpables: son un aportador y un ausente.** El bloom mete la energía y el
+  tonemapping era **lo único que la absorbía**.
+- ⚠⚠ **El pipeline de la TV va con HDR APAGADO** (`RP: … hdr=OFF`). En LDR todo lo que pasa de 1.0
+  **se clava al escribir**. El móvil corre bloom **sin** tonemapping y no se quema **porque sí tiene
+  HDR**. ⇒ **En LDR el tonemapping no es estética, es el paracaídas.**
+- ⚠ **Sin tonemapping no se salva ni bajando el bloom a 0.30**: sigue clavando el 19,65 %.
+- ⚠ **`exposure` no compensa: es inerte en la TV** (el `Volume` de la barra LED, prioridad 11, pisa
+  al grado, que va a 10).
+
+**Desplegado y elegido por el user entre cuatro imágenes: `bloom 0.30 + tonemapping`** (sello
+`rcv 2026-08-28 tmA`). La niebla de la mañana **se queda**, y por eso la escena sigue **más clara
+que el 27-ago** en las dos bandas (agua 55.5 → 58.9, suelo 67.2 → 72.4) con el suelo entero.
+Verificado sobre el player ya desplegado: clip **0,00 %**, textura **86 %** de la referencia.
+
+```
+bloom (con tm)  agua L*  suelo L*  suelo con rango  textura
+OFF               56.7     69.5        100 %          91 %
+0.30              58.9     72.4         88 %          86 %   <- desplegado
+0.90              61.6     76.6         62 %          79 %
+1.20              61.7     78.6         52 %          78 %
+```
+
+🧭 **No hay rodilla: es un intercambio suave**, así que es una elección del user y no un óptimo
+calculable.
+
+### ⭐ La línea `HORNEADO:` — prueba de artefacto que además dice lo que hace (2026-08-28)
+
+`PostProcessingSetup` emite al arrancar, **por `JsBridge` (canal Cast)**:
+
+```
+HORNEADO: bloom=0.30 thr=0.60 tm=Neutral sat=18 con=10 exp=0.05 vig=0.00
+```
+
+- ⚠ **Va por `JsBridge` a propósito**: los `Debug.Log` **no viajan al sender**, así que el grado
+  horneado era **invisible desde fuera** y la única prueba de versión era el sello del `index.html`
+  — que **se despliega aparte del player** y puede estar nuevo con un `.wasm` viejo.
+- 🧭 **Su texto lo generan los valores del build**, así que **una sola lectura** demuestra a la vez
+  *que corre el binario nuevo* **y** *que se horneó lo que se midió en caliente*. Un sello dice «soy
+  la versión X» y hay que fiarse; esto **dice lo que hace**.
+- De paso descarta la caché del device: los `Build/*` van con `max-age=3600`.
+
+### ⚠⚠ Un build de player REVIERTE un deploy de `index.html` (2026-08-28)
+
+El aviso que ya había abajo es *no copiar el template sobre el procesado*. **Éste es el fallo
+contrario y es silencioso:** el build **regenera `webgl-output/index.html` desde el template**, así
+que **borra cualquier cambio desplegado sólo sobre el procesado**.
+
+El 28-ago se desplegó el `index.html` **cinco veces** (relay, HUD, splash, frases, limpieza) sin
+pasar por el template. Un build habría borrado el arreglo del relay **en silencio**.
+
+**Antes de cada build**, comprobar los marcadores en el template:
+
+```bash
+for m in "sendCustomMessage(NAMESPACE, undefined" relay-meter _progresoAcuario \
+         "PLANTILLAS\[_fraseIdioma\]" splash-tip RCV_HTML_VER; do
+  echo "$m $(grep -c "$m" Assets/WebGLTemplates/CastReceiver/index.html)"
+done
+```
+
+Un `0` en cualquiera = **parar y portar al template antes de construir**.
+
+### 🧪 Medir sin engañarse: cuatro trampas nuevas (2026-08-28)
+
+1. ⚠⚠ **Una métrica global sobre el encuadre entero mide el objeto más brillante, no lo que
+   preguntas.** Los 11 fondos dieron cifras **idénticas** (`P99` 99.7, croma 0.0), `bg_abyss` —que es
+   negro— incluido: era **el suelo** dominando la cola alta. **Medir por bandas**
+   (`Tools/mide_bandas.py`: agua 0.12-0.50, suelo 0.80-0.93).
+   🧭 *Un dato demasiado limpio es tan sospechoso como uno imposible.*
+2. ⚠⚠ **Una métrica agregada sobre una región que CONTIENE el defecto mide el defecto.** La medida
+   de textura dio «**textura OK 86 %**» a la imagen reventada: los **bordes del clip** son gradientes
+   enormes que sostenían la desviación. Cura: medir sólo donde queda rango (`L* < 85`) con la máscara
+   **erosionada** (`Tools/mide_textura_suelo.py`).
+3. ⚠ **Sincronizar contra una línea que no distingue lo que buscas.** Se esperó `BLOOM:`, que es
+   **idéntica con el bloom encendido y apagado**, teniendo `GRADE: bloom=OFF` al lado; con `sleep`
+   encadenados, **las 6 etiquetas de la primera tanda salieron falsas** (una captura llegó 7 s
+   *después* de acabar la sesión). Capturar **por evento**, y **anotar el segundo de cada captura en
+   un acta** para que un desfase futuro salga como desfase y no como dato.
+4. ⚠⚠ **`adb exec-out screencap` puede devolver un FOTOGRAMA CONGELADO** sin dar error, con la app
+   viva y el log sano (`stream sent=379 fail=0`). Cuatro capturas byte a byte iguales estuvieron a
+   punto de colar **«dos sustratos fundidos a ΔE 0.1»**. El md5 lo caza en un segundo, y hay que
+   compararlo **también alrededor de un cambio**: dos capturas idénticas a los lados de un
+   `change_bg` significan que **el cambio no llegó**.
+   🧭 *Un cero perfecto casi nunca es un resultado; casi siempre es un fallo de tubería.*
+
+⚠ **Y una de proceso: NO editar un script mientras se está ejecutando.** Bash lo lee **por trozos
+sobre la marcha**; añadirle una guarda en vuelo lo reventó a media función y la tanda salió **sin una
+sola captura**. **`bash -n` daba verde**: el fichero era válido, lo inválido era el estado del
+intérprete. 🧭 *Un script en ejecución es un artefacto en uso, no un fichero.*
+
+### 🎨 ¿Se distinguen los fondos y los suelos en la tele? (2026-08-28)
+
+Criterio del user: *«los fondos, suelos, luces y todo eso deben ser diferenciales como en la app
+móvil»*. Varios son de pago. Medido con `Tools/mide_diferencial.py bg` / `sub` (ΔE al vecino más
+parecido, **en la banda que toca**):
+
+- **Fondos: ninguno fundido.** Y la tele los separa **MÁS** que el arte (`bg_tropical` 33.2 → 37.3;
+  `bg_classic` 23.0 → 30.5). Sólo comprime en la zona oscura (4.4 → 3.3).
+- **Sustratos: sólo `sub_sand` / `sub_white`** fundidos (ΔE 1.3), y **ya venían a 2.2 en el arte**.
+- ⚠ **Las 7 luces NO están medidas.**
+
+⇒ **Tres pares apretados, los tres de origen en el arte** — ninguno lo arregla un ajuste de render:
+
+```
+sub_sand / sub_white     arte 2.2 -> pantalla 1.3   FUNDIDOS   (los dos gratis)
+bg_abyss / bg_cave       arte 4.4 -> pantalla 3.3   casi       (los dos de pago)
+bg_deep  / bg_night      arte 6.4 -> pantalla 5.5   casi       <- CRUZA LINEA DE PRECIO
+```
+
+⚠ Aviso de la sesión del móvil: **`colorA`/`colorB` es código muerto** para los sustratos que tienen
+PNG — `DecorationPlacer.BuildFloorMaterial` carga `Resources/Substrates/{id}.png` y gana; el ruido
+Perlin con `colorA`/`colorB` es sólo el fallback. **El arreglo son los PNG, no el código.**
+
+### 🚻 Las frases de la splash son NEUTRAS en género — el sexo no viaja (2026-08-28)
+
+`TvFishEntry` trae `speciesId`, `nickname`, `uid` y `ageScale`, **y nada más**. El móvil tiene el
+sexo en su save (`OwnedFishSave.sex`) pero **no lo manda**, así que un macho salía como *«Nemo está
+deseando que LA veas»*. **7 de 26** plantillas estaban marcadas; ya son neutras en `es` y `en`, con
+**guarda en `Tools/test-frases.js` validada en rojo**.
+
+⚠ **No se puede deducir:** `pairs` trae `maleUid`/`femaleUid`, pero sólo cubre peces **emparejados**
+y llega **después del INIT**, o sea cuando la splash ya lleva rato rotando frases.
+
+Campo `sex` **pedido al móvil**, documentado en `CAST_CONTRACT_TV.md`. Valores exactos:
+`"Male"` · `"Female"` · `"Unknown"` · `""` (mayúscula inicial, `.ToString()` de un enum de C#).
+⚠⚠ **El save del móvil tiene `"Male"` por defecto**, así que `"Male"` **no significa «es macho»**:
+significa «nadie ha dicho lo contrario». El emisor debe mandar `""` cuando no esté seguro.
+
 
 ## ⚠ index.html — template vs procesado
 
