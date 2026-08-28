@@ -375,8 +375,9 @@ comió 115 MB de PNG una vez. Añadidas con el porqué escrito. **Comprobar que 
       `CAST_PARIDAD_VISUAL.md` apunta a **resolución** y podría ser la equivocada.
 - [ ] 🔐 **Desplegar el Worker de la Fase 2** — escrito, 42/42 en local, **sin desplegar**. Faltan
       `JWT_SECRET` y `MINT_TOKENS`, que sólo pone el user.
-- [ ] 🐟 **Los volcados y su §6.5** — **bloqueados por el relay**, por nada más. El canal de ida
-      está sano, así que sus 13 emisores probablemente funcionan: falta **poder verlo**.
+- [x] ✅ **Los volcados y su §6.5** — **CERRADOS** el mismo día, en cuanto se curó el relay:
+      6 uid byte a byte, pareja cableada en los dos lados, `9.33 × 0.8 = 7.47` exacto y punto
+      decimal. Con el APK real y un acuario real, no con scripts.
 - [ ] 🎨 **Editar una deco colocada** no manda UPDATE (pide el móvil).
 - [ ] 📊 **La serie del 2055**: limpios **720 → 356 → 287 s**. ⚠ Tres puntos no son tendencia, y
       **caduca entera** si se compilan las dos líneas del `silence.wav`. No diseñar tandas para
