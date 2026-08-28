@@ -6,8 +6,9 @@
 > la del repo móvil trabajaran en directo (`ListAgents` + `SendMessage`), y de ahí salió casi todo
 > lo de abajo. Tres razonamientos tumbados por medidas, dos de ellos míos.
 >
-> ✅ **Y se cerró el bug del relay** (§1), que tenía bloqueados los volcados y la §6.5 del móvil.
-> Todo lo de §0 y §1 está **desplegado y validado en la tele**.
+> ✅ **Y por la tarde los dos repos trabajaron a la vez** (§0.bis): se cerraron **seis cosas**, todas
+> validadas en el device — el canal de vuelta, la §6.5, el volcado automático, la edición de decos,
+> el `silence.wav` y el campo `lang`. **Nada quedó desplegado sin validar.**
 
 ---
 
@@ -50,6 +51,69 @@ que esto iguala la tele a **«el móvil CON el bug»**. El día que allí lo arr
 **este ajuste se descuadrará solo**: hay que **remedir**, no parchear a ojo.
 
 ---
+
+---
+
+## 0.bis ✅✅ LA TARDE: los dos repos trabajando a la vez, y seis cosas cerradas
+
+El user dio luz verde a las dos sesiones para tocar sus repos y probarlo juntos. **Todo lo de abajo
+está validado en el device**, y ninguno quedó ambiguo — que es lo que más trabajo costó.
+
+| | cómo se cerró |
+|---|---|
+| **§6.5 del contrato** (uid + parejas) | diff de los dos volcados: 6 uid **byte a byte**, `uid propios: 0`, pareja cableada en los dos lados |
+| **El canal de vuelta** | **603 mensajes, 0 fallos** en 15 min. Antes: 1-4 por sesión |
+| **Volcado automático** | `cast_dump_tv.txt` **existe por primera vez** |
+| **Editar una deco colocada** | `quat` y `escala` **idénticos** en los dos volcados |
+| **El `silence.wav` del emisor** | apagado → nuestro `pm.load` pasa de **RECHAZADO** a **RESUELTO** |
+| **El campo `lang`** | `lang=es -> es` en device, **sin `DIAG`**, en el segundo 1,7 |
+
+### ⭐ El `silence.wav`: una hipótesis que nació mal, se debilitó… y acabó siendo cierta de OTRA cosa
+
+Recorrido completo, porque es el mejor ejemplo del día de por qué **separar afirmaciones pegadas**:
+
+1. Nació como *«su `load()` cancela nuestro `pm.load` y por eso muere el relay»* — **dos cosas en una**.
+2. La sesión del móvil la debilitó ella misma: en **2 de 6** el rechazo llegaba **antes** que su `load()`.
+3. Se redujo a lo único defendible: *«con su APK el relay muere en ~2 s; sin él aguanta 400 s»* (200×).
+4. El relay resultó ser **otra cosa** (el `gms_cast_mrp`, §1) y se curó sin tocar su APK.
+5. Y al quitar el `silence.wav`: **7 sesiones seguidas con `pm.load` RECHAZADO → 1 RESUELTO a la
+   primera.** La competencia por la sesión de media **era real**, sólo que no causaba lo que creíamos.
+
+🧭 **Si nos hubiéramos aferrado a la versión fuerte**, habríamos «arreglado» el relay quitando el
+`silence.wav` y el bug de la difusión seguiría ahí. **Si la hubiéramos tirado entera**, su `pm.load`
+seguiría rechazado sin que nadie lo supiera. **Separar las dos afirmaciones salvó las dos.**
+
+### 🖼 Frases rotativas en la pantalla de carga (pedido del user)
+
+53 fijas en **castellano e inglés** (30 ambiente + 18 info + 5 espera) más 16 plantillas
+personalizadas con los **motes reales** que el móvil ya mandaba y que **no se pintaban en ningún
+sitio** (`CAST_CONTRACT_TV.md` §4.2). En device salió *«Escarlata pregunta si has traído comida.»*
+
+⚠⚠ **Y un fallo propio que conviene no repetir:** durante un rato el idioma se **leía**, se
+**logueaba**… y se **ignoraba** — `_fuentes()` usaba `FRASES.es` a pelo. Un usuario en inglés habría
+visto castellano **y el log habría dicho `lang=en -> en` tan tranquilo**.
+🧭 **Infraestructura multiidioma con contenido de un solo idioma es PEOR que no tenerla, porque
+parece que funciona.** Cubierto con 11 tests, incluido uno que exige que los dos bancos tengan el
+**mismo número de frases por tipo** — si no, un idioma tendría menos variedad sin que nadie lo notara.
+
+### 🧹 Producción limpia
+
+El user: *«sin ese debug es pro normal; no debería verse nada del número de versión ni fps».* El
+**sello** y el **HUD del relay** ahora sólo salen con `DIAG`.
+⚠ Eso **cambia el protocolo de diagnóstico**: «mándame una captura» ya no vale a secas.
+🧭 Lo bueno: `DIAG` viaja por el **canal de ida**, el único que no se rompió en todo el día, así que
+el diagnóstico sigue siendo alcanzable justo cuando el retorno falla.
+
+### ⚠ Dos avisos operativos que salieron de la tarde
+
+- **Volcados: hace falta ARRANQUE EN FRÍO**, no una reconexión — hasta que su disparador de respaldo
+  esté desplegado. Ver §2.bis.
+- **Su respaldo iba a dispararse a los 45 s** y nuestros arranques tardan **33-50 s**: habría volcado
+  un acuario a medias, y eso en el diff **no se lee como «llegué pronto», se lee como desajuste del
+  protocolo**. Subido a 90 s. 🧭 **Fabricar evidencia falsa es peor que no tener ninguna.**
+  Pendiente nuestro: guarda de `montado=si/no` en el `dump`.
+- ⚠ **Su push está bloqueado por GitHub** (blob de 123 MB en la historia, 64 commits atascados).
+  **El nuestro no**: mayor blob **47,1 MB**, ninguno > 100. Comprobado, no supuesto.
 
 ## 1. ✅✅ EL RELAY: RESUELTO EL MISMO DIA (era el sender equivocado)
 
