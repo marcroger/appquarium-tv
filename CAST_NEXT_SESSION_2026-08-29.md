@@ -325,7 +325,26 @@ esperando turno. Capturar a mano con `adb exec-out screencap`, que no abre sesi�
   (un tragadero **dentro del parche que quita tragaderos**) y además se ocultaba salvo con `DIAG`
   — o sea, **invisible justo en la avería para la que existía**. Los dos reflejos —«que no reviente»
   y «que no moleste»— nacen de proteger al usuario de la información.
-- **Escribir la regla no la ejecuta.** Las dos sesiones incumplimos hoy reglas que teníamos
+- **Escribir la regla no la ejecuta.**
+
+### ⭐ Y la conclusión del día, que es lo más transferible
+
+**Cuatro conclusiones falsas entre las dos sesiones**, todas con la misma forma —*datos correctos,
+hipótesis razonable, mal emparejadas*— y las cuatro cazadas igual:
+
+| lo que se creía | lo que faltaba mirar |
+|---|---|
+| «el `exposure` sale más claro» | la variante que sólo difería en **él** |
+| «el receptor no monta» | **la pantalla**, no el log |
+| «el `bloomHQ` aporta +1.2 L\*» | **varios bloques** por estado, no una captura |
+| «el giro no se aplica» | **la serie entera**, no dos fotos |
+
+**Ninguna se cazó pensando más. Se cazaron mirando más.** Y en las cuatro **la ventana que faltaba
+estaba disponible y era barata**: no hacía falta un instrumento nuevo, se miraba por el que ya
+estaba abierto.
+
+⇒ 🧭 **Cuando una hipótesis y unos datos no encajan, lo primero no es pensar mejor: es preguntarse
+qué ventana no se está mirando.** Las dos sesiones incumplimos hoy reglas que teníamos
   apuntadas.
 
 ---
