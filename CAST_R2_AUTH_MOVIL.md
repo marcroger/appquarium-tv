@@ -77,25 +77,86 @@ Es decir: `decos_remote_assets_deco_coral_acropora_205d35d0….bundle` → `deco
 Si el móvil guarda los ids con otro formato (sufijos de instancia, prefijos distintos), **hay que
 normalizarlos antes de meterlos en los claims** o el usuario se quedará sin sus propias decos.
 
-### 1.4 El endpoint de emisión
+> 📲 **Si eres la sesión del repo MÓVIL, lee antes**
+> [`CAST_HANDOFF_MOVIL_2026-08-26.md`](CAST_HANDOFF_MOVIL_2026-08-26.md): resume esto y todo lo
+> demás que cambió de tu lado el 26-ago.
+
+### 1.4 El endpoint de emisión ✅ YA EXISTE (escrito el 2026-08-26, **sin desplegar**)
 
 `POST https://appquarium-assets.appquarium.workers.dev/mint-token`
 
-```json
+```
+Authorization: Bearer <MINT_TOKENS>          ← ⚠ NUEVO, ver abajo
+Content-Type: application/json
+
 { "userId": "...", "isPremium": false,
   "ownedSpecies": [], "ownedDecoIds": [], "ownedPackIds": [] }
 ```
-→ `200 {"token": "<jwt>"}`
+→ `200 {"token": "<jwt>", "exp": 1756300000}`
 
-**Este endpoint todavía NO existe**: lo escribo yo en el Worker desde el repo TV cuando la parte
-móvil esté lista. Se implementa junto con la verificación HS256 y la comprobación de propiedad
-(en `src/index.js` hay un hueco marcado en `authorize()`).
+Errores: `401` sin credencial o con una ajena · `400` sin `userId` o con body que no es JSON ·
+`405` si no es POST · `503` si al Worker le falta `JWT_SECRET` o `MINT_TOKENS`.
 
-⚠ En el MVP el Worker **se fía de lo que le manda el APK** — no valida el `purchaseToken` contra
-la Google Play Developer API. Es un trade-off conocido: quien manipule el APK se emite el token
-que quiera. Cerrarlo es la mejora futura (pide un Service Account de Google Play).
+#### ⚠⚠ DOS DECISIONES QUE NO ESTABAN EN ESTE SPEC
 
----
+**1. `/mint-token` NO es abierto: pide una credencial (`MINT_TOKENS`).**
+
+El spec decía que «el Worker se fía de lo que le manda el APK», y eso **sigue siendo cierto para
+el CONTENIDO de los claims** (no se valida la compra contra Google Play — el trade-off conocido
+del MVP). Pero un endpoint de emisión **sin ninguna credencial** es otra cosa: cualquiera pide un
+token con `isPremium: true` y se baja el catálogo entero. Con eso la Fase 2 protegería **menos**
+que la Fase 1, que es justo lo contrario de lo que se busca.
+
+Así que para emitir hay que presentar uno de `MINT_TOKENS`, un secret propio del Worker que
+**hornea el APK** (igual que el receiver hornea el suyo). El listón sigue siendo «hay que atacar
+el producto», que es lo que las licencias esperan.
+
+🧭 **Es un secret distinto del `BUNDLE_TOKENS` del receiver**, a propósito: son dos clientes con
+credenciales separadas, y rotar una no obliga a rebuildear al otro.
+
+**2. La propiedad NO se aplica todavía: se registra.** `OWNERSHIP_MODE` = `log` (por defecto) o
+`enforce`.
+
+En `log` la firma y la caducidad se verifican **de verdad**, pero si el usuario pide un bundle que
+no consta como suyo **se le sirve igual** y la respuesta lleva `X-Aq-Ownership: would-deny`.
+
+Motivo: si los ids de los claims llegan con otro formato —sufijos de instancia, prefijos
+distintos— el usuario **se queda sin SU acuario**, y eso se ve como una tele vacía, que es el
+síntoma más caro de diagnosticar de este proyecto. Primero se mide con tráfico real; se pasa a
+`enforce` cuando el contador de `would-deny` sea 0.
+
+#### Cómo se comporta el Worker con cada credencial
+
+| lo que llega en `Authorization` | qué pasa |
+|---|---|
+| un `BUNDLE_TOKENS` (Fase 1) | se sirve, como siempre. **Sigue vivo toda la migración** |
+| un JWT válido y con el ítem en sus claims | se sirve |
+| un JWT válido **sin** el ítem, `OWNERSHIP_MODE=log` | se sirve + `X-Aq-Ownership: would-deny` |
+| un JWT válido **sin** el ítem, `OWNERSHIP_MODE=enforce` | **403** |
+| un JWT caducado, mal firmado, `alg: none` o sin `exp` | **401 JWT invalido o caducado** |
+| un bundle de `audio` o `environments` | se sirve: no es de nadie |
+
+⚠ Un token **con tres partes separadas por puntos se trata SIEMPRE como JWT** y no cae al camino
+del token constante. Si no, un JWT caducado se compararía contra la lista y daría `403 Invalid
+token`, un diagnóstico engañoso para algo que sólo necesita re-emitirse.
+
+#### Estado y despliegue
+
+**Escrito y probado, NO desplegado.** `Tools/r2-auth-worker/test-local.mjs` cubre 42 casos, 0
+fallos, incluidos firma manipulada, `alg: none`, `HS512` y caducado.
+
+Para ponerlo en producción hacen falta **dos secrets nuevos** en el Worker:
+
+```bash
+cd Tools/r2-auth-worker
+npx wrangler secret put JWT_SECRET      # aleatorio largo; sólo lo conoce el Worker
+npx wrangler secret put MINT_TOKENS     # el que hornea el APK; admite varios por coma
+npx wrangler deploy
+```
+
+El despliegue es **aditivo**: sin esos secrets el camino nuevo devuelve `503` y el token constante
+sigue funcionando igual, así que la tele no se entera. Aun así toca infraestructura viva, y lo
+decide el user.
 
 ## 2. Trabajo en el móvil
 

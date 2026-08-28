@@ -108,4 +108,20 @@ Assets/Scripts/Core/TvBundleAuthSecret.cs.meta
 /_tvshots/
 /_gradesweep/
 /_gradetune/
+/_fondos/
+__pycache__/
 /Tools/_cap*.sh
+
+# Capturas de diagnóstico contra el device (2026-08-28). Se generan por tanda y pesan
+# decenas de MB: el 21-ago se colaron 115 MB de PNG en una rama y hubo que reescribir el
+# historial antes de poder mergear.
+#
+# ⚠⚠ Esto era una LISTA de nombres y duró tres horas: cada tanda nueva creaba una carpeta que
+# no estaba en ella, y a las pocas horas había 7 sin ignorar. Una lista que hay que recordar
+# actualizar no es una guarda. Ahora es un PATRÓN: toda carpeta de la raíz que empiece por `_`.
+#
+# ℹ Las dos carpetas históricas `_cast_drop_2026-06-27/` y `_cast_video_loop_2026-06-30/` ya
+#   están TRACKEADAS, y `.gitignore` no afecta a lo que ya está en el índice: siguen versionadas
+#   y sus cambios siguen apareciendo. Sólo deja de recogerse lo que se añada nuevo dentro, que
+#   es lo que se quiere (son volcados cerrados).
+/_*/

@@ -47,6 +47,33 @@ public class AmbientModeController : MonoBehaviour
     [Tooltip("True en TvScene: fija Day mode, ignora reloj. Set by TvSceneBootstrap.")]
     public bool alwaysAmbient = false;
 
+    [Header("Efecto del ciclo sobre decos y peces")]
+    [Tooltip("Publica el color de la fase para que DecoLit y FishUnlit se apaguen de noche. " +
+             "Apagarlo devuelve el comportamiento anterior: todo a pleno día las 24 h.")]
+    public bool afectarDecos = true;
+    [Range(0f, 1f)]
+    [Tooltip("Brillo que conservan las decos en el punto más oscuro del ciclo. 0 = negras. " +
+             "El cálculo puro daría ~0,03 en noche cerrada y las decos desaparecerían.")]
+    public float sueloDecoNoche = 0.18f;
+    [Range(0f, 1f)]
+    [Tooltip("Igual para los peces, pero MÁS ALTO a propósito: son el protagonista de la " +
+             "escena y con el suelo de las decos la noche se los comía. Subirlo los destaca " +
+             "más sobre el fondo apagado; bajarlo hasta sueloDecoNoche los integra del todo.")]
+    public float sueloPecesNoche = 0.35f;
+    [Range(0f, 1f)]
+    [Tooltip("Igual para la ARENA. El más alto de los tres: es la superficie más grande del " +
+             "encuadre y bajarla mucho deja un agujero negro bajo el acuario. ⚠ Esto NO es " +
+             "paridad con el móvil (allí la arena tampoco se apaga): es una mejora sobre él, " +
+             "decidida por el user el 2026-08-24. Ver DecorationPlacer.AplicarLuzAlSustrato.")]
+    public float sueloSustratoNoche = 0.45f;
+
+    // Globals de shader que leen `Appquarium/DecoLit` y `Appquarium/FishUnlit`. Son DARKEN
+    // (0 = sin cambio) a propósito: un global que nadie publica vale 0, así que el fallo cae
+    // del lado del aspecto de siempre y no del de la escena en negro. Ver el comentario
+    // largo de `DecoLit.shader`.
+    private static readonly int AqDecoDarken = Shader.PropertyToID("_AqDecoDarken");
+    private static readonly int AqFishDarken = Shader.PropertyToID("_AqFishDarken");
+
     // ── Estado ───────────────────────────────────────────────────────────────
 
     public AmbientMode CurrentMode { get; private set; } = AmbientMode.Day;
@@ -56,18 +83,37 @@ public class AmbientModeController : MonoBehaviour
 
     private Coroutine _transition;
     private int       _lastCheckedHour = -1;
+    /// <summary>Se pone a true en cuanto llega una orden explícita (UPDATE `ambient` del
+    /// móvil). A partir de ahí el reloj local deja de mandar: ver el comentario de Update().</summary>
+    private bool      _modoManual;
 
     // ── Ciclo de vida ────────────────────────────────────────────────────────
 
     void Start()
     {
+        // ⚠ 2026-08-24 — ANTES: `FindFirstObjectByType<Light>()`, SIN filtrar por tipo.
+        // En la escena sólo hay una luz (la direccional), pero `TankLightingController` crea
+        // 3 spots y 1 point EN RUNTIME, y el orden de los `Start()` no está garantizado: si
+        // los spots ya existían, el ciclo día/noche acababa atenuando un LED de la barra en
+        // vez del sol. `TankLightingController:147` sí filtra por Directional; esto no.
+        // Se filtra igual que él, y además se REPORTA por el canal Cast: el
+        // `Debug.Log` de abajo no viaja a la tele, así que el fallo era invisible.
         if (sunLight == null)
-            sunLight = FindFirstObjectByType<Light>();
+        {
+            foreach (var l in FindObjectsByType<Light>(FindObjectsSortMode.None))
+                if (l.type == LightType.Directional) { sunLight = l; break; }
+        }
 
         if (sunLight == null)
-            Debug.LogWarning("[Ambient] ❌ No se encontró ningún Light. Sólo se modificará el ambient.");
+        {
+            Debug.LogWarning("[Ambient] ❌ No se encontró ningún Light direccional. Sólo se modificará el ambient.");
+            JsBridge.Log("⚠ Ambient: sin luz direccional — el ciclo sólo moverá el ambiente");
+        }
         else
+        {
             Debug.Log($"[ShadowDiag] AmbientMode.Start() — sunLight='{sunLight.gameObject.name}' type={sunLight.type} shadows={sunLight.shadows} enabled={sunLight.enabled}");
+            JsBridge.Log($"Ambient: sol='{sunLight.gameObject.name}' tipo={sunLight.type}");
+        }
 
         if (alwaysAmbient)
             ApplyImmediate(AmbientMode.Day);
@@ -81,7 +127,13 @@ public class AmbientModeController : MonoBehaviour
 
     void Update()
     {
-        if (!alwaysAmbient && autoFollowRealTime)
+        // ⚠ 2026-08-24 — `_modoManual` corta el reloj interno.
+        // `CheckRealTimeMode` reimponía el modo en CADA cambio de hora: si el móvil pedía
+        // "noche" a las 15:30, a las 16:00 la tele volvía a día ella sola y se cargaba lo
+        // que el user había elegido. En TV el sender YA es el reloj (el móvil manda un
+        // UPDATE `ambient` cada vez que su propio ciclo cambia de fase), así que el reloj
+        // local sólo debe gobernar MIENTRAS no haya llegado ninguna orden explícita.
+        if (!alwaysAmbient && autoFollowRealTime && !_modoManual)
             CheckRealTimeMode();
 
 #if UNITY_EDITOR
@@ -101,8 +153,13 @@ public class AmbientModeController : MonoBehaviour
     /// <summary>Cicla al siguiente modo: Día → Tarde → Noche → Día.</summary>
     public void CycleMode() => SetMode((AmbientMode)(((int)CurrentMode + 1) % 3));
 
-    public void SetMode(AmbientMode mode)
+    /// <summary>Orden explícita (la que llega por el UPDATE `ambient`): además de cambiar el
+    /// modo, desactiva el reloj local para que no la pise al cambiar de hora.</summary>
+    public void SetMode(AmbientMode mode) => SetMode(mode, manual: true);
+
+    private void SetMode(AmbientMode mode, bool manual)
     {
+        if (manual) _modoManual = true;
         if (CurrentMode == mode) return;
 
         CurrentMode = mode;
@@ -122,7 +179,7 @@ public class AmbientModeController : MonoBehaviour
         int hour = DateTime.Now.Hour;
         if (hour == _lastCheckedHour) return;
         _lastCheckedHour = hour;
-        SetMode(ModeForCurrentHour());
+        SetMode(ModeForCurrentHour(), manual: false);
     }
 
     private static AmbientMode ModeForCurrentHour()
@@ -147,9 +204,81 @@ public class AmbientModeController : MonoBehaviour
     {
         var (ambient, sun, intensity) = GetConfig(mode);
         RenderSettings.ambientLight = ambient;
+        PublicarLuzDecos(ambient, sun, intensity);
         if (sunLight == null) return;
         sunLight.color     = sun;
         sunLight.intensity = intensity;
+    }
+
+    /// <summary>
+    /// Traduce la iluminación de la fase a un factor por canal RELATIVO AL DÍA y lo publica
+    /// como global de shader para `Appquarium/DecoLit`.
+    ///
+    /// Se normaliza contra el día a propósito, en vez de mandar el ambiente en bruto: así el
+    /// día sale EXACTAMENTE en (1,1,1) y la imagen diurna —que es la que está validada en la
+    /// tele desde agosto— no se mueve ni un píxel. Lo que cambia es sólo lo que debe cambiar.
+    ///
+    /// El suelo del rango existe porque el cálculo puro da ~0,03 en noche cerrada: fiel a la
+    /// física, pero deja las decos invisibles. Con 0,18 la noche se lee como noche y las
+    /// siluetas siguen ahí para que la bioluminiscencia tenga sobre qué destacar.
+    /// </summary>
+    private void PublicarLuzDecos(Color ambient, Color sun, float intensity)
+    {
+        if (!afectarDecos)
+        {
+            Shader.SetGlobalColor(AqDecoDarken, Color.clear);
+            Shader.SetGlobalColor(AqFishDarken, Color.clear);
+            return;
+        }
+
+        Color refDia = dayAmbient + daySunColor * daySunIntensity;
+        Color actual = ambient    + sun         * intensity;
+
+        // Se manda el complemento: el shader hace 1 - esto. Ver arriba por qué.
+        Color deco = Complemento(actual, refDia, sueloDecoNoche);
+        Color pez  = Complemento(actual, refDia, sueloPecesNoche);
+        Shader.SetGlobalColor(AqDecoDarken, deco);
+        Shader.SetGlobalColor(AqFishDarken, pez);
+
+        // La arena no puede ir por un global: usa `Sprites/Default`, cuyo `_Color` es una
+        // propiedad del material y por tanto GANA al global. Se escribe directamente.
+        if (_placer == null) _placer = FindFirstObjectByType<DecorationPlacer>();
+        if (_placer != null)
+        {
+            Color arena = Complemento(actual, refDia, sueloSustratoNoche);
+            _placer.AplicarLuzAlSustrato(new Color(1f - arena.r, 1f - arena.g, 1f - arena.b, 1f));
+        }
+
+        // ⚠ 2026-08-24 — REPORTAR EL MECANISMO, NO SÓLO EL EFECTO.
+        // El build del 24-ago salió con el ciclo "hecho" y las decos siguieron planas, y no
+        // se pudo saber por qué sin otro build: nadie decía qué factor se estaba publicando.
+        // Con esto, «llegó el mensaje pero el factor es 1» y «el factor baja pero la deco no
+        // se entera» dejan de ser indistinguibles. Se emite sólo cuando cambia de verdad
+        // (~2 líneas por transición), no en cada frame del fundido.
+        int firma = Mathf.RoundToInt((1f - deco.r) * 100f) * 1000
+                  + Mathf.RoundToInt((1f - deco.g) * 100f);
+        if (firma != _ultimaFirmaLuz)
+        {
+            _ultimaFirmaLuz = firma;
+            Color ar = Complemento(actual, refDia, sueloSustratoNoche);
+            JsBridge.Log($"luz: deco={1f - deco.r:F2}/{1f - deco.g:F2}/{1f - deco.b:F2} " +
+                         $"pez={1f - pez.r:F2}/{1f - pez.g:F2}/{1f - pez.b:F2} " +
+                         $"arena={1f - ar.r:F2}/{1f - ar.g:F2}/{1f - ar.b:F2}" +
+                         (_placer == null ? " ⚠ SIN PLACER — la arena no se está tiñendo" : ""));
+        }
+    }
+
+    private int _ultimaFirmaLuz = int.MinValue;
+    private DecorationPlacer _placer;
+
+    private static Color Complemento(Color actual, Color refDia, float suelo)
+    {
+        float F(float act, float dia) =>
+            Mathf.Lerp(suelo, 1f, Mathf.Clamp01(act / Mathf.Max(dia, 1e-4f)));
+
+        return new Color(1f - F(actual.r, refDia.r),
+                         1f - F(actual.g, refDia.g),
+                         1f - F(actual.b, refDia.b), 0f);
     }
 
     private IEnumerator TransitionTo((Color ambient, Color sun, float intensity) target)
@@ -165,12 +294,19 @@ public class AmbientModeController : MonoBehaviour
             float t      = elapsed / transitionDuration;
             float smooth = Mathf.SmoothStep(0f, 1f, t);
 
-            RenderSettings.ambientLight = Color.Lerp(startAmbient, target.ambient, smooth);
+            Color ambNow = Color.Lerp(startAmbient, target.ambient, smooth);
+            Color sunNow = Color.Lerp(startSun,     target.sun,     smooth);
+            float intNow = Mathf.Lerp(startIntensity, target.intensity, smooth);
+
+            RenderSettings.ambientLight = ambNow;
+            // Cada frame, para que las decos hagan el mismo fundido que el resto y no
+            // salten de golpe al final de la transición.
+            PublicarLuzDecos(ambNow, sunNow, intNow);
 
             if (sunLight != null)
             {
-                sunLight.color     = Color.Lerp(startSun, target.sun, smooth);
-                sunLight.intensity = Mathf.Lerp(startIntensity, target.intensity, smooth);
+                sunLight.color     = sunNow;
+                sunLight.intensity = intNow;
             }
 
             elapsed += Time.deltaTime;
@@ -179,6 +315,7 @@ public class AmbientModeController : MonoBehaviour
 
         // Valor final exacto
         RenderSettings.ambientLight = target.ambient;
+        PublicarLuzDecos(target.ambient, target.sun, target.intensity);
         if (sunLight != null)
         {
             sunLight.color     = target.sun;

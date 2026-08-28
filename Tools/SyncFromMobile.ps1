@@ -58,6 +58,20 @@ $FoldersToSync = @(
     "Assets\Resources\Data"
 )
 
+# Archivos que NUNCA se copian, aunque esten dentro de una carpeta de $FoldersToSync.
+#
+# ⚠⚠ 2026-08-26 — Las carpetas se copian ENTERAS, asi que un fichero nuevo en el movil
+# entra aqui sin que nadie lo decida. `FishStatusOverlay.cs` (nuevo en el movil el 26-ago)
+# usa cuatro miembros de `UIManager` que el stub de TV NO tiene -- `C_SEX_MALE`,
+# `C_SEX_FEMALE`, `OverlayCanvas` y `MakeLabel` -- asi que un `-Yes` a ciegas deja la TV
+# SIN COMPILAR. Es UI, y la TV no tiene UI: no hay nada que portar.
+#
+# 🧭 Antes de anadir uno aqui, comprobar si es mobile-only de verdad. La alternativa es
+# ampliar el stub de `TvStubs.cs`, que cuesta mas y arrastra codigo muerto.
+$FilesToExclude = @(
+    "Assets\Scripts\Fish\FishStatusOverlay.cs"
+)
+
 # Archivos específicos que se sincronizan individualmente (con su .meta)
 $FilesToSync = @(
     "Assets\Scripts\Core\AquariumCameraController.cs",
@@ -73,7 +87,13 @@ $FilesToSync = @(
 #   PostProcessingSetup.cs   bloom OFF + Tonemapping Neutral + sat/contrast -> vuelven los 7 fps
 #   DecorationPlacer.cs      tint dual _Color/_BaseColor, BioLumEmissionScale 0.25, remap X,
 #                            RemoveAllDecos, GetFloorSurfaceY (de ahí cuelgan las sombras)
-#   FishSpawner.cs           DespawnOneBySpecies (lo llama TvSceneBootstrap -> no compila)
+#   FishSpawner.cs           DespawnOneBySpecies Y DespawnByUid (2026-08-27). Los llama
+#                            TvSceneBootstrap -> sin ellos no compila. DespawnByUid es lo que
+#                            permite quitar EL pez que el usuario quito, y no otro de su especie.
+#   CastDataTypes.cs         (2026-08-27) TvRemoveFishPayload, y los campos de giro/inclinacion/
+#                            montaje de TvAddDecoPayload: tiltX, hasUserRot, quat*, mountedOn...
+#   TvSceneBootstrap.cs      es TV-only de facto, pero ojo: handlers de remove_fish por uid, el
+#                            buffer de `pairs` y el volcado `dump` viven aqui.
 #   AmbientModeController.cs la versión móvil llama a CastManager -> no compila
 #   TankBackground.cs        orden de shaders para el color space de WebGL
 #   WaterSurface.cs          idem
@@ -185,7 +205,12 @@ foreach ($folder in $FoldersToSync) {
     }
     Get-FolderFileList -Root $MobileRoot -RelFolder $folder | ForEach-Object {
         # Ignorar .meta — se copia junto al archivo principal
-        if ($_ -notlike "*.meta") { $candidates.Add($_) }
+        if ($_ -like "*.meta") { return }
+        if ($FilesToExclude -contains $_) {
+            Write-Host "  - Excluido a proposito: $_" -ForegroundColor DarkGray
+            return
+        }
+        $candidates.Add($_)
     }
 }
 foreach ($file in $FilesToSync) {

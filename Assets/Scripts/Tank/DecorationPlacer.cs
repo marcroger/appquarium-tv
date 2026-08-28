@@ -1669,6 +1669,43 @@ public class DecorationPlacer : MonoBehaviour
         var mat = BuildFloorMaterial(subId, found.Value.colorA, found.Value.colorB);
         if (_floorRenderer         != null) _floorRenderer.material         = mat;
         if (_floorOccluderRenderer != null) _floorOccluderRenderer.material = mat;
+        // El material es NUEVO, así que hay que devolverle la fase del ciclo: si no, cambiar
+        // de sustrato de noche encendería la arena a pleno día.
+        AplicarLuzAlSustrato(_luzSustrato);
+    }
+
+    // ── El ciclo día/noche sobre la arena ────────────────────────────────────
+    //
+    // ⚠ 2026-08-24 — El sustrato NO se apagaba de noche, y en el móvil TAMPOCO: su
+    // `SubstrateShadow` sólo multiplica por `shadowAttenuation`, y el `TankNightOverlay`
+    // (idéntico en los dos proyectos) vive en z=4,99, delante del fondo pero DETRÁS de todo
+    // lo demás, así que sólo oscurece el telón.
+    //
+    // O sea que esto NO es paridad con el móvil: es una mejora deliberada sobre él, decidida
+    // por el user. El motivo es que en la tele la arena es la superficie más grande del
+    // encuadre —en el teléfono el tanque va pequeño y con UI alrededor—, y con el fondo, las
+    // decos y los peces ya apagados, una alfombra fluorescente se comía la noche entera, que
+    // es justo cuando luce la bioluminiscencia.
+    //
+    // Va por `_Color` de `Sprites/Default`, que es lo que usa el suelo en TV (el
+    // `Shader.Find("Appquarium/SubstrateShadow")` de `BuildFloorMaterial` no encuentra nada
+    // porque ese shader no existe en este proyecto). Sin shader nuevo.
+
+    private Color _luzSustrato = Color.white;
+
+    /// <summary>Aplica el factor de luz de la fase actual a la arena. (1,1,1) = día.</summary>
+    public void AplicarLuzAlSustrato(Color factor)
+    {
+        _luzSustrato = factor;
+        Tenir(_floorRenderer);
+        Tenir(_floorOccluderRenderer);
+
+        void Tenir(MeshRenderer r)
+        {
+            if (r == null) return;
+            var m = r.material;
+            if (m != null && m.HasProperty("_Color")) m.SetColor("_Color", factor);
+        }
     }
 
     // ── Internos ─────────────────────────────────────────────────────────────
@@ -1723,6 +1760,12 @@ public class DecorationPlacer : MonoBehaviour
     /// También repara materiales URP/Unlit sin textura que hayan quedado blancos por una
     /// conversión incorrecta en el Editor (cuando se leyó _MainTex pero GLTFast usa _BaseMap).
     /// </summary>
+    /// <summary>Cuántos materiales se han reapuntado del shader del bundle al del player.
+    /// Se reporta por el canal Cast: si sale 0 con decos colocadas, o el reapuntado no hace
+    /// falta o no está entrando, y en cualquier caso hay que mirarlo.</summary>
+    private static int _shadersReapuntados;
+    public static int ShadersReapuntados => _shadersReapuntados;
+
     public static void FixNonURPMaterials(GameObject go)
     {
         // Device-safe targets (CG legacy, sin LightMode → ejecutan en el Cast renderer):
@@ -1755,6 +1798,30 @@ public class DecorationPlacer : MonoBehaviour
                 bool unlitEnDeco = decoLit != null
                                    && sname.Contains("Appquarium/FishUnlit")
                                    && !mat.name.EndsWith("_DECOLIT");
+
+                // ⚠⚠ 2026-08-24 — «YA ES EL SHADER BUENO» NO SIGNIFICA «ES *NUESTRO* SHADER».
+                // Un material que viene de un AssetBundle trae su PROPIA copia del shader,
+                // horneada cuando se construyó el bundle. Sigue llamándose
+                // "Appquarium/DecoLit", así que la guarda de abajo lo dejaba pasar, pero es
+                // el bytecode del 19-ago: no conoce `_AqDecoDarken` y por tanto ignora el
+                // ciclo día/noche. Se midió: tras cambiar el shader y rebuildear el PLAYER,
+                // las decos seguían clavadas en 47,97 de luminancia en las 8 fases, mientras
+                // la misma sonda en el Editor demostraba que el global sí llega al shader.
+                //
+                // `FishSpawner.cs:341-360` ya resolvía esto para los peces desde hace
+                // tiempo, con este mismo razonamiento escrito en su comentario — a las decos
+                // nunca se les aplicó. `Shader.Find` devuelve la copia del PLAYER (los
+                // shaders dentro de bundles no se registran ahí), así que reapuntar basta.
+                //
+                // 🧭 Regla que sale de aquí: tocar DecoLit/FishUnlit NO se despliega sólo con
+                // un build de player mientras el material viva en un bundle. O se reapunta
+                // aquí, o hay que reconstruir los 80 bundles.
+                if (!unlitEnDeco && decoLit != null
+                    && sname.Contains("Appquarium/DecoLit") && mat.shader != decoLit)
+                {
+                    mat.shader = decoLit;
+                    _shadersReapuntados++;
+                }
 
                 // Ya device-safe → dejar intacto: Sprites/UI, DecoLit, o ya procesado.
                 if (!unlitEnDeco
@@ -2042,7 +2109,14 @@ public class DecorationPlacer : MonoBehaviour
         // SubstrateShadow: como Sprites/Default (vertex color RGB×tex + alpha fade)
         // pero también recibe sombras URP del main light (fish/decos proyectan sombra en el suelo).
         // Fallback a Sprites/Default si el shader custom no está disponible.
-        Shader shader = Shader.Find("Appquarium/SubstrateShadow")
+        // ⚠ 2026-08-25 — `Appquarium/SubstrateFog` va PRIMERO (TV). Es `Sprites/Default`
+        // clonado mas la niebla de agua, para que la arena entre en el mismo medio que las
+        // decos y los peces. Sin el, la niebla tinie las decos de turquesa y deja el suelo
+        // blanco: medido en la tele, queda PEOR que sin niebla.
+        // Si no existe (proyecto movil, o shader stripeado) la cadena cae a lo de siempre y
+        // el suelo se comporta exactamente como antes. Fallar hacia lo de antes.
+        Shader shader = Shader.Find("Appquarium/SubstrateFog")
+                     ?? Shader.Find("Appquarium/SubstrateShadow")
                      ?? Shader.Find("Sprites/Default")
                      ?? Shader.Find("UI/Default")
                      ?? Shader.Find("Universal Render Pipeline/Unlit");

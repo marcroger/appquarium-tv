@@ -73,6 +73,14 @@ public class CastReceiver : MonoBehaviour
                 AplicarGrado(msg.payload);
                 break;
 
+            // Niebla de agua y tono de los peces, en caliente. Misma razon que GRADE: elegir
+            // estos valores a base de builds cuesta ~10 min por variante y hay que verlos en la
+            // tele, no en Chrome. Todo arranca APAGADO (densidad 0 = imagen de siempre), asi que
+            // este mensaje es tambien el interruptor: no mandarlo es el rollback.
+            case "FOG":
+                AplicarNieblaDeAgua(msg.payload);
+                break;
+
             case "PING":
             case "KEEPALIVE":
                 break;
@@ -134,6 +142,12 @@ public class CastReceiver : MonoBehaviour
         {
             bloom          = pp.enableBloom,
             bloomIntensity = pp.bloomIntensity,
+            bloomThreshold = pp.bloomThreshold,
+            bloomScatter   = pp.bloomScatter,
+            bloomHQ        = pp.bloomHQ,
+            bloomDownscale = pp.bloomDownscale,
+            bloomMaxIterations  = pp.bloomMaxIterations,
+            bloomSkipIterations = pp.bloomSkipIterations,
             tonemapping    = pp.enableTonemapping,
             saturation     = pp.saturation,
             contrast       = pp.contrast,
@@ -141,12 +155,19 @@ public class CastReceiver : MonoBehaviour
             vignette       = pp.vignetteIntensity,
             bgFit          = -1f,     // centinela: si el JSON no lo trae, no se toca el encuadre
             shadowFade     = -1f,
+            renderScale    = -1f,
         };
         try   { JsonUtility.FromJsonOverwrite(payload, g); }
         catch (System.Exception e) { JsBridge.Log("GRADE: payload ilegible — " + e.Message); return; }
 
         pp.enableBloom       = g.bloom;
         pp.bloomIntensity    = g.bloomIntensity;
+        pp.bloomThreshold    = Mathf.Clamp01(g.bloomThreshold);
+        pp.bloomScatter      = Mathf.Clamp01(g.bloomScatter);
+        pp.bloomHQ           = g.bloomHQ;
+        pp.bloomDownscale    = Mathf.Clamp(g.bloomDownscale, 0, 1);
+        pp.bloomMaxIterations  = Mathf.Clamp(g.bloomMaxIterations, 2, 8);
+        pp.bloomSkipIterations = Mathf.Clamp(g.bloomSkipIterations, 0, 4);
         pp.enableTonemapping = g.tonemapping;
         pp.saturation        = g.saturation;
         pp.contrast          = g.contrast;
@@ -179,9 +200,129 @@ public class CastReceiver : MonoBehaviour
             else             bg2.SetBackgroundFit(g.bgFit);
         }
 
+        // ── renderScale en caliente (2026-08-25) ─────────────────────────────
+        // POR QUE: la TV renderiza a `renderScale 0,70`, o sea 1344x756 estirados a 1920x1080
+        // — el 55 % de los pixeles. El movil va a escala 1, y de ahi la mitad del "en el
+        // telefono se ve mas nitido" que reporto el user (la otra mitad es el grado: TV lleva
+        // tonemapping + sat +18, el movil bloom 1,2 / sat -15).
+        //
+        // ⚠⚠ Subirlo NO es gratis: es fill-rate puro, y el Mali-G31 de la Xiaomi va justo.
+        // El 0,70 se eligio en su dia para llegar a 30 fps estables. Por eso esto es un
+        // MENSAJE y no una constante: la unica forma honesta de decidirlo es barrer 0,70 /
+        // 0,85 / 1,00 en la tele leyendo el FPS del HUD, y elegir con el dato delante en vez
+        // de gastar un build por variante. Mismo criterio que la niebla y el grado.
+        //
+        // Se reporta la resolucion EFECTIVA, no solo el factor: es lo que hay que comparar
+        // contra los 1920x1080 del panel.
+        if (g.renderScale > 0f)
+        {
+            var rp = UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline
+                     as UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset;
+            if (rp == null)
+            {
+                JsBridge.Log("RENDERSCALE: no hay UniversalRenderPipelineAsset activo — sin efecto");
+            }
+            else
+            {
+                // URP acepta [0.1, 2]. Se acota aqui para que un valor absurdo no deje la
+                // tele en negro sin explicacion.
+                float previo = rp.renderScale;
+                rp.renderScale = Mathf.Clamp(g.renderScale, 0.3f, 2f);
+                JsBridge.Log($"RENDERSCALE: {previo:F2} → {rp.renderScale:F2} " +
+                             $"({Mathf.RoundToInt(Screen.width * rp.renderScale)}x" +
+                             $"{Mathf.RoundToInt(Screen.height * rp.renderScale)} " +
+                             $"sobre {Screen.width}x{Screen.height})");
+            }
+        }
+
+        // ⚠ El umbral y la piramide SIEMPRE en el log, aunque el bloom este OFF: son
+        // exactamente los campos cuya ausencia hizo que un barrido entero midiera otra cosa.
+        JsBridge.Log($"BLOOM: thr={pp.bloomThreshold:F2} scatter={pp.bloomScatter:F2} " +
+                     $"hq={(pp.bloomHQ ? "ON" : "off")} " +
+                     $"downscale={(pp.bloomDownscale == 0 ? "Half" : "Quarter")} " +
+                     $"maxIt={pp.bloomMaxIterations} skipIt={pp.bloomSkipIterations}");
         JsBridge.Log($"GRADE: bloom={(g.bloom ? g.bloomIntensity.ToString("F2") : "OFF")} " +
                      $"tm={(g.tonemapping ? "Neutral" : "OFF")} sat={g.saturation:F0} " +
                      $"con={g.contrast:F0} exp={g.exposure:F2} vig={g.vignette:F2}");
+    }
+
+    // ── Niebla de agua (2026-08-25) ──────────────────────────────────────────
+    // POR QUE: medido en la tele, los peces van a croma C* 42,6 contra 23,1 del agua que los
+    // rodea (1,8x) y L* 59 contra 47; las decos, en cambio, ya estan integradas (25,5). Y
+    // ningun shader del proyecto lee la profundidad, asi que un pez del fondo tiene el mismo
+    // contraste que uno pegado al cristal. Eso es lo que se lee como "assets separados".
+    //
+    // Los valores buenos NO se pueden elegir aqui ni en Chrome: hay que verlos en la tele.
+    // Por eso esto es un mensaje y no una constante — un solo build permite barrer todas las
+    // variantes en una sesion, igual que GRADE.
+    //
+    // ⚠ Los globales arrancan a 0 = SIN CAMBIO. Si este mensaje no llega nunca, la imagen es
+    // exactamente la de antes. Apagar = mandar density 0.
+    private static readonly int IdFog      = Shader.PropertyToID("_AqWaterFog");
+    private static readonly int IdFogRange = Shader.PropertyToID("_AqWaterFogRange");
+    private static readonly int IdFishDim  = Shader.PropertyToID("_AqFishDim");
+    private static readonly int IdFishDes  = Shader.PropertyToID("_AqFishDesat");
+    private static readonly int IdDecoFog  = Shader.PropertyToID("_AqDecoFogMul");
+
+    private void AplicarNieblaDeAgua(string payload)
+    {
+        // Se parte de lo que hay puesto ahora, para poder mandar un solo campo.
+        var actual = Shader.GetGlobalColor(IdFog);
+        var rango  = Shader.GetGlobalVector(IdFogRange);
+        var f = new FogPayload
+        {
+            r = actual.r, g = actual.g, b = actual.b, density = actual.a,
+            // Defaults del encuadre 2.5D: ZFront=-1,0 · decos hasta +3,0 · fondo en +5,0.
+            z0 = Mathf.Approximately(rango.x, 0f) && Mathf.Approximately(rango.y, 0f) ? -1f : rango.x,
+            z1 = Mathf.Approximately(rango.x, 0f) && Mathf.Approximately(rango.y, 0f) ?  5f : rango.y,
+            fishDim   = Shader.GetGlobalFloat(IdFishDim),
+            fishDesat = Shader.GetGlobalFloat(IdFishDes),
+            decoFog   = Shader.GetGlobalFloat(IdDecoFog),
+            auto      = false,
+        };
+        try   { JsonUtility.FromJsonOverwrite(payload, f); }
+        catch (System.Exception e) { JsBridge.Log("FOG: payload ilegible — " + e.Message); return; }
+
+        // `auto`: tomar el color del agua del preset de fondo activo en vez de darlo a mano.
+        // Es lo que tiene sentido en produccion — cada fondo tiene su agua.
+        string origen = "manual";
+        if (f.auto)
+        {
+            var bg = FindFirstObjectByType<TankBackground>();
+            if (bg == null) JsBridge.Log("FOG: no hay TankBackground, se usa el color manual");
+            else
+            {
+                foreach (var p in TankBackground.Presets)
+                {
+                    if (p.id != bg.CurrentPresetId) continue;
+                    f.r = p.surfaceTint.r; f.g = p.surfaceTint.g; f.b = p.surfaceTint.b;
+                    origen = $"auto({p.id})";
+                    break;
+                }
+            }
+        }
+
+        Shader.SetGlobalColor (IdFog,      new Color(f.r, f.g, f.b, Mathf.Clamp01(f.density)));
+        Shader.SetGlobalVector(IdFogRange, new Vector4(f.z0, f.z1, 0f, 0f));
+        Shader.SetGlobalFloat (IdFishDim,  Mathf.Clamp01(f.fishDim));
+        Shader.SetGlobalFloat (IdFishDes,  Mathf.Clamp01(f.fishDesat));
+        Shader.SetGlobalFloat (IdDecoFog,  Mathf.Clamp01(f.decoFog));
+
+        JsBridge.Log($"FOG: color={f.r:F2}/{f.g:F2}/{f.b:F2} den={f.density:F2} " +
+                     $"z=[{f.z0:F1},{f.z1:F1}] fishDim={f.fishDim:F2} fishDesat={f.fishDesat:F2} " +
+                     $"decoFog={f.decoFog:F2} ({origen})");
+    }
+
+    [System.Serializable]
+    private class FogPayload
+    {
+        public float r, g, b;
+        public float density;      // 0 = apagado
+        public float z0, z1;       // rango de profundidad en Z del mundo
+        public float fishDim;      // 0 = sin cambio
+        public float fishDesat;    // 0 = sin cambio
+        public float decoFog;      // 0 = las decos NO reciben niebla
+        public bool  auto;         // true = color del agua tomado del preset de fondo activo
     }
 
     [System.Serializable]
@@ -189,6 +330,15 @@ public class CastReceiver : MonoBehaviour
     {
         public bool  bloom;
         public float bloomIntensity;
+        // ⚠ 2026-08-28 — sin estos, `grade-tune.js` barria el bloom SIN TOCAR EL UMBRAL:
+        // las ocho variantes corrian a 0.92, que en escena submarina no cruza casi ningun
+        // pixel. La conclusion «el bloom no aporta nada» medía el umbral, no el bloom.
+        public float bloomThreshold;
+        public float bloomScatter;
+        public bool  bloomHQ;
+        public int   bloomDownscale;       // 0 = Half, 1 = Quarter
+        public int   bloomMaxIterations;
+        public int   bloomSkipIterations;
         public bool  tonemapping;
         public float saturation;
         public float contrast;
@@ -197,5 +347,6 @@ public class CastReceiver : MonoBehaviour
         public string bgShader;   // "urp" | "sprites"; vacío = no tocar
         public float  bgFit;      // fracción tapada por el suelo; negativo = no tocar
         public float  shadowFade; // desvanecido de sombra sobre el fondo; negativo = no tocar
+        public float  renderScale;// escala de render de URP; negativo = no tocar
     }
 }

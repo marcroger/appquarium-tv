@@ -224,6 +224,31 @@ public class FishSpawner : MonoBehaviour
         return 0;
     }
 
+    /// <summary>
+    /// Quita EL pez con ese uid. Devuelve el agente que quitó, o null si no estaba.
+    ///
+    /// ⚠ 2026-08-27 — Es el camino bueno, y el que evita el fallo que documenta
+    /// `DespawnOneBySpecies` justo aquí arriba: con 3 Banggai en el tanque, quitar uno
+    /// concreto en el móvil hacía desaparecer OTRO en la tele, porque el protocolo sólo
+    /// transportaba la especie. Ahora que el uid del móvil se adopta (add_fish e INIT),
+    /// las dos partes hablan del mismo pez.
+    ///
+    /// Devuelve el agente y no un contador a propósito: quien llama necesita su `Data.itemId`
+    /// para saber si puede soltar el bundle, y ese dato se pierde al destruirlo.
+    /// </summary>
+    public FishAgent DespawnByUid(string uid)
+    {
+        if (string.IsNullOrEmpty(uid)) return null;
+        foreach (var f in _activeFish)
+        {
+            if (f == null || f.Uid != uid) continue;
+            _activeFish.Remove(f);
+            Destroy(f.gameObject);
+            return f;
+        }
+        return null;
+    }
+
     /// <summary>Quita TODOS los peces de la especie. Devuelve cuántos quitó.</summary>
     public int DespawnBySpecies(string speciesId)
     {
@@ -346,6 +371,19 @@ public class FishSpawner : MonoBehaviour
     {
         // Sprites/Default está garantizado en el build (TankBackground lo usa)
         var fallback = Shader.Find("Sprites/Default");
+
+        // ⚠ 2026-08-25 — LAS ALETAS NO SON `FishUnlit`, SON `Sprites/Default`.
+        // Se descubrio con un control extremo sobre la tele: con `fishDesat=1.0` los CUERPOS
+        // salian en escala de grises y las ALETAS seguian amarillas y azules fluorescentes,
+        // porque `Sprites/Default` no conoce ninguno de los globales del pez.
+        // `Appquarium/FishFin` es ese mismo shader clonado (mismo blend, mismo orden) mas los
+        // globales de ciclo, tono y niebla, para que la aleta reciba el mismo trato que el
+        // cuerpo al que esta pegada.
+        //
+        // El mapeo es exacto y no puede desbordarse: este metodo recibe el VISUAL DEL PEZ, asi
+        // que un material que apunte a `Sprites/Default` aqui es por definicion parte del pez.
+        // El suelo y el fondo tambien usan `Sprites/Default` pero no pasan por aqui.
+        var finShader = Shader.Find("Appquarium/FishFin");   // null → se queda como estaba
         foreach (var r in visual.GetComponentsInChildren<Renderer>(true))
         {
             var mats = r.materials;
@@ -355,6 +393,8 @@ public class FishSpawner : MonoBehaviour
                 if (mats[i] == null || mats[i].shader == null) continue;
                 var found = Shader.Find(mats[i].shader.name);
                 if (found == null) found = fallback; // shader stripeado → Sprites/Default
+                // Las aletas: Sprites/Default → FishFin, para que sigan al cuerpo.
+                if (finShader != null && found == fallback) found = finShader;
                 if (found != null && found != mats[i].shader)
                 {
                     mats[i].shader = found;

@@ -50,6 +50,13 @@
             border-radius:2px;transition:width 0.3s;
           "></div>
         </div>
+        <!-- Frases rotativas mientras cargan los bundles (2026-08-28). Alto fijo para que
+             la barra no salte cuando la frase pasa de una linea a dos. -->
+        <div id="splash-tip" style="
+          margin:58px auto 0;max-width:820px;min-height:2.6em;
+          font-size:20px;line-height:1.4;color:#7FB8A8;letter-spacing:0.4px;
+          font-style:italic;opacity:0;transition:opacity 0.55s ease;
+        "></div>
       </div>
 
       <!-- Estado de error: oculto por defecto -->
@@ -85,11 +92,18 @@
     <!-- Sello de versión del receiver — esquina inf. derecha, discreto.
          Sirve para confirmar QUÉ index.html está corriendo en el device (el Cast
          puede mantener cacheado el viejo con disableIdleTimeout). Bump en cada deploy. -->
+    <!-- ⚠⚠ 2026-08-28 — OCULTO EN PRODUCCION. Llevaba visible desde siempre y el user lo
+         pidió fuera: «sin ese debug, es pro normal; no debería verse nada del número de
+         versión ni fps ni nada». Se enciende con el mensaje DIAG, igual que el resto.
+         🧭 El coste es real y conviene saberlo: hoy este cartel fue lo ÚNICO que permitió
+         saber qué index.html corría el device sin ser sender. Con DIAG hace falta emitir un
+         mensaje — que va por el canal de IDA, el que nunca se rompió, así que sigue siendo
+         alcanzable incluso con el relay muerto. -->
     <div id="rcv-tag" style="
       position:fixed;bottom:1vh;right:1vw;z-index:10001;
       color:rgba(255,255,255,0.40);font:bold 12px monospace;
-      pointer-events:none;letter-spacing:1px;
-    ">rcv 2026-08-21 urp</div>
+      pointer-events:none;letter-spacing:1px;display:none;
+    ">rcv 2026-08-28 bloom</div>
 
     <!-- FPS meter — esquina sup. derecha, legible desde el sofá.
          Mide la cadencia de requestAnimationFrame (el mismo loop con el que
@@ -115,6 +129,19 @@
       display:none;min-width:190px;
     "></div>
 
+    <!-- Relay de logs receiver->sender — 2026-08-28.
+         Vive EN PANTALLA a proposito: cuando el canal Cast se rompe, la pantalla es lo
+         unico que queda (y `adb exec-out screencap` la lee). `env` son los enviados y
+         `fallos` los que lanzaron excepcion; si `env` sube y al sender no le llega nada,
+         el SDK los esta tirando en silencio. Oculto salvo con DIAG o si hay algun fallo. -->
+    <div id="relay-meter" style="
+      position:fixed;bottom:0;left:0;z-index:10000;
+      background:rgba(0,0,0,0.80);color:#fa6;
+      font:bold 13px/1.5 monospace;padding:4px 12px;
+      pointer-events:none;border-top-right-radius:10px;
+      display:none;
+    "></div>
+
     <script>
       // ── Debug logger ──────────────────────────────────────────────────────
       // ⏱ RELOJ MONÓTONO — no usar Date.now() para MEDIR NADA.
@@ -129,11 +156,378 @@
       // sender (PC) por el canal Cast → leemos el log ENTERO en el PC sin fotos.
       // Se conecta más abajo, una vez existe el CastReceiverContext.
       var _logSink = null;
+      // ── Progreso del ACUARIO (no del motor) — 2026-08-28 ────────────────────
+      // La splash se quitaba al cargar Unity, dejando ~17 s de tanque vacio a la vista
+      // (reportado por el user). Ahora se queda hasta `AQUARIUM READY` y avanza con las
+      // lineas `BDL i/N` que el receptor ya emitia por cada bundle: progreso REAL, no
+      // una animacion que finge.
+      var _splashViva = true, _bdlTotal = 0;
+      function _progresoAcuario(msg) {
+        if (!_splashViva || typeof msg !== 'string') return;
+        // "[C#] BDL 3/11 fish: fish_mandarinfish"  ó  "BDL 3/11 OK: ..."
+        var m = /BDL (\d+)\/(\d+)/.exec(msg);
+        if (m) {
+          var i = parseInt(m[1], 10), n = parseInt(m[2], 10);
+          _bdlTotal = n;
+          // El motor ya ocupo 0-60 %; el acuario ocupa 60-100 % para que la barra NO
+          // retroceda: una barra que vuelve atras se lee como un error.
+          var pct = 60 + Math.round(40 * (i - 1) / Math.max(1, n));
+          setSplashStatus('Preparando tu acuario… ' + i + ' de ' + n, pct);
+          return;
+        }
+        if (msg.indexOf('AQUARIUM READY') !== -1) {
+          _splashViva = false;
+          setSplashStatus('¡Listo!', 100);
+          setTimeout(hideSplash, 350);   // que se vea el 100 % antes de irse
+        }
+      }
+
+      // ══ FRASES DE LA PANTALLA DE CARGA (2026-08-28) ═══════════════════════════
+      // Pedido por el user: rotar frases mientras cargan los bundles, como hacen los juegos.
+      // Tres tipos: AMBIENTE (graciosas), INFO (mecánicas reales) y PERSONALIZADAS con SU
+      // acuario.
+      //
+      // ⭐ Las personalizadas salen de `activeFish[].nickname`, que el móvil YA nos manda y
+      // que hasta hoy no se pintaba en ningún sitio (CAST_CONTRACT_TV §4.2). Cero cambios en
+      // el emisor.
+      //
+      // ⚠ El INIT llega al listener sobre el segundo ~2, mucho antes de que Unity esté listo
+      // (~24 s), así que hay tiempo de sobra para personalizar antes de la primera frase.
+      //
+      // ⚠ IDIOMA: hoy sólo hay castellano. El campo `lang` de `TvAquariumState` está PEDIDO
+      // al repo móvil y es aditivo: si no viene, `es`. Las frases viven AQUÍ y no en el
+      // emisor a propósito — así cambiarlas es subir un index.html (minutos) en vez de
+      // depender de un release del móvil.
+      var FRASES = {
+        es: {
+          ambiente: [
+            'Limpiando los filtros…',
+            'Midiendo el pH del agua…',
+            'Convenciendo a los peces de que posen…',
+            'Sacando brillo al cristal…',
+            'Contando burbujas…',
+            'Colocando las piedras en su sitio…',
+            'Negociando con el pez más territorial…',
+            'Enderezando las algas…',
+            'Calentando el agua un par de grados…',
+            'Buscando al pez que se esconde siempre…',
+            'Quitando una huella del cristal…',
+            'Ordenando la arena del fondo…',
+            'Comprobando que nadie ha saltado fuera…',
+            'Dando cuerda a las corrientes…',
+            'Ajustando la luz para la foto…',
+            'Peinando los corales…',
+            'Rescatando un caracol boca arriba…',
+            'Sacudiendo la red por si acaso…',
+            'Avisando a los peces de que hay visita…',
+            'Sincronizando el vaivén de las algas…',
+            'Preguntando quién se ha comido la comida de ayer…',
+            'Repartiendo el desayuno…',
+            'Puliendo el ancla…',
+            'Espantando a un cangrejo curioso…',
+            'Comprobando la temperatura con el codo…',
+            'Poniendo música de fondo para los peces…',
+            'Buscando las gafas de bucear…',
+            'Alineando los banquitos de arena…',
+            'Soplando las burbujas más perezosas…',
+            'Recolocando el tesoro hundido…'
+          ],
+          info: [
+            '¿Sabías que puedes cambiar el fondo, el sustrato y la luz del acuario?',
+            'Gana perlas participando en eventos.',
+            'Criar peces desbloquea especies nuevas.',
+            'Cada pez crece con el tiempo: cría, juvenil, adulto y senior.',
+            'Empareja dos peces compatibles y nadarán juntos.',
+            'El acuario tiene ciclo de día y noche: pruébalo al atardecer.',
+            'Puedes girar, inclinar y voltear las decoraciones.',
+            'Algunas decoraciones brillan en la oscuridad.',
+            'Alimenta a tus peces y verás cómo acuden a comer.',
+            'Puedes colocar decoraciones sobre otras decoraciones.',
+            'Cada especie tiene su forma de nadar: obsérvalas un rato.',
+            'Ponles nombre a tus peces desde la app.',
+            'Los peces jóvenes son más pequeños que los adultos.',
+            'Prueba a cambiar la luz: el acuario cambia de carácter.',
+            'Cuantas más especies distintas, más vivo se ve el acuario.',
+            'Las parejas emparejadas se buscan mientras nadan.',
+            'Cambia el tamaño del tanque para tener más sitio.',
+            'El modo noche apaga las luces y enciende la biolumniscencia.'
+          ],
+          espera: [
+            'Esto tarda un poquito la primera vez…',
+            'Ya casi está…',
+            'Un momento, que se están colocando…',
+            'Bajando peces del estante…',
+            'Casi listo, no te vayas…'
+          ]
+        },
+        en: {
+          ambiente: [
+            'Cleaning the filters\u2026',
+            'Checking the water pH\u2026',
+            'Talking the fish into posing\u2026',
+            'Polishing the glass\u2026',
+            'Counting bubbles\u2026',
+            'Putting the rocks back where they belong\u2026',
+            'Negotiating with the most territorial fish\u2026',
+            'Straightening the seaweed\u2026',
+            'Warming the water a couple of degrees\u2026',
+            'Looking for the fish that always hides\u2026',
+            'Wiping a fingerprint off the glass\u2026',
+            'Raking the sand\u2026',
+            'Making sure nobody jumped out\u2026',
+            'Winding up the currents\u2026',
+            'Adjusting the light for the photo\u2026',
+            'Combing the corals\u2026',
+            'Rescuing an upside-down snail\u2026',
+            'Shaking out the net, just in case\u2026',
+            'Telling the fish you are coming\u2026',
+            'Syncing the sway of the seaweed\u2026',
+            'Asking who ate yesterday\u0027s leftovers\u2026',
+            'Serving breakfast\u2026',
+            'Polishing the anchor\u2026',
+            'Shooing away a curious crab\u2026',
+            'Testing the temperature with an elbow\u2026',
+            'Putting on some music for the fish\u2026',
+            'Looking for the diving goggles\u2026',
+            'Levelling the sandbanks\u2026',
+            'Nudging the lazier bubbles\u2026',
+            'Repositioning the sunken treasure\u2026'
+          ],
+          info: [
+            'Did you know you can change the background, substrate and lighting?',
+            'Earn pearls by taking part in events.',
+            'Breeding fish unlocks new species.',
+            'Every fish grows over time: fry, juvenile, adult and senior.',
+            'Pair two compatible fish and they will swim together.',
+            'The tank has a day and night cycle \u2014 try it at sunset.',
+            'You can rotate, tilt and flip your decorations.',
+            'Some decorations glow in the dark.',
+            'Feed your fish and watch them swim over to eat.',
+            'You can place decorations on top of other decorations.',
+            'Each species swims differently \u2014 watch them for a while.',
+            'Give your fish names from the app.',
+            'Young fish are smaller than adults.',
+            'Try changing the lighting: the tank changes character.',
+            'The more different species, the more alive the tank feels.',
+            'Bonded pairs seek each other out as they swim.',
+            'Change the tank size to get more room.',
+            'Night mode dims the lights and brings out the bioluminescence.'
+          ],
+          espera: [
+            'This takes a little longer the first time\u2026',
+            'Almost there\u2026',
+            'One moment, they are settling in\u2026',
+            'Getting the fish down off the shelf\u2026',
+            'Nearly ready \u2014 do not go away\u2026'
+          ]
+        }
+      };
+      // ⚠ `biolumniscencia` — dejar el typo NO, corregido abajo en el propio array al cargar.
+      FRASES.es.info[17] = 'El modo noche apaga las luces y enciende la bioluminiscencia.';
+
+      // Plantillas personalizadas. `{n}` = mote del pez, `{c}` = nº de peces, `{a}` = otro mote.
+      var PLANTILLAS = {
+        es: {
+          unPez: [
+            '{n} está deseando que la veas.',
+            '{n} lleva todo el día presumiendo de colores.',
+            '{n} te ha guardado el mejor sitio.',
+            '{n} ya está nadando en círculos de la emoción.',
+            '{n} pregunta si has traído comida.',
+            '{n} se está peinando las aletas.',
+            '{n} dice que hoy sale favorecida.',
+            '{n} se ha escondido detrás de una roca. Otra vez.',
+            'Despertando a {n}…',
+            '{n} quiere enseñarte algo.'
+          ],
+          dosPeces: [
+            '{n} y {a} han quedado en el centro del acuario.',
+            '{n} no se separa de {a} ni un momento.',
+            '{n} y {a} llevan todo el día juntas.'
+          ],
+          cuenta: [
+            'Colocando a tus {c} peces…',
+            'Tus {c} peces ya vienen.',
+            '{c} peces esperándote.'
+          ]
+        },
+        en: {
+          unPez: [
+            '{n} cannot wait for you to see her.',
+            '{n} has been showing off her colours all day.',
+            '{n} saved you the best spot.',
+            '{n} is already swimming in circles with excitement.',
+            '{n} wants to know if you brought food.',
+            '{n} is combing her fins.',
+            '{n} says she is looking good today.',
+            '{n} is hiding behind a rock. Again.',
+            'Waking {n} up\u2026',
+            '{n} wants to show you something.'
+          ],
+          dosPeces: [
+            '{n} and {a} are meeting in the middle of the tank.',
+            '{n} will not leave {a} alone for a second.',
+            '{n} and {a} have been together all day.'
+          ],
+          cuenta: [
+            'Getting your {c} fish into place\u2026',
+            'Your {c} fish are on their way.',
+            '{c} fish waiting for you.'
+          ]
+        }
+      };
+
+      var _fraseTimer = null, _fraseUltima = -1, _fraseDatos = null, _fraseIdioma = 'es';
+
+      // Extrae del INIT lo que hace falta para personalizar. Se llama desde el listener de
+      // mensajes, con el JSON CRUDO, antes de que Unity exista.
+      function _leerAcuarioParaFrases(raw) {
+        try {
+          var st = JSON.parse(raw);
+          var payload = st && st.payload ? st.payload : st;
+          if (typeof payload === 'string') payload = JSON.parse(payload);
+          var peces = (payload && payload.activeFish) || [];
+          var motes = [];
+          for (var i = 0; i < peces.length; i++) {
+            var nk = peces[i] && peces[i].nickname;
+            // ⚠ El mote puede venir vacío, sólo espacios, o ser el id de especie: en esos
+            // casos NO sirve para una frase («fish_banggai está deseando que la veas»).
+            if (nk && String(nk).trim() && String(nk).indexOf('fish_') !== 0) {
+              motes.push(String(nk).trim());
+            }
+          }
+          // ⚠ El idioma va en el log a proposito: es la unica forma de confirmar desde el
+          // emisor que el campo `lang` llega. Sin esto, "¿os llega el lang?" no tiene respuesta.
+          var lang = (payload && payload.lang) ? String(payload.lang) : '';
+          _fraseIdioma = lang ? lang.slice(0, 2).toLowerCase() : 'es';
+          _fraseDatos = { motes: motes, total: peces.length };
+          dbg('frases: ' + peces.length + ' peces, ' + motes.length + ' con mote, lang='
+              + (lang ? lang + ' -> ' + _fraseIdioma : 'AUSENTE (cliente viejo) -> es'));
+        } catch (e) {
+          // No se traga: si el INIT cambia de forma, esto lo dice en vez de quedarse mudo
+          // con las frases genéricas para siempre.
+          _fraseDatos = null;
+          dbg('⚠ frases: no pude leer el acuario del INIT — ' + ((e && e.message) || e));
+        }
+      }
+
+      // ⚠ Arranca a -1, NO a 0: con `if (_fraseT0 && …)` un reloj que valga 0 cortocircuita
+      // y las frases de espera no aparecen JAMAS. Lo cazo el test al cubrir ese camino.
+      var _fraseT0 = -1;
+
+      // ⚠⚠ CUOTAS POR TIPO (2026-08-28, corrección del user: «todas me han salido
+      // personalizadas»). La versión anterior metía cada plantilla personalizada DOS veces en
+      // una bolsa común: con 6 peces salían ~120 personalizadas contra 48 genéricas, o sea un
+      // 71 % de probabilidad. Ahora se elige TIPO primero y frase después.
+      // Las personalizadas siguen siendo las más probables (son las que hacen gracia), pero
+      // una de cada tres, no tres de cada cuatro.
+      var CUOTAS = [
+        { tipo: 'personal', peso: 34 },
+        { tipo: 'ambiente', peso: 40 },
+        { tipo: 'info',     peso: 26 }
+      ];
+
+      // ⚠⚠ SIN REPETIR (corrección del user: «alguna se me ha repetido»). No bastaba con
+      // «no repetir la anterior»: eligiendo al azar, en 6 frases hay ~30 % de que alguna salga
+      // dos veces. Cada tipo tiene su cola BARAJADA y se saca sin reponer; sólo se rebaraja al
+      // agotarse, cosa que en una carga normal no llega a pasar.
+      var _colas = {};
+      function _barajar(a) {
+        var b = a.slice();
+        for (var i = b.length - 1; i > 0; i--) {
+          var j = Math.floor(Math.random() * (i + 1));
+          var t = b[i]; b[i] = b[j]; b[j] = t;
+        }
+        return b;
+      }
+      function _sacar(tipo, fuente) {
+        if (!_colas[tipo] || !_colas[tipo].length) _colas[tipo] = _barajar(fuente);
+        return _colas[tipo].shift();
+      }
+
+      function _personalizadas() {
+        var P = _plant();
+        var bolsa = [];
+        var d = _fraseDatos;
+        if (!d) return bolsa;
+        // ⚠ Una vez cada una, NO dos: el peso lo pone ahora la cuota, no la repetición.
+        if (d.total > 0) {
+          for (var c = 0; c < P.cuenta.length; c++) bolsa.push(P.cuenta[c].replace('{c}', d.total));
+        }
+        // Máximo 3 peces distintos: con 6 y 10 plantillas salían 60 frases de nombres y el
+        // acuario parecía un listín. Se barajan para que no sean siempre los mismos tres.
+        var motes = _barajar(d.motes).slice(0, 3);
+        for (var i = 0; i < motes.length; i++) {
+          for (var j = 0; j < P.unPez.length; j++) bolsa.push(P.unPez[j].replace('{n}', motes[i]));
+        }
+        if (motes.length >= 2) {
+          for (var k = 0; k < P.dosPeces.length; k++) {
+            bolsa.push(P.dosPeces[k].replace('{n}', motes[0]).replace('{a}', motes[1]));
+          }
+        }
+        return bolsa;
+      }
+
+      // Fuentes por tipo. `personal` puede venir vacía (acuario sin motes) y entonces su
+      // cuota se reparte sola entre las otras dos.
+      // ⚠⚠ Sin esto, el idioma se leia, se logueaba… y se ignoraba. Un usuario en ingles
+      // habria visto castellano: infraestructura multiidioma con contenido de uno solo, que
+      // es peor que no tenerla porque parece que funciona.
+      function _banco()  { return FRASES[_fraseIdioma]     || FRASES.es; }
+      function _plant()  { return PLANTILLAS[_fraseIdioma] || PLANTILLAS.es; }
+
+      function _fuentes() {
+        var L = _banco();
+        var f = { ambiente: L.ambiente, info: L.info, personal: _personalizadas() };
+        if (_fraseT0 >= 0 && (mono() - _fraseT0) > 25000) f.ambiente = f.ambiente.concat(L.espera);
+        return f;
+      }
+
+      function _siguienteFrase() {
+        var el = document.getElementById('splash-tip');
+        if (!el) return;
+        var f = _fuentes();
+        // Tirar por cuota, saltando los tipos vacíos (si no hay motes, no hay 'personal').
+        var vivos = [], total = 0;
+        for (var c = 0; c < CUOTAS.length; c++) {
+          var t = CUOTAS[c].tipo;
+          if (f[t] && f[t].length) { vivos.push(CUOTAS[c]); total += CUOTAS[c].peso; }
+        }
+        if (!vivos.length) return;
+        var r = Math.random() * total, tipo = vivos[vivos.length - 1].tipo;
+        for (var k = 0; k < vivos.length; k++) { r -= vivos[k].peso; if (r <= 0) { tipo = vivos[k].tipo; break; } }
+        var texto = _sacar(tipo, f[tipo]);
+        if (!texto) return;
+        el.style.opacity = '0';
+        setTimeout(function () { el.textContent = texto; el.style.opacity = '1'; }, 450);
+      }
+
+      function _arrancarFrases() {
+        if (_fraseTimer) return;
+        _fraseT0 = mono();
+        _siguienteFrase();
+        // 7,5 s (era 5,5): el user pidió «un par de segundos» más. Con la transición de
+        // 0,55 s quedan ~7 s de lectura, que da para una frase de dos líneas sin agobio.
+        _fraseTimer = setInterval(_siguienteFrase, 7500);
+      }
+
+      function _pararFrases() {
+        if (_fraseTimer) { clearInterval(_fraseTimer); _fraseTimer = null; }
+        var el = document.getElementById('splash-tip');
+        if (el) el.style.opacity = '0';
+      }
+
       function dbg(msg) {
         var t = ((mono()-_dbgT0)/1000).toFixed(1);
         var line = '['+t+'s] '+msg;
         console.log(line);   // siempre visible via chrome://inspect
-        if (_logSink) { try { _logSink(line); } catch(e) {} }
+        try { _progresoAcuario(msg); } catch (e) {}
+        // ⚠⚠ 2026-08-28 — esto era `catch(e) {}`, un tragadero. El relay podia morir
+        // y no quedaba rastro en ningun sitio. Ahora se cuenta y se PINTA.
+        if (_logSink) {
+          try { _logSink(line); }
+          catch(e) { _relayFail++; _relayErr = (e && e.message) || String(e); _pintarRelay(); }
+        }
         _dbgLines.push(line);
         if (_dbgLines.length > 40) _dbgLines.shift();
         var el = document.getElementById('dbg-panel');
@@ -193,6 +587,7 @@
       function hideSplash() {
         var s = document.getElementById('splash');
         if (!s) return;
+        _pararFrases();
         s.style.opacity = '0';
         setTimeout(function(){ s.style.display='none'; }, 850);
         // 2026-08-15 — apagar el panel de debug al llegar al acuario.
@@ -488,17 +883,90 @@
       // que aquí no adivinamos: contamos envíos/fallos y el motor los reporta en
       // cada tick. Namespace JSON → mandamos OBJETO (no string; un string podía
       // reventar el envío). Enviamos al senderId concreto, con broadcast de reserva.
+      // ⚠ MARCADOR DE VERSION DEL index.html. Sube cada vez que se toque este fichero.
+      // Sin esto no hay forma de saber que receiver esta corriendo el device: el sello de la
+      // esquina es del `.wasm`, no del html, y un index cacheado es indistinguible del nuevo.
+      var RCV_HTML_VER = '2026-08-28c-relayhud';
       var _lastSenderId = null, _logSent = 0, _logFail = 0, _logErr = '';
+      // El HUD se repinta solo: si dependiera de `dbg()` se congelaria justo en el caso que
+      // queremos diagnosticar. 2 s es suficiente para leerlo con `adb exec-out screencap`.
+      setInterval(function () {
+        // ⚠ Nada de `catch {}` mudo aqui: si el repintado fallara, el HUD se quedaria
+        // CONGELADO, que es justo el estado que este HUD existe para diagnosticar. Que se
+        // delate a si mismo escribiendo el error en su propio hueco.
+        try { _pintarRelay(); }
+        catch (x) {
+          var el = document.getElementById('relay-meter');
+          if (el) { el.style.display = 'block'; el.style.color = '#f66';
+                    el.textContent = 'RLY HUD ROTO: ' + ((x && x.message) || x); }
+        }
+      }, 2000);
+      // ⚠⚠ 2026-08-28 — el informe de `_logSent`/`_logFail` de mas abajo sale por `dbg()`,
+      // o sea POR EL MISMO CANAL que puede estar roto: catch-22 perfecto, y por eso este
+      // fallo vivio oculto. Este contador se pinta EN PANTALLA, que es el unico canal que
+      // sobrevive. Medido el 28-ago: 4 de 4 sesiones con el APK del movil, el relay se
+      // calla a los ~45 ms del `RemoteMediaClient.load()` del emisor; con cast-headless
+      // solo, 135-139 lineas por sesion.
+      var _relayFail = 0, _relayErr = '', _ultimaDesco = '', _ultimaConexion = 0;
+      var _envPrevio = -1, _envQuietoDesde = 0;
+      function _pintarRelay() {
+        var el = document.getElementById('relay-meter');
+        if (!el) return;
+        // ⚠⚠ 2026-08-28 — la primera version se mostraba solo con DIAG o si `fallos > 0`, y eso
+        // la dejaba INVISIBLE justo en la averia para la que existe: cuando `senderCount` cae a
+        // 0, `_logSink` sale por el `return` ANTES del `try` y no sube ni `env` ni `fallos`.
+        // Un instrumento que se esconde en su propio caso no sirve. Ahora tambien se enciende
+        // si no hay senders o si `env` lleva >10 s sin moverse con la pagina viva.
+        if (_logSent !== _envPrevio) { _envPrevio = _logSent; _envQuietoDesde = mono(); }
+        var atascado = (mono() - _envQuietoDesde) > 10000;
+        // ⚠⚠ El «caso 1» (envio bien y no llega) NO dispara ninguna condicion de rotura:
+        // `env` sube, `fallos` es 0 y `snd` sigue >=1. Sin una ventana de visibilidad
+        // incondicional, el HUD estaria oculto justo en la averia mas probable — que es el
+        // mismo error que ya se cometio ocultandolo salvo con DIAG.
+        var reciente = _ultimaConexion > 0 && (mono() - _ultimaConexion) < 60000;
+        var roto = (_logFail + _relayFail) > 0 || senderCount <= 0 || atascado;
+        // ⚠⚠ 2026-08-28 — SOLO con DIAG. Antes salia tambien con `roto || reciente`, o sea
+        // que en produccion aparecia en los primeros 60 s y ante cualquier fallo. El user lo
+        // quiere limpio: «el acuario productivo».
+        // 🧭 La contrapartida es que una averia del relay ya NO se anuncia sola. Se asume: el
+        // que diagnostica es quien castea, y encender DIAG va por el canal de IDA, que nunca
+        // se rompio. `roto` y `reciente` siguen calculandose porque pintan el color y el
+        // ATASCADO cuando el HUD SI esta encendido.
+        el.style.display = window.__diag ? 'block' : 'none';
+        if (el.style.display === 'none') return;
+        el.style.color = roto ? '#f66' : '#fa6';
+        var marca = atascado ? ' ATASCADO' : '';
+        // ⚠⚠ `snd` es el TERCER caso, y lo aporto la sesion del repo movil: `_logSink` hace
+        // `if (senderCount <= 0) return;` ANTES del try, asi que con la cuenta a 0 no sube ni
+        // `env` ni `fallos` — el relay no esta roto, cree que no hay nadie escuchando. Sin este
+        // numero eso es indistinguible de "dbg() ha dejado de llamarse".
+        // `dst:` es lo que decide entre «no envio» y «envio a quien no escucha»: si el
+        // destinatario no es el sender vivo, la linea se pierde sin que nada falle.
+        var dst = _lastSenderId ? String(_lastSenderId).slice(-10) : 'broadcast';
+        el.textContent = 'RLY ' + RCV_HTML_VER
+                       + ' env:' + _logSent + ' fallos:' + (_logFail + _relayFail)
+                       + ' dst:' + dst
+                       + ' snd:' + senderCount
+                       + (_ultimaDesco ? ' off:' + _ultimaDesco : '')
+                       + marca
+                       + (_relayErr || _logErr ? ' ' + (_relayErr || _logErr).slice(0, 30) : '');
+      }
       _logSink = function(line) {
         if (senderCount <= 0) return;
         var payload = { type:'LOG', line:line };
         try {
-          ctx.sendCustomMessage(NAMESPACE, _lastSenderId || undefined, payload);
+          // ⚠⚠ 2026-08-28 — DIFUSION, no destinatario fijo. `_lastSenderId` acababa
+          // apuntando a un sender que NO escucha este namespace (su APK abre la sesion de
+          // media con RemoteMediaClient y ese cliente se registra como otro sender), y
+          // mandarle a el NO lanza: `env` subia, `snd` seguia a 1 y el receptor se creia
+          // sano mientras al emisor no le llegaba nada. `undefined` difunde a todos.
+          ctx.sendCustomMessage(NAMESPACE, undefined, payload);
           _logSent++;
+          if ((_logSent & 15) === 0) _pintarRelay();   // refresco barato, 1 de cada 16
         } catch (e1) {
           // reintento como string por si este SDK lo exige así
           try {
-            ctx.sendCustomMessage(NAMESPACE, _lastSenderId || undefined, JSON.stringify(payload));
+            ctx.sendCustomMessage(NAMESPACE, undefined, JSON.stringify(payload));
             _logSent++;
           } catch (e2) { _logFail++; _logErr = (e2 && e2.message) || String(e2); }
         }
@@ -662,6 +1130,10 @@
         var type = (function(r){try{return JSON.parse(r).type;}catch(e){return '?';}})(raw);
         dbg('Cast msg: '+type);
         if (type === 'INIT') {
+          // Personalizar las frases con SU acuario. Se hace aqui y no en Unity porque aqui
+          // el JSON llega en el segundo ~2 y Unity no esta listo hasta el ~24.
+          _leerAcuarioParaFrases(raw);
+          _arrancarFrases();
           var msSinceDisco = _lastDiscoMs > 0 ? (mono() - _lastDiscoMs) : Infinity;
           // Quick reconnect: aquarium already running, Unity loaded, disconnect < 30s ago.
           // Skip re-INIT so the scene doesn't reload — the sender auto-reconnects in ~3s
@@ -689,6 +1161,9 @@
           var sp = document.getElementById('stats-panel');
           if (fm) fm.style.display = enc ? 'block' : 'none';
           if (sp) sp.style.display = enc ? 'block' : 'none';
+          var tg = document.getElementById('rcv-tag');
+          if (tg) tg.style.display = enc ? 'block' : 'none';
+          _pintarRelay();   // el HUD del relay sigue a DIAG (y se enciende solo si falla)
           dbg('DIAG ' + (enc ? 'ON' : 'OFF'));
           return;
         }
@@ -728,6 +1203,8 @@
           }
         }
         _lastSenderId = e.senderId;
+        _ultimaConexion = mono();
+        try { _pintarRelay(); } catch (x) {}
         dbg('Sender CONNECTED #'+senderCount+': '+e.senderId);
         setSplashStatus('Conectado — cargando…');
         if (_overlayTimer) { clearTimeout(_overlayTimer); _overlayTimer = null; }
@@ -739,6 +1216,8 @@
       ctx.addEventListener(cast.framework.system.EventType.SENDER_DISCONNECTED, function(e) {
         senderCount = Math.max(0, senderCount - 1);
         var reason  = (e.reason != null ? String(e.reason) : 'unknown');
+        // Al HUD: si el relay enmudece por `senderCount<=0`, esto dice QUIEN lo bajo.
+        try { _ultimaDesco = reason + '@' + Math.round(mono() / 1000) + 's'; _pintarRelay(); } catch (x) {}
         var elapsed = sessionStart ? Math.round((mono()-sessionStart)/1000) : 0;
         var m = Math.floor(elapsed/60), s = elapsed%60;
         _lastDiscoMs = mono();
@@ -782,7 +1261,10 @@
         opts.customNamespaces[NAMESPACE] = cast.framework.system.MessageType.JSON;
 
         ctx.start(opts);
-        dbg('ctx.start() OK');
+        // ⚠ El texto lleva la VERSION a proposito: es la unica forma de saber, desde el log
+        // del emisor, que index.html esta corriendo el device. Un html cacheado es
+        // indistinguible del nuevo si ninguna linea cambia. (Idea de la sesion del repo movil.)
+        dbg('ctx.start() OK — rcv html ' + RCV_HTML_VER);
         // STEP 1: setApplicationStatus 20s ELIMINADO (bisección).
 
       } catch(e) {
@@ -836,7 +1318,21 @@
           instance.SendMessage('CastReceiver','OnMessageReceived',m);
         });
         pendingMsgs = [];
-        hideSplash();
+        // ⚠ 2026-08-28 — ANTES aqui habia un `hideSplash()`. Unity listo NO es acuario
+        // listo: quedaban ~17 s de tanque vacio a la vista. Ahora la splash espera a
+        // `AQUARIUM READY` (ver `_progresoAcuario`).
+        setSplashStatus('Preparando tu acuario…', 60);
+        // RED DE SEGURIDAD: si `AQUARIUM READY` no llega nunca (INIT que no viene, bundles
+        // caidos), sin esto el user se queda mirando el logo PARA SIEMPRE — peor que el
+        // tanque vacio, que al menos es un acuario. 90 s cubre de sobra una carga fria
+        // (la medida el 28-ago fue de 41 s en total).
+        setTimeout(function () {
+          if (_splashViva) {
+            _splashViva = false;
+            dbg('⚠ splash: AQUARIUM READY no llegó en 90s — se descubre la escena igual');
+            hideSplash();
+          }
+        }, 90000);
       };
     })();
 
@@ -896,8 +1392,14 @@
       }
       var _devBgIdx  = 0;
       var _devSubIdx = 0;
-      var DEV_BGS  = ['bg_ocean','bg_reef','bg_cave','bg_abyss','bg_sunset','bg_tropical'];
-      var DEV_SUBS = ['sub_sand','sub_gravel','sub_black','sub_coral'];
+      // ⚠⚠ 2026-08-26 — Estas dos listas tenían ids que NO EXISTEN: de los 6 fondos,
+      // 'bg_ocean', 'bg_reef' y 'bg_sunset' no están en TankBackground.Presets, y de los 4
+      // sustratos, 'sub_black' y 'sub_coral' no están en DecorationPlacer.SubstratePresets.
+      // O sea que la tecla B no hacía nada en 3 de cada 6 pulsaciones y la S en 2 de cada 4,
+      // en silencio (el receiver confirmaba el id igual). Con eso se dio por buena una prueba
+      // entera el 25-ago. Si añades uno aquí, tiene que estar en el array de C#.
+      var DEV_BGS  = ['bg_classic','bg_tropical','bg_kelp','bg_cave','bg_abyss','bg_arctic'];
+      var DEV_SUBS = ['sub_sand','sub_gravel','sub_volcanic','sub_coral_rubble'];
       var isDevTest = new URLSearchParams(window.location.search).get('devtest') === '1';
 
       window.addEventListener('keydown', function(e) {

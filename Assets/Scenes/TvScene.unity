@@ -504,16 +504,16 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: abfe1709c2ca3ce4498bbc3669b89496, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PostProcessingSetup
-  enableBloom: 0
-  bloomIntensity: 0.35
-  bloomThreshold: 0.92
-  bloomScatter: 0.6
-  enableTonemapping: 1
+  enableBloom: 1
+  bloomIntensity: 1.2
+  bloomThreshold: 0.6
+  bloomScatter: 0.75
+  enableTonemapping: 0
   colorFilter: {r: 1, g: 1, b: 1, a: 1}
   contrast: 10
   saturation: 18
   postExposure: 0.05
-  vignetteIntensity: 0.095
+  vignetteIntensity: 0
   vignetteSmoothness: 0.4
   vignetteColor: {r: 0, g: 0.01, b: 0.06, a: 1}
 --- !u!114 &694170315

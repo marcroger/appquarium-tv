@@ -32,13 +32,20 @@ El móvil envía el estado del tanque vía Google Cast SDK; este proyecto **rend
 
 | Doc | Cuándo |
 |---|---|
-| [`CAST_NEXT_SESSION_2026-08-22.md`](CAST_NEXT_SESSION_2026-08-22.md) | ⭐⭐ **EMPEZAR AQUÍ.** Cierre del 21-ago: la TV recuperó el color (llevaba desde siempre sin aplicar ningún grado, por 5 causas encadenadas). Protocolo auditado 11/11 y coste de URP medido. |
+| [`CAST_NEXT_SESSION_2026-08-29.md`](CAST_NEXT_SESSION_2026-08-29.md) | ⭐⭐ **EMPEZAR AQUÍ.** Cierre del 28-ago, **el día que las dos sesiones de Claude se hablaron** (`ListAgents` + `SendMessage` con el repo móvil). El user **aprobó mirando la tele** un ajuste visual que iguala la claridad del teléfono (agua alta 75.9 contra 76.0) — horneado y **pendiente de build**. El **bloom no cuesta fps** (el «7 fps» era el framerate absoluto de junio). La **nitidez estaba del revés**: la tele no es más borrosa, es más dura. Y un **relay de logs que moría en silencio**, con HUD ya desplegado y **una lectura a medias que cuesta una captura** (§1). |
+| [`CAST_NEXT_SESSION_2026-08-28.md`](CAST_NEXT_SESSION_2026-08-28.md) | Cierre del 27-ago (segundo día sin tele): `remove_fish` **por uid**, un chequeo de compilación **sin Unity y sin build**, y la **paridad visual medida** — no era el grado: copiar el del móvil *perdería* un 35 % de croma, la TV **no apaga el color**, y el «fondo en B/N» es el arte (7 de 11 fondos por debajo de croma 12 en el fichero). Mañana: **dos tandas** y comparar con **el mismo preset** en las dos pantallas. |
+| [`CAST_NEXT_SESSION_2026-08-27.md`](CAST_NEXT_SESSION_2026-08-27.md) | Cierre del 26-ago (día sin tele): tres handlers que **confirmaban lo que no había pasado**, seis ids de preset fantasma, y el **rig local roto** desde el último build. Player nuevo `rcv 2026-08-26 ids` construido y verificado en local (9/9), **pendiente de una tanda** que valide también el `renderScale 0,75` de ayer. |
+| [`CAST_NEXT_SESSION_2026-08-26.md`](CAST_NEXT_SESSION_2026-08-26.md) | Cierre del 25-ago: la escena deja de verse como assets separados (niebla de agua, tono de peces, `renderScale` 1:1). Todo desplegado y validado **menos `renderScale 0,75`**, que se quedó sin tanda. Trae las 3 trampas del día y 2 afirmaciones mías que resultaron falsas. |
+| [`CAST_NEXT_SESSION_2026-08-25.md`](CAST_NEXT_SESSION_2026-08-25.md) | Cierre del 24-ago: Cierre del 24-ago: el ciclo día/noche por fin llega a decos y peces. **Construido y verificado, NO desplegado.** Trae la trampa del shader horneado en el bundle y por qué el deploy va sólo con `Build/`. |
+| [`CAST_NEXT_SESSION_2026-08-22.md`](CAST_NEXT_SESSION_2026-08-22.md) | Cierre del 21-ago: la TV recuperó el color (llevaba desde siempre sin aplicar ningún grado, por 5 causas encadenadas). Protocolo auditado 11/11 y coste de URP medido. |
 | [`CAST_PARIDAD_VISUAL.md`](CAST_PARIDAD_VISUAL.md) | 🎨 **El detalle y las pruebas** de lo anterior: qué se descartó con medida, qué reglas salieron, y lo que queda del fondo. |
 | [`CAST_NEXT_SESSION_2026-08-21.md`](CAST_NEXT_SESSION_2026-08-21.md) | Cierre del 20-ago: Cierre del 20-ago: los bundles ya están detrás del Worker. Qué cambió en el deploy y qué queda. |
 | [`CAST_R2_AUTH_MOVIL.md`](CAST_R2_AUTH_MOVIL.md) | 📄 **Para la sesión del repo MÓVIL.** Contrato de la Fase 2 (JWT por usuario): campo del JSON, claims, orden de migración. |
 | [`CAST_NEXT_SESSION_2026-08-20.md`](CAST_NEXT_SESSION_2026-08-20.md) | Estado al cierre del 19-ago, Estado al cierre del 19-ago, pendientes reales y las trampas caras (bundle local que cambia de hash, y los 3 fallos de la conversión de materiales). |
 | [`ESTADO_PRODUCCION_2026-08-19.md`](ESTADO_PRODUCCION_2026-08-19.md) | 📊 **Foto de estado y valoración para producción.** Qué está validado, y los 2 puntos que faltan antes de difundir (bucket abierto + rigs de diagnóstico servidos). |
 | [`DECOS_PESO_PARA_MOVIL.md`](DECOS_PESO_PARA_MOVIL.md) | 📄 **Para leer en el repo MÓVIL.** Las 3 palancas de peso de decos, qué se reutiliza, qué cambiar (DXT1→ASTC/ETC2) y las 7 trampas ya pagadas. |
+| [`CAST_HANDOFF_MOVIL_2026-08-26.md`](CAST_HANDOFF_MOVIL_2026-08-26.md) | 📲 **PARA LA SESIÓN DEL REPO MÓVIL.** Todo lo que cambió de su lado del contrato el 26-ago y no llegó a recibir: los **dos cambios de la Fase 2** (`/mint-token` con credencial, propiedad en modo `log`), el emparejamiento ya aceptado, la carrera del `pairs`, y lo que les toca. **Es el fichero que hay que pasarles.** |
+| [`CAST_CONTRACT_TV.md`](CAST_CONTRACT_TV.md) | 🤝 **El contrato del canal Cast, lado receiver.** Qué campos del INIT leo de verdad y qué hago si faltan, los 12 UPDATE con su conducta ante basura, y **lo que NO cumplo**. Su pareja es `CAST_CONTRACT.md` en el repo MÓVIL. Regla fijada entre los dos: **todo cambio es aditivo**. |
 | [`CAST_UPDATES.md`](CAST_UPDATES.md) | ⭐ Protocolo UPDATE en tiempo real — tipos, payloads, gestión memoria, calls mobile pendientes. |
 | [`CAST_NETFLIX_SPEC.md`](CAST_NETFLIX_SPEC.md) | Spec ejecutable para Fase A.1 — contrato del refactor Netflix. 10 secciones. |
 | [`BUILD_REPORT_2026-05-25.md`](BUILD_REPORT_2026-05-25.md) | Diagnóstico del build de 411MB + análisis duplicación. |
@@ -178,6 +185,338 @@ el Editor. Detalle completo y pruebas: **`CAST_PARIDAD_VISUAL.md` §0**.
   **qué build está corriendo de verdad** en la tele, que cachea.
 - Coste medido (25 peces, 420 s): **FPS 37 contra 37** — URP no cuesta FPS. La memoria sube un
   escalón del heap geométrico (159 → 191 MB).
+
+### ⚠⚠ Un shader tocado NO llega a las decos con sólo rebuildear el player (2026-08-24)
+
+Un material que sale de un **AssetBundle trae su propia copia del shader**, compilada cuando se
+construyó el bundle. Sigue llamándose `Appquarium/DecoLit`, así que la guarda «ya es device-safe»
+de `FixNonURPMaterials` lo deja pasar — pero es el bytecode del día en que se construyó el bundle,
+y no conoce las propiedades nuevas.
+
+- **Costó un build entero de 55 min**: el ciclo día/noche salió «hecho» y las decos siguieron
+  planas (47,97 de luminancia en las 8 fases), mientras una sonda en el Editor demostraba que el
+  global sí llegaba al shader.
+- **`FishSpawner.cs:341-360` ya lo resolvía para los peces** desde hace meses, con el razonamiento
+  escrito en su comentario. A las decos nunca se les aplicó.
+- Ahora `DecorationPlacer.FixNonURPMaterials` **reapunta** (`mat.shader = Shader.Find(...)`, que
+  devuelve la copia del player) y lo **cuenta**: `AQUARIUM READY … | shaders reapuntados: N`.
+- 🧭 La alternativa era reconstruir los 80 bundles: **68 min + 87 MB de subida**. Reapuntar es
+  gratis y sobrevive a cualquier cambio futuro de shader.
+
+### ⚠⚠ Añadir un shader nuevo: GUID hexadecimal + Always Included (2026-08-25)
+
+Dos trampas encadenadas, y las dos fallan **en silencio** — nada peta, nada sale magenta, el
+shader simplemente no existe en el device y `Shader.Find` devuelve `null`.
+
+1. **El GUID del `.meta` DEBE ser hexadecimal** (`0-9a-f`). Se crearon `SubstrateFog` y
+   `FishFin` con GUIDs "legibles" (`5ub57ra7e…`, `f15hf1n0…`) y **`u`, `r`, `h`, `n` no son
+   hex**. Unity **reescribió las entradas de `m_AlwaysIncludedShaders` como `{fileID: 0}`** y
+   stripeó los shaders. **Costó un build.** La convención buena ya existía: `DecoLit` usa
+   `dec011710000000000000000000000ab` — leetspeak dentro del alfabeto hex.
+2. **Hay que registrarlo en `ProjectSettings/GraphicsSettings.asset`**
+   (`m_AlwaysIncludedShaders`), o el build lo stripea.
+
+⚠ Al arreglar el GUID, buscar-y-reemplazar el viejo **no encuentra nada** (Unity ya lo borró):
+hay que reponer las líneas `- {fileID: 0}`. Comprobar que el GUID **nuevo esté**, no que el
+viejo no esté.
+
+🧭 **Se caza en 60 s con la sonda**, que reporta el shader REAL de cada renderer por el canal
+Cast: `node Tools/cast-headless.js --ip <IP> --fish 2 --decos deco_anchor --update ambient=day@45`
+→ `sonda[day] TankFloor … shader='Appquarium/SubstrateFog'` (o `'Sprites/Default'` si no llegó).
+
+### 🌊 Niebla de agua y tono de peces (2026-08-25) — el «assets separados»
+
+Medido en la tele: los peces iban a croma perceptual C* **42,6** contra **23,1** del agua, y las
+decos ya estaban integradas (**25,5**). O sea, **el problema eran los peces, no el decorado**.
+Y ningún shader leía la profundidad, así que un pez del fondo tenía el mismo contraste que uno
+pegado al cristal.
+
+Constantes en `TvSceneBootstrap` (`PublicarAspectoDelAgua`), elegidas sobre el device:
+`TonoDesat 0,32` · `TonoDim 0,16` · `NieblaDens 0,30` · **`DecoNiebla 0,25`** · rango
+`[ZFront, ZBack] = [-1,0 · +4,2]`.
+
+- ⚠ **La cámara es ORTOGRÁFICA** → la distancia a cámara no sirve. Se usa la **Z del mundo**.
+- El **telón de fondo (Z=5,0) queda fuera** del rango a propósito: ya representa la lejanía.
+- Como el suelo llega a Z=+4,2 y ahí la niebla satura, **la juntura suelo/fondo se funde de
+  regalo** — era el otro problema medido (salto de ×12 a ×30 en 40 píxeles).
+- **Las decos llevan multiplicador propio** (`_AqDecoFogMul`). ⚠⚠ El primer intento fue acortar
+  el rango de Z para dejarlas fuera; **no vale**: se colocan a cualquier profundidad hasta
+  `ZDecoBack=+3,0`. **Un corte por profundidad no puede proteger algo que se mueve en
+  profundidad.** El caso que manda es el **ancla, acromática**: croma 1,9 → 8,4 (con 0,25) →
+  17,3 (con 1,0, ya turquesa). La estrella azul apenas se inmuta: su color ya está cerca del agua.
+- **Las aletas NO eran `FishUnlit`, eran `Sprites/Default`** → `Appquarium/FishFin`. El suelo
+  igual → `Appquarium/SubstrateFog`. Ambos clonan `Sprites/Default` al pie de la letra (blend
+  premultiplicado, `ZWrite Off`, `Cull Off`, cola `Transparent`) y sólo añaden la niebla.
+- El color del agua sale del **`surfaceTint` del preset de fondo** y se republica en cada
+  `change_bg`.
+
+**Afinar sin gastar builds — mensaje `FOG`** (mismo espíritu que `GRADE`):
+```
+--raw 'FOG={"auto":true,"density":0.30,"decoFog":0.25,"fishDesat":0.32,"fishDim":0.16}@70'
+```
+Campos: `r/g/b` · `density` · `z0/z1` · `fishDim` · `fishDesat` · `decoFog` · `auto`. Los que no
+vengan se quedan como están. **Rollback sin build:** `{"density":0,"fishDesat":0,"fishDim":0}`.
+⚠ Todos los globales valen **0 = sin cambio**: un global que nadie publica vale 0, nunca 1.
+Coste medido: FPS 29-43 (avg 32-35), igual que sin niebla.
+
+⚠ **Medir esto sobre los peces desde capturas sueltas NO es fiable**: entran y salen del encuadre
+y esa varianza domina. Y una máscara por umbral (`croma > 35`) **tiene sesgo de selección** —
+escoge «lo más saturado que haya» y su media no se mueve aunque desatures un 35 %. Usar objetos
+**FIJOS** (las decos).
+
+### ⚠⚠ La tele reporta 2560x1440, NO 1920x1080 (2026-08-25)
+
+`Screen.width x Screen.height` en el Xiaomi es **2560x1440**. Durante toda la vida del proyecto
+el comentario de `TvSceneBootstrap` decía que `renderScale 0,70` era «49 % de píxeles» dando por
+hecho un panel de 1080p — **falso, y nunca se comprobó**. Con 2560x1440, el 0,70 renderizaba
+**1792x1008**, que es el **93 % LINEAL** de 1080p.
+
+Consecuencia: **la `renderScale` apenas estaba costando nitidez**. Si la diferencia con el móvil
+que reporta el user sigue ahí, hay que buscarla en el **grado** (la TV lleva tonemapping +
+`sat +18`; el móvil `bloom 1,2` / `sat -15`), no en la resolución.
+
+🎯 **`renderScale = 0,75` es el único valor no arbitrario**: `2560 x 0,75 = 1920` y
+`1440 x 0,75 = 1080`, o sea **1:1 con lo que el device entrega**. Por debajo se renderiza de
+menos y se estira; por encima se tira trabajo (a 1,0 son 2560x1440 para sacar 1080p).
+
+Coste medido en el device (12 peces + 3 decos, una sesión por escala, HUD leído siempre al mismo
+`SESSION`):
+
+| escala | resolución | FPS avg |
+|---|---|---|
+| 0,70 | 1792x1008 | 35 |
+| **0,75** | **1920x1080** | **35** ← gratis |
+| 0,85 | 2176x1224 | 34 |
+| 1,00 | 2560x1440 | 33 |
+
+**Ajustable en caliente**, sin gastar builds: `--raw 'GRADE={"renderScale":0.85}@50'`. Reporta la
+resolución efectiva: `RENDERSCALE: 0.70 → 0.85 (2176x1224 sobre 2560x1440)`.
+
+⚠⚠ **Para comparar escalas NO sirve barrerlas dentro de una sesión.** El `FPS avg` del HUD es
+**acumulativo desde el arranque**, así que sube monótonamente pase lo que pase. El primer intento
+dio «0,70 → 28 fps» al principio y «0,70 → 41 fps» al final de la misma tanda: pura deriva.
+Hacen falta **sesiones separadas leídas al mismo `SESSION`**.
+
+### ⚠⚠ El catálogo local YA NO cuadra con R2 (2026-08-24)
+
+Un build de player regenera `webgl-output/StreamingAssets/aa/` con **hashes de bundle distintos**
+a los que hay desplegados (fish `b5a9bb42…` local contra `724dbae8…` en R2). **Subir
+`StreamingAssets/` deja la tele vacía**: los 80 bundles dejan de encontrarse. Comprobado en vivo el
+24-ago (7/7 `RemoteProviderException`).
+
+**Al desplegar sólo un cambio de código: subir `Build/` + `index.html` y NADA MÁS.** Si algún día
+hay que volver a cuadrarlos, la vía es un New Build de Addressables + redespliegue de los 80
+bundles, nunca subir el catálogo suelto.
+
+### ⚠⚠ Un id de preset que no existe NO da error: el receiver lo confirma (2026-08-26)
+
+`change_bg` / `change_sub` / `change_light` **confirmaban cualquier id**. `SetPreset` y
+`SetSubstrate` se plantan en un `Debug.LogWarning` —que **no viaja por el canal Cast**— y
+vuelven sin tocar nada, pero el handler logueaba `change_sub: sub_black` igual y encima
+guardaba el id fantasma en `SaveData`.
+
+Había **seis ids fantasma** repartidos por el proyecto: `bg_ocean`, `bg_reef`, `bg_sunset`,
+`sub_black`, `sub_coral` (y `light_green`, que sí es legítimo: preset retirado que
+`AquariumManager` migra a `light_white`). Consecuencias medidas:
+
+- La tecla **B** del `?devtest=1` no hacía nada en **3 de cada 6** pulsaciones, y la **S** en
+  **2 de cada 4**. Con eso se dio por buena una prueba entera el 25-ago.
+- **`Tools/test-updates.js` llevaba MESES en verde** mandando `bg_ocean`: comprobaba que el
+  receiver hiciera **eco** del id, no que el fondo cambiara. La prueba de que no cambiaba
+  estaba en la línea de al lado —`agua: … (bg_kelp)`— y nadie la miró.
+
+Lo que hay ahora:
+
+1. Los tres handlers **validan** contra el array de C# (`ERR change_bg: id desconocido 'x' —
+   válidos: …`) y **releen el estado** después de aplicar en vez de reportar la intención.
+2. `DEV_BGS`/`DEV_SUBS` del `index.html` con ids reales.
+3. `test-updates.js` comprueba el **efecto** (para el fondo, contra `agua: … (<id>)`) y añade
+   tres tests **negativos** que exigen el `ERR`. ⚠ Esos tres fallan contra un player anterior
+   al 2026-08-26 — a propósito.
+4. **`node Tools/check_preset_ids.js`** — guarda sin Unity, sin navegador y sin tele: lee los
+   ids de los arrays de C# y revisa receiver y herramientas. Sale 1 si hay fantasmas.
+
+🧭 **Regla:** no comprobar nunca que el receiver **repita** lo que le mandaste. Comprobar
+contra algo que lea el estado real.
+
+**El mismo patrón estaba en dos sitios más** (auditado el mismo día, ya arreglado):
+- **`add_fish` decía «spawned» aunque `SpawnFish` devolviera null.** El `if (agent != null)`
+  protegía las dos llamadas de debajo, pero el log salía igual. Ahora responde `ERR add_fish:
+  … SpawnFish devolvió null` y, si va bien, dice **cuántos peces hay en el tanque**.
+- **`add_deco` tiraba el `bool` que devuelve `PlaceAt`**: una deco rechazada (sin sitio) se
+  confirmaba como colocada.
+- Y los `yield break` mudos de payload sin `speciesId`/`itemId` ahora dicen por qué se van.
+
+### ⚠⚠ El rig local servía un catálogo que R2 no tiene (2026-08-26)
+
+`Tools/static-server.js` + `?devtest=1` (puerto 3001) llevaba roto **desde el último build de
+player**: los 7 bundles daban **404** y el acuario salía vacío. No era el token, ni CORS, ni el
+anti-bot de Cloudflare — el Worker respondía **404 con CORS puesto y preflight 204**, o sea
+«ese bundle no está en el bucket».
+
+Es la trampa de la sección anterior mordiendo al rig local: el servidor servía
+`webgl-output/StreamingAssets/aa/catalog.bin` **del disco**, que pide hashes que un build de
+player regeneró y que **nunca se despliegan**.
+
+⚠⚠ **Los dos catálogos pesan EXACTAMENTE lo mismo (44.826 bytes)** y sólo cambian los hashes
+de dentro. Comparar por tamaño —o el «suele ser idéntico y no hace falta tocarlo» que decía
+este mismo doc— **no lo detecta**.
+
+**Arreglado:** el servidor sirve `/StreamingAssets/aa/*` **desde R2** (lo que ve la tele) y el
+resto del disco, que es justo lo que se quiere probar. `--local-catalog` vuelve a lo de antes.
+Tras el cambio: **7/7 bundles OK** y `test-updates.js` **6/6**.
+
+```bash
+node Tools/static-server.js       # deja corriendo el receiver en localhost:3001
+node Tools/test-updates.js        # los 9 tests de los handlers UPDATE
+node Tools/check_preset_ids.js    # ids fantasma
+```
+
+### 🐟 El emparejamiento estaba montado y VACÍO (2026-08-26)
+
+Toda la maquinaria de parejas existía en la TV —`FishAgent.WirePairsFromSave`,
+`SaveData.activePairs`, `BreedingPair`, `SteeringController.PairBond()` con peso **1,8** en Idle y
+**1,2** en Explore— **y no se usaba nunca**: `TvAquariumState` no transportaba las parejas, así que
+`activePairs` estaba siempre vacío y la función se iba por su primera línea. Una pareja emparejada
+nadaba junta en el móvil y **suelta** en la tele. Lo encontró la sesión del repo móvil.
+
+- **El uid del móvil se ADOPTA** (INIT y `add_fish`). Antes se generaba aquí con `Guid.NewGuid()`
+  en **tres** sitios; quedan dos, ambos fallback para cliente viejo.
+  ⚠ `uid` en `TvAddFishPayload` **no es opcional**: un pez que entra a mitad de sesión con uid
+  propio **no puede emparejarse jamás**.
+- **UPDATE `pairs`** = lista **completa**, no delta: `{"items":[{maleUid,femaleUid},…]}`. Encaja
+  sin adaptador porque `WirePairsFromSave` limpia **todos** los partners antes de re-cablear.
+- ⚠⚠ **La carrera.** El móvil emite `pairs` justo detrás del `add_fish` que forma la pareja, pero
+  `AddFishAsync` **espera una descarga de bundle** y un `FishAgent` no entra en `FishAgent.All`
+  hasta su `OnEnable`. El `pairs` puede llegar **antes que el pez** → `All.Find` devuelve null →
+  la pareja se descarta **en silencio**, y como `pairs` sólo se emite al cambiar, no se reintenta.
+  **Fix:** re-emparejar tras cada `add_fish` que termine bien.
+- 🧭 **Se reporta lo CABLEADO, no lo recibido**: `pairs: 3 recibidas pero sólo 2 cableadas`. Esa
+  diferencia *es* el síntoma de la carrera.
+
+### 🔐 Fase 2 del JWT — escrita y probada, SIN desplegar (2026-08-26)
+
+El Worker sólo comparaba contra `BUNDLE_TOKENS`, así que **el bloqueo de la Fase 2 no era sólo del
+móvil**: un JWT habría recibido 401. Ya está la verificación HS256 + `POST /mint-token`
+(`Tools/r2-auth-worker/`, **42/42** en `test-local.mjs`, incluidos firma manipulada, `alg: none`,
+HS512, caducado y sin `exp`).
+
+⚠⚠ **Dos decisiones que NO estaban en el spec** y que el móvil tiene que conocer — están en
+`CAST_R2_AUTH_MOVIL.md` §1.4 y en el handoff:
+
+1. **`/mint-token` NO es abierto**: exige `Bearer <MINT_TOKENS>`, credencial propia del APK. Un
+   endpoint de emisión sin credencial dejaría pedir `isPremium` a cualquiera → la Fase 2
+   protegería **menos** que la Fase 1.
+2. **`OWNERSHIP_MODE=log`**: firma y caducidad se verifican de verdad, pero un bundle que no
+   consta como suyo **se sirve igual**, marcado `X-Aq-Ownership: would-deny`. Si los ids de los
+   claims llegaran mal, el usuario se quedaría sin **su** acuario → tele vacía, el síntoma más
+   caro de diagnosticar aquí. Se pasa a `enforce` cuando el contador sea 0.
+
+**Para desplegarlo** hacen falta dos secrets que pone el user:
+```bash
+cd Tools/r2-auth-worker
+npx wrangler secret put JWT_SECRET
+npx wrangler secret put MINT_TOKENS
+npx wrangler deploy
+```
+Es aditivo: sin ellos el camino nuevo da `503` y el token constante sigue igual.
+
+### 🐟 `remove_fish` por uid (2026-08-27) — y una contabilidad rota desde siempre
+
+`remove_fish` sólo transportaba la **especie**, así que `DespawnOneBySpecies` quitaba **el
+primero** de esa especie. Con 3 Banggai en el tanque, quitabas uno concreto en el móvil y en la
+tele desaparecía otro — sin error, con el log diciendo que todo bien. Ahora que el uid del móvil
+se adopta (26-ago), el arreglo era barato.
+
+**Es aditivo, y el camino viejo se identifica en el log:**
+
+| llega | qué hace |
+|---|---|
+| `"fish_banggai"` | `remove_fish: fish_banggai por especie (cliente sin uid: quitado el primero)` |
+| `{"uid":"…","speciesId":"…"}` | `remove_fish: fish_banggai uid=… (quedan N peces)` |
+| uid que no está en el tanque | `ERR remove_fish: uid 'x' no esta en el tanque` — y **no quita nada** |
+
+⚠ Ese último punto es deliberado: **caer al camino de la especie sería reintroducir el fallo por
+la puerta de atrás**. `speciesId` en el JSON es opcional (se saca del propio pez si no viene).
+
+⚠⚠ **De paso salió otra**: `remove_fish` destruía el pez pero **no lo sacaba de
+`ownedFish`/`activeFishUids`**. `add_fish` los alimentaba y nadie los limpiaba, así que el save
+transitorio sólo crecía y divergía del tanque según avanzaba la sesión. Hoy sólo se leen en el
+arranque —por eso no se notaba— pero el emparejamiento ya consume uid de ahí. Ahora se limpian, y
+si el pez estaba emparejado **se retira la pareja y se re-cablea** (si no, `pairs` la contaría
+para siempre como «recibida pero no cableada», que es el síntoma de la carrera del `add_fish` y
+ahí sí es un fallo).
+
+**Falta el lado móvil:** mandar el uid en el payload. Contrato en `CAST_CONTRACT_TV.md` §5.3.
+
+### ⚠⚠ `waitForLog` miraba TODO el log acumulado (2026-08-27)
+
+En `Tools/test-updates.js`, `waitForLog(patrón)` buscaba en el log **desde el arranque**, así que
+**una línea de un test anterior daba por bueno un test posterior sin que pasara nada**. No es
+teórico: los dos tests nuevos de `remove_fish` habrían pasado con líneas de los tests 2 y 12.
+
+Ahora hay `desde()`, que marca el punto del log, y `waitForLog(patrón, ms, marca)` sólo mira de
+ahí en adelante. Los tests viejos siguen llamando sin marca.
+
+🧭 Misma familia que el `bg_ocean` que tuvo este fichero meses en verde: **el test pasaba, y no
+comprobaba nada**.
+
+### 🧪 Guardas que se pagan solas (2026-08-26)
+
+`node Tools/check_preset_ids.js` — sin Unity, sin navegador y sin tele. Comprueba tres cosas:
+
+1. Que **ningún id de preset fantasma** ande suelto por el receiver o las herramientas (encontró
+   **cinco** el día que se escribió).
+2. Que las **cifras del contrato** (`11 fondos / 12 sustratos / 7 luces`) cuadren con los arrays
+   de C#. Un doc con listas a mano del que **depende otro repo** es el mismo bug que persigue.
+3. Que **todo tipo de UPDATE del switch esté documentado** en `CAST_CONTRACT_TV.md`. Cazó `pairs`
+   el mismo día en que se cableó. ⚠ El escáner **corta en el fin de `ApplyUpdate`**, o se cuela el
+   switch de `ApplyAmbientMode`: si cuenta 15 tipos en vez de 12, se pasó de largo.
+
+🧭 No es descuido de nadie: **la ventana entre escribir código y escribir el doc siempre existe**,
+y en esa ventana el contrato miente.
+### ⚠⚠ El MCP de Unity puede estar hablando con OTRO proyecto (2026-08-27)
+
+El puerto **8091** lo sirve **el Editor que esté abierto**, sea cual sea el proyecto. Ese día
+había un Unity abierto con `D:\dev\Distill` y ninguno con éste: `recompile_scripts` se quedó
+**7 minutos «working»**, `Library/ScriptAssemblies/Assembly-CSharp.dll` seguía siendo del día
+anterior, y el `Editor.log` que se leía era el del otro proyecto.
+
+⚠ Lo peligroso no es el cuelgue, es que **una Console vacía porque no ha compilado se parece a
+una Console limpia**. Comprobar antes de fiarse:
+
+```powershell
+Get-CimInstance Win32_Process -Filter "Name='Unity.exe'" | Select-Object ProcessId,CommandLine
+```
+
+### 🧰 Comprobar que el C# compila SIN Unity y sin build (2026-08-27)
+
+```bash
+bash Tools/compile-check.sh          # Assembly-CSharp (runtime)
+bash Tools/compile-check.sh Editor   # Assembly-CSharp-Editor
+```
+
+**~15 s.** Usa el Roslyn y el host de .NET que trae Unity, y saca las 308 referencias y los
+~2.500 caracteres de `define` del `.csproj` que Unity genera para el IDE. Hasta ahora la única
+forma de saber si un cambio compilaba era la Console del Editor o gastarse un build.
+
+- ⚠ **Comprueba SÓLO que compila.** Ni runtime, ni stripping, ni que el shader exista, ni que el
+  bundle cargue. Es el escalón más bajo: encima siguen `static-server.js` + `test-updates.js`, y
+  encima de todo, la tele.
+- ⚠ Depende de que el `.csproj` esté al día (lo regenera Unity al reimportar). Un `.cs` **recién
+  creado** que no esté en el csproj **no se compila y sale verde**. Mirar la cuenta de fuentes
+  que imprime (hoy: 35 runtime / 15 editor).
+- 🧭 Se validó **en los dos sentidos**: verde con el código bueno y rojo con un `CS0029` metido a
+  propósito. Una herramienta de verificación que sólo se ha visto en verde no está verificada.
+
+Tres trampas que costó montarlo, todas de fallo silencioso:
+1. La versión inicial terminaba con **éxito si el generador reventaba** (el bucle no iteraba y
+   `CODE` seguía a 0). Ahora aborta si no hay ficheros de respuesta.
+2. `python` en Windows escribe el salto de línea como **CR+LF**, y `$(cat orden.txt)` **no parte
+   por CR**: el nombre salía `Assembly-CSharp<CR>` y `csc` daba `CS2011` sobre un fichero que
+   existía y que se abría a mano. Va con `newline=''`.
+3. Con rutas de MSYS (`/tmp/…`) python resolvía contra `D:\tmp` y `csc` buscaba en
+   `C:\Users\…\Temp`. La ruta de trabajo es **relativa** (`Temp/compile-check`) a propósito.
 
 ### Estado actual — 2026-08-19 ⭐
 
@@ -429,7 +768,7 @@ print('OK index.html')
 | `Assets/Scripts/Stubs/` | TvStubs (stubs para clases mobile-only referenciadas indirectamente) |
 | `Assets/Settings/` | **TvRenderPipeline.asset** ⭐ + **TvUniversalRenderer.asset** — el render pipeline que faltaba (2026-08-21). Sin esto no hay post-proceso |
 | `Assets/Editor/` | **TvUrpSetup** ⭐ (crea/enciende/apaga el pipeline y verifica `postProcessData`), **TvRenderProbe** (sonda: ¿se está renderizando, y con qué?), **TvGradeSweep** (barrido de grado en el Editor — ⚠ NO fiable para elegir valores, ver `CAST_PARIDAD_VISUAL.md` §0.1), TvAddressablesSetup, TvBuildTools, SyncFromMobileMenu, **TvBuildPostprocess** (parchea settings.json tras cada build), **TvProdBuild** ⭐ (build de producción en batchmode + preflight de audio), **TvWasmOptimize** ⭐ (fuerza `DiskSizeLTO` en cualquier build), TvEmptyTestBuild, **TvAuthPreflight** ⭐ (aborta el build si falta el token de los bundles), TvShadowDiag, **TvDecoOptimize** ⭐ (pasa una deco a texturas DXT1 sueltas: −49,8 % de peso medido) |
-| `Tools/` | ~30 ficheros. Los que importan: **grade-tune.js** ⭐ (afina el grado sobre el player REAL en Chrome, mandando mensajes `GRADE`), **grade_contact_sheet.py** (hoja de contactos + luminancia/saturación por bandas, con guarda de «esto no mide nada»), **r2-auth-worker/** ⭐ (el Worker portero de los bundles + sus dos baterías de pruebas), **SyncFromMobile.ps1**, **cast-headless.js** (sender sin navegador), **cast-run.sh** (ciclo de medición completo), **restore-production-receiver.sh**, **extract_glb_textures.py** (saca las texturas embebidas de un GLB + `mapeo.txt`, paso previo a `TvDecoOptimize`), **r2_huerfanos.py** (lista/borra bundles huérfanos de R2), y los `rcv-*.html` (receivers de diagnóstico). ⚠ Varios escriben en R2 de producción. |
+| `Tools/` | ~30 ficheros. Los que importan: **grade-tune.js** ⭐ (afina el grado sobre el player REAL en Chrome, mandando mensajes `GRADE`), **grade_contact_sheet.py** (hoja de contactos + luminancia/saturación por bandas, con guarda de «esto no mide nada»), **r2-auth-worker/** ⭐ (el Worker portero de los bundles + sus dos baterías de pruebas), **SyncFromMobile.ps1**, **check_preset_ids.js** ⭐ (guarda: ningún id de preset fantasma, sin Unity ni tele), **compile-check.sh** ⭐ (¿compila el C#? en ~15 s, sin Unity y sin build), **static-server.js** (rig local en :3001 — sirve el catálogo **desde R2**, no del disco), **test-updates.js** (los tests de los handlers UPDATE — **16** desde el 27-ago), **cast-headless.js** (sender sin navegador), **cast-run.sh** (ciclo de medición completo), **restore-production-receiver.sh**, **extract_glb_textures.py** (saca las texturas embebidas de un GLB + `mapeo.txt`, paso previo a `TvDecoOptimize`), **r2_huerfanos.py** (lista/borra bundles huérfanos de R2), y los `rcv-*.html` (receivers de diagnóstico). ⚠ Varios escriben en R2 de producción. |
 
 ---
 
@@ -496,6 +835,65 @@ que es el grupo local de verdad; `Default Local Group` tiene 0 entradas y no pro
 **LZ4 compression** confirmado. **NonRecursiveBuilding=true** — ⚠ NO cambiar a `false` (causa 47 min/bundle, builds de 30h+). Ver `feedback_nonrecursivebuilding.md`.
 
 ---
+
+### 📡 El relay de logs del receiver puede morir en silencio (2026-08-28)
+
+Cada línea de `dbg()` del `index.html` viaja al sender por el canal Cast (`_logSink` →
+`ctx.sendCustomMessage`). **Ese relay se muere y no queda rastro en ninguna parte**, porque había
+dos `try/catch` que se comían el fallo y el único informe de contadores salía… **por el mismo canal
+roto**:
+
+```
+index.html:136   if (_logSink) { try { _logSink(line); } catch(e) {} }   ← tragadero
+index.html:492   _logSink = …  catch (e2) { _logFail++; … }             ← sólo cuenta
+index.html:522   dbg('… 📡 stream sent='+_logSent+' fail='+_logFail)     ← ¡por el canal roto!
+```
+
+**Medido el 28-ago**, cruzando el logcat del móvil con nuestro log:
+
+| sender | líneas del receiver que llegan | última |
+|---|---|---|
+| `cast-headless` **solo** | **135 · 139 · 202+** | toda la sesión |
+| APK del móvil delante | **3-4** | **a los ~45 ms** de su `RemoteMediaClient.load()` |
+
+Cuatro sesiones de cuatro, Δ entre +3 y +57 ms tras el `load()` del `silence.wav` del emisor.
+⚠⚠ **Y el acuario seguía renderizando**: se comprobó con dos `adb exec-out screencap` consecutivos
+(103.088 y 134.270 píxeles cambiando de 2.073.600). La escena montaba; lo que no llegaba eran los
+logs. Eso tuvo a la sesión del repo móvil media mañana concluyendo «el receptor no arranca» y llegó
+a escribirse en su `CAST_CONTRACT.md` §11.2 como diagnóstico establecido — corregido desde este
+lado en `CAST_CONTRACT_TV.md` §5.5.
+
+**Lo que hay ahora (desplegado y verificado en el device):** un HUD `#relay-meter` que pinta
+`RLY env:N fallos:M snd:K off:<motivo>@<s>` **EN PANTALLA**.
+
+- 🧭 **En pantalla a propósito:** un instrumento no puede reportar su propia muerte por el conducto
+  que ha muerto. Y aquí la pantalla se lee con `adb exec-out screencap`, así que es un canal de
+  verdad, no un consuelo.
+- **Los tres números juntos son el diagnóstico**, y decide de un vistazo entre cuatro causas:
+
+| lo que se lee | causa |
+|---|---|
+| `env` sube · `fallos:0` · `snd:1` | el mensaje se pierde **dentro del SDK**, sin lanzar |
+| `fallos` sube | **excepción** en `sendCustomMessage` |
+| `env` congelado · `fallos:0` · **`snd:0`** | `_logSink` sale por `if (senderCount <= 0) return;` **antes del `try`** → el receptor cree que no hay nadie escuchando |
+| `env` congelado · `fallos:0` · `snd:1` | no es el relay: **`dbg()` ha dejado de llamarse** |
+
+  ⚠ El tercer caso lo aportó la sesión del repo móvil, y es el más probable: encaja con que el
+  relay muera **con la página viva**, siempre en el mismo punto y 45 ms después de una operación
+  del emisor que toca la capa de sesión. `off:` dice **quién bajó `snd` y cuándo`.
+- **El HUD se repinta solo cada 2 s**, no cuando alguien llama a `dbg()`: si dependiera de `dbg()`
+  se congelaría justo en el caso que existe para diagnosticar.
+- ⚠ Y si el propio repintado revienta, **lo escribe en su hueco** (`RLY HUD ROTO: …`). La primera
+  versión del parche llevaba un `catch {}` mudo ahí dentro — un tragadero **dentro del parche que
+  quita tragaderos**.
+- **Oculto en producción salvo que haya un fallo** (es un indicador de error), y visible siempre
+  con `DIAG`.
+
+⚠ El parche va **al template Y al procesado**, aplicado por separado — **nunca copiando uno sobre
+otro** (ver la sección de abajo).
+
+🧭 **La regla que sale de aquí:** *ausencia de líneas en un log no es ausencia de eventos.* Separar
+«no pasó» de «no me llegó», y el desempate barato en este proyecto es **mirar la pantalla**.
 
 ## ⚠ index.html — template vs procesado
 

@@ -146,7 +146,25 @@ es la configuración con la que se han validado las sesiones de 900 s. **No toca
 
 **Recomendable antes de difundir:**
 3. ✅ ~~Volver a medir el techo de carga~~ **HECHO el 19-ago**: mejor que antes (−32 MB de heap).
-4. Cerrar el hueco de editar decos colocadas (requiere el repo móvil).
+4. ✅ ~~Cerrar el hueco de editar decos colocadas~~ **HECHO Y VALIDADO EN DEVICE (2026-08-28)**
+   — y resultó que **ya estaba implementado por los dos lados sin que ninguno lo supiera**. El móvil
+   reemite `add_deco` desde `SyncDecoSave`, el choke point de las 11 ediciones, y **todas emiten al
+   FINAL del gesto, nunca por frame** (medido: ~125 ms entre mensajes, cadencia de dedo). La TV ya
+   transportaba los diez campos desde el 27-ago y `PlaceAt` reemplaza por `instanceId`.
+
+   **Medido a dos bandas**, en canales que no comparten modo de fallo:
+
+   | | |
+   |---|---|
+   | el móvil **emite** | 4 `add_deco` con `+rot` a los 152 s, cadencia de gesto |
+   | la TV **aplica** | 54.876 px cambiados de forma permanente en la región de la deco |
+   | y el **volcado** lo cierra con números | `quat=(0.000,0.866,0.000,-0.500)` y `escala=2.400` **idénticos en los dos lados**; `pos.x −0.43 → −0.35`, que es el ×0,8 exacto |
+
+   ⚠ Sólo funciona **al soltar el gesto**: `PlaceAt` destruye y recrea el GameObject, así que un
+   arrastre continuo parpadearía. Para arrastre en vivo haría falta un `update_deco` que mute el
+   transform sin recrear (§6.1 de `CAST_CONTRACT_TV.md`).
+
+**⇒ Con esto la lista de «recomendable antes de difundir» se queda SIN NINGÚN PUNTO ABIERTO.**
 
 **Opcional, mejora de producto:**
 5. Decimar las 11 mallas de fotogrametría: −14 a −21 MB. **Decisión de calidad del user.**

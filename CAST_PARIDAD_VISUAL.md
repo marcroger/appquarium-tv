@@ -232,6 +232,329 @@ día se enciende el bloom, hay que volver a ponerlo ON.
 
 ---
 
+## 0.5 ✅✅ MEDIDO EN LOCAL (2026-08-27) — no es el grado, y el fondo está pintado así
+
+Barrido de las 8 variantes de `Tools/grade-tune.js` sobre el **player real** (`rcv 2026-08-27
+rmuid`) y medido en **L\* / C\*** con `Tools/analiza_grado_lab.py`. Escena: `bg_kelp`, 1 pez,
+6 decos, día.
+
+⚠ **Primero, por qué las cifras de antes no valían.** `grade_contact_sheet.py` informa **media de
+canales RGB** y **saturación HSV**, y las dos se equivocan justo en esto:
+
+- La media RGB **sube** al desaturar un verde saturado (`0,150,0` → gris `107`): la variante de
+  control `Z`, que desatura del todo, salió **la más clara de las ocho** sin serlo.
+- La saturación HSV de un verde **oscuro** es alta, así que el fondo en penumbra puntuaba más
+  «saturado» que el suelo vivo — al revés de lo que se ve en la captura.
+
+### El barrido, en unidades que no engañan
+
+| variante | fondo alto | fondo medio | suelo |
+|---|---|---|---|
+| **A** el build tal cual | L\* 20.8 · C\* 21.0 | L\* 8.4 · C\* 7.9 | L\* 34.3 · C\* 38.6 |
+| **B** grado del móvil exacto | L\* 21.4 · C\* 15.2 | L\* 9.0 · C\* 7.0 | L\* 34.7 · C\* **25.1** |
+| **F** sin bloom, sat +18 | L\* 20.8 · C\* 21.0 | L\* 8.2 · C\* 7.8 | L\* 34.3 · C\* 38.6 |
+| **Z** control extremo | L\* 21.6 · C\* **0.0** | L\* 9.1 · C\* 0.0 | L\* 35.1 · C\* 0.0 |
+
+- 🧭 **`F` reproduce `A` clavado** (±0.0 en las tres bandas). `F` son los valores que la escena ya
+  tiene, así que esto demuestra que la ruta `GRADE` y el build dicen lo mismo: **el barrido mide**.
+- ⚠⚠ **Copiar el grado del móvil PIERDE color**: −13.5 de croma en el suelo (**−35 %**) y −5.8 en
+  el fondo alto (**−28 %**), a cambio de **+0.5 L\*** de claridad. Es exactamente lo contrario de
+  lo que se buscaba. **No hacerlo.**
+- **El bloom no aporta nada en escena oscura**: entre 1.2, 0.6, 0.35 y apagado la claridad varía
+  **±0.1 L\***. Lo único que mueve el croma es el parámetro de saturación. ⚠ Reserva honesta:
+  `bg_kelp` es oscuro y el bloom necesita zonas brillantes — **falta remedirlo en un fondo vivo**
+  antes de dar el bloom por inútil.
+- **El tonemapping es casi irrelevante aquí**: `G` (sin él) contra `F` = −0.6 L\*, croma igual.
+
+### ⚠⚠ Y lo que de verdad cambia el diagnóstico: la TV NO apaga el color
+
+Comparando el **PNG de origen** contra el **render del player**, en cuatro fondos que van de casi
+negro a muy vivo (`Tools/medir-fondos.js`):
+
+| fondo | PNG (banda alta) | render (banda alta) | diferencia |
+|---|---|---|---|
+| `bg_abyss` | L\* 0.9 · C\* 1.6 | L\* 1.1 · C\* 2.7 | +0.2 L\* · **+1.1 C\*** |
+| `bg_kelp` | L\* 23.5 · C\* 19.3 | L\* 20.8 · C\* 21.0 | −2.7 L\* · **+1.6 C\*** |
+| `bg_tropical` | L\* 63.4 · C\* 36.0 | L\* 60.8 · C\* 35.9 | −2.5 L\* · −0.1 C\* |
+| `bg_classic` | L\* 55.4 · C\* 39.3 | L\* 53.4 · C\* 40.1 | −2.0 L\* · +0.8 C\* |
+
+**El croma se conserva entero** —incluso sube un poco, que es el `sat +18` trabajando— y la
+claridad baja de forma **constante** ~2 L\* en los cuatro. Eso no es «apagado»: es un velo
+pequeño y uniforme, coherente con la viñeta.
+
+### 🎨 «El fondo casi en blanco y negro» es el arte, no el pipeline
+
+Croma del **PNG de origen** de los 11 fondos:
+
+| fondo | L\* | C\* | | fondo | L\* | C\* |
+|---|---|---|---|---|---|---|
+| `bg_abyss` | 1.4 | **2.4** | | `bg_wreck` | 13.9 | 11.2 |
+| `bg_cave` | 5.0 | 3.6 | | `bg_deep` | 7.0 | 15.4 |
+| `bg_jungle` | 7.3 | 5.5 | | `bg_arctic` | 25.0 | 17.4 |
+| `bg_volcanic` | 6.4 | 6.7 | | `bg_tropical` | 48.5 | 29.3 |
+| `bg_night` | 3.8 | 9.9 | | `bg_classic` | 37.7 | **37.2** |
+| `bg_kelp` | 12.7 | 10.9 | | | | |
+
+**Siete de once están por debajo de croma 12 en el fichero.** Son cuevas, abismos y noche: están
+pintados así. `bg_classic` tiene **15× más croma** que `bg_abyss`.
+
+🧭 **Consecuencia para la comparación con el móvil:** si las dos pantallas no tenían **el mismo
+preset**, la comparación no dice nada sobre el pipeline. Es el punto 1 del protocolo de §4, y es
+el que hay que asegurar antes de tocar nada.
+
+### Lo que queda vivo de este documento
+
+Sólo la **nitidez**, y es independiente del color:
+
+| | resolución | píxeles |
+|---|---|---|
+| Móvil | 1536×1024 | 1,57 Mpx |
+| TV | 1024×683 | 0,70 Mpx |
+
+**2,25× en píxeles (1,5× lineal).** ⚠ §2.2 decía 512 y «9×»: **falso desde el 21-ago**, cuando
+`de033c9` subió los 11 fondos de 512 a 1024 y este doc no se enteró. La conclusión de §3.1 (ir por
+Addressables y no por subir el import) **sigue siendo la buena**, pero el premio es menor de lo
+que se creía y ahora compite con un refactor de carga asíncrona.
+
+---
+
+---
+
+## 0.6 ✅✅✅ MEDIDO EN LAS DOS PANTALLAS A LA VEZ (2026-08-28) — y sale al revés del §2.2
+
+Primera medición con **capturas simultáneas por `adb` de la tele y del teléfono**, mismo instante,
+mismo estado real (`bg_classic` + `sub_gravel`, casteando desde `com.appquarium.qa`). Y con los
+valores de post-proceso del móvil **verificados por la sesión del repo móvil**, no deducidos.
+
+### 0.6.1 El color, midiendo zonas EMPAREJADAS (no bandas por fracción de filas)
+
+| zona | TELE | MÓVIL | Δ (móvil − tele) |
+|---|---|---|---|
+| suelo cercano | L\* 66.3 · C\* 15.3 · **h 82°** | L\* 73.7 · C\* 12.5 · **h 82°** | **+7.4 L\*** · −2.8 C\* · **0° de tono** |
+| agua alta | L\* 71.2 · C\* 41.5 · **h 191°** | L\* 76.0 · C\* 36.8 · **h 191°** | +4.9 L\* · −4.7 C\* · **0°** |
+| agua honda | L\* 25.7 · C\* 8.1 | L\* 34.1 · C\* 15.3 | +8.3 L\* · +7.2 C\* |
+
+- **El tono es IDÉNTICO** (0° en las dos zonas fiables). Confirma y refuerza el §0.5: la TV **no
+  cambia los colores**.
+- La TV está **más oscura en todo** (−4.9 a −8.3 L\*), no sólo en lo brillante.
+- La TV está **más saturada en lo iluminado** (+2.8 / +4.7 C\*) y **menos en el agua honda**
+  (−7.2 C\*). Eso último es la niebla de agua del 25-ago, que el móvil no tiene.
+  ⚠ Ese «más saturada» sale de **+18 contra 0**, no de +18 contra −15: ver §0.6.4.bis.
+- El móvil pinta el suelo **prácticamente igual que el PNG** (L\* 73.7 contra 73.1 del fichero).
+
+### 0.6.2 ⚠⚠ Los −26 L\* del 27-ago estaban inflados por la BANDA, no por el pipeline
+
+La banda «suelo» de `Tools/analiza_grado_lab.py` es el **25 % inferior**, y ahí dentro se promedian
+el suelo cercano y el lejano, que va **fuertemente niebleado** por `SubstrateFog`. En la MISMA
+captura:
+
+| medida del suelo | contra el PNG |
+|---|---|
+| suelo cercano (último 10 % de filas) | **−9.7 L\*** |
+| banda «suelo» (25 % inferior) | **−21 L\*** |
+
+El hueco real contra el móvil es **7.4 L\***, no 17.4. 🧭 **Regla: en esta escena el suelo tiene un
+degradado de niebla front-to-back; promediarlo entero mide la niebla, no el grado.**
+
+### 0.6.3 El barrido de grado sobre el suelo — el grado explica algo más de la MITAD
+
+Cuatro variantes en caliente sobre el player real (`rcv 2026-08-27 decorot`), suelo cercano,
+`sub_gravel`. **Control extremo incluido: C\* → 0.0 en las tres bandas**, así que el grado llega a
+los píxeles y el barrido mide.
+
+| variante | L\* del suelo cercano | gana |
+|---|---|---|
+| build tal cual | 63.4 | — |
+| sin tonemapping | 66.9 | **+3.5** |
+| sin tm, sat 0 | 67.0 | +3.6 |
+| **todo plano y sin viñeta** | **67.6** | **+4.2** |
+
+De los 7.4 L\* de hueco, **el grado explica 4.2** (tonemapping 3.5 · **viñeta 2.0** · sat/contraste
+0.7). ⚠ **La viñeta se había quedado fuera de todos los barridos anteriores** y vale la mitad de
+todo el grado: es 0.095 y muerde justo en el **borde inferior** del frame, que es donde está el
+suelo.
+
+### 0.6.4 🐛 El campo `exposure` del mensaje `GRADE` NO HACE NADA (y en el móvil tampoco)
+
+```
+PostProcessingSetup        Volume priority 10 · Add<ColorAdjustments>(true)
+TankLightingController     Volume priority 11 · .Override(colorFilter) + .Override(postExposure)
+```
+
+Gana el 11. Y `light_white` tiene `filterColor (1,1,1)` y `exposureOffset 0.00`, así que con esa luz
+puesta **el `postExposure` de `PostProcessingSetup` se sustituye por 0**.
+
+**Probado en píxeles**, con las dos variantes que sólo difieren en saturación y exposure:
+
+| banda | `exposure 0.00` | `exposure −1.00` | Δ |
+|---|---|---|---|
+| fondo alto | 64.6 | 64.6 | **0.0** |
+| fondo medio | 48.1 | 48.2 | **+0.1** |
+
+Sale **igual**, que es justo lo que predice «está pisado». El receiver loguea `exp=-1.00` tan
+tranquilo — falla en silencio.
+
+⚠ **La primera lectura de este dato fue errónea y conviene que quede escrito:** se dijo que la
+imagen salía «más clara», comparando el control contra la referencia de producción — que **también
+difiere en tonemapping y viñeta**. Con la línea base equivocada, un campo inerte parece un campo
+con el signo invertido. La objeción la levantó la sesión del repo móvil.
+🧭 **Para aislar un parámetro hay que comparar contra la variante que sólo difiere en ÉL.**
+
+### 0.6.4.bis ⚠⚠ En el MÓVIL el destrozo es MAYOR: son cuatro campos, no dos
+
+`TankLightingController.cs` es fichero **compartido**, pero las dos copias **no son iguales**:
+
+| | TV | MÓVIL |
+|---|---|---|
+| `profile.Add<ColorAdjustments>(…)` | **`(false)`** ← arreglado el 21-ago | **`(true)`** |
+| qué pisa a priority 11 | sólo `colorFilter` y `postExposure` | **TODO el ColorAdjustments** |
+
+`Add<T>(true)` hace `SetAllOverridesTo(true)`, así que en el móvil ganan también `saturation`,
+`contrast` y `hueShift` **con sus valores por defecto**. Estado efectivo del móvil con `light_white`:
+
+| campo | en su inspector | EFECTIVO |
+|---|---|---|
+| colorFilter | (0.75, 0.90, 1.00) | **blanco** |
+| postExposure | +0.1 | **0** |
+| **saturation** | **−15** | **0** |
+| bloom · vignette | 1.2 / 0.6 / 0.75 / HQ · 0.095 | **vivos** (son otros componentes) |
+
+⚠⚠ **Esto corrige el §2.1 y el §0.6.1 de este mismo documento:** la diferencia de saturación entre
+pantallas **no es +18 contra −15, es +18 contra 0**. Quien ajuste a la baja contando con que el
+móvil resta 15 **se quedará corto**.
+ℹ Alcance honesto: lo del `colorFilter` está **medido** (los 0° de tono). Lo de `saturation` es
+**deducción de la API**, aportada por la sesión del móvil y sin contraprueba en píxeles todavía.
+
+- ⚠ **«Arreglarlo» subiendo la prioridad NO es un fix**: activaría de golpe un filtro azul y +0.1 EV
+  que llevan quién sabe cuánto sin aplicarse. Es un cambio de aspecto, y lo decide el user.
+- ℹ **Pisar `colorFilter` y `postExposure` es DELIBERADO** y está razonado en el propio fichero
+  (líneas 186-187 en la copia del móvil): el preset de luz es el dueño del tinte del frame,
+  precisamente para alcanzar los shaders **unlit** (`TankBackground`, decos GLB) que un
+  ColorAdjustments normal no tocaría. **Eso no se toca.** El daño colateral es `saturation` y
+  `contrast`, que el comentario no promete y el `(true)` se lleva por delante.
+- 🧭 Es la **misma familia** del bug del `Add<T>(true)` del 21-ago que ya está en `CLAUDE.md` —
+  literalmente el mismo bug, que en la TV se arregló y en el móvil sigue.
+
+### 0.6.4.ter No hay UN colorFilter del móvil: hay SIETE
+
+Es función del preset de luz, que elige el usuario y que llega por `change_light`:
+
+| preset | colorFilter | exposureOffset |
+|---|---|---|
+| `light_white` | (1.00, 1.00, 1.00) | 0.00 |
+| `light_warm` | (1.00, 0.90, 0.76) | −0.10 |
+| `light_blue` | (0.72, 0.86, 1.00) | −0.30 |
+| `light_deep` | (0.55, 0.65, 1.00) | **−0.60** |
+| `light_purple` | (0.88, 0.72, 1.00) | −0.25 |
+| `light_sunset` | (1.00, 0.82, 0.65) | −0.10 |
+| `light_cycle` | **animado (HSV, 0.07 Hz)** | −0.15 |
+
+⚠⚠ **Con `light_cycle` puesto, dos capturas no son comparables entre sí**: reescribe `colorFilter`
+cada frame. El campo `luz=` de la cabecera del `DUMP` dice cuál está activo — es lo que convierte
+esta tabla en un número.
+
+### 0.6.5 ⚠⚠ EL BLOOM: la prueba que lo descartó no estaba probando el bloom
+
+Valores reales, verificados a los dos lados:
+
+| | TELE | MÓVIL |
+|---|---|---|
+| bloom | **OFF** (intensity 0.35) | **ON, intensity 1.2** |
+| **bloomThreshold** | **0.92** | **0.60** |
+| scatter / HQ filtering | 0.6 / — | 0.75 / **true** |
+| **tonemapping** | **Neutral** | **NINGUNO** |
+| contraste / saturación | +10 / **+18** (vivos) | 0 / **0 efectivo** (su −15 está pisado, ver §0.6.4.bis) |
+| **HDR** | **OFF** | **ON** |
+| renderScale | 0.75 | 0.8 |
+
+El §0.5 dio por cerrado que «el bloom no aporta nada en escena oscura (±0.1 L\*)». Pero ese barrido
+usa `Tools/grade-tune.js`, que **sólo manda `bloom` y `bloomIntensity` y NUNCA el umbral**: las ocho
+variantes corrieron a **threshold 0.92**, que en escena submarina no lo cruza casi ningún píxel.
+**La conclusión medía el umbral, no el bloom.**
+
+⚠ El mensaje `GRADE` **tampoco expone** `bloomThreshold` / `bloomScatter` / `highQualityFiltering`,
+así que esto **no se puede probar en caliente**: hace falta ampliar `GradePayload` y entra en el
+build pendiente. Es el cambio de mayor retorno que queda.
+
+🧭 Misma familia que el `bg_ocean` de meses en verde: **la prueba pasaba y no comprobaba lo que
+decía comprobar.**
+
+### 0.6.6 ⚠⚠ LA NITIDEZ: la TV no se ve más BORROSA, se ve más DURA — el §2.2 está al revés
+
+Medido con las dos capturas al **mismo tamaño en píxeles** (escala verificada por correlación
+cruzada sobre el cañón: **1.00×**), energía de alta frecuencia como fracción del espectro:
+
+| región | TELE | MÓVIL | móvil/tele |
+|---|---|---|---|
+| **grava del suelo** (mucho detalle real) | 0.166 | 0.163 | **0.98× — empatan** |
+| **agua plana honda** (sin detalle que dibujar) | 0.0698 | 0.0136 | **0.19×** |
+| telón de fondo | 0.005 / 0.017 | 0.004 / 0.007 | 0.92× / 0.42× |
+
+O sea: **donde hay detalle real, empatan**. Lo que la TV tiene de más es **5.13× de energía de alta
+frecuencia en zonas donde no hay nada**, o sea **grano**. Ampliadas ×6 se ve qué es: las partículas
+del telón salen en **bloques cuadrados de alto contraste** en la tele y **suaves** en el móvil.
+
+Dos causas descartadas **con medida**:
+
+| candidato | resultado |
+|---|---|
+| ¿lo crea el grado? | **no** — con el grado aplanado entero: 0.0111 → 0.0105 |
+| ¿lo explica la resolución (1024 vs 1536)? | **no, va al revés**: la cadena de 1024 sin comprimir predice **0.32×** (más suave); se mide 5.13× (más duro). Discrepancia de ~16× y **de signo contrario** |
+
+Lo que queda en esa cadena es el **formato de compresión**:
+
+```
+TV  (WebGL)      maxTextureSize 1024 · textureFormat -1  → DXT1     (4 colores por bloque de 4x4)
+MÓVIL (Android)  maxTextureSize 2048 · textureFormat 50  → ASTC 6x6
+```
+
+⚠⚠ **NO está probado.** No se ha generado una versión DXT1 para comparar píxel a píxel. Lo que hay
+es que **resolución y grado quedan descartados con medida** y el formato es lo único que queda.
+
+⚠ **Objeción abierta, de la sesión del repo móvil:** que su `renderScale 0.8` con filtro de subida
+bilineal sea un paso bajo que se coma la alta frecuencia en zonas planas. Los framebuffers físicos
+(`adb shell wm size`) dicen que va al revés:
+
+| | render | cadena hasta el panel |
+|---|---|---|
+| TV | 1920x1080 (Unity reporta `Screen 2560x1440` × 0.75) | **sube a 2560x1440 y el compositor la baja a 1920x1080** |
+| móvil | 864x1920 (1080x2400 × 0.8) | sube a 1080x2400, sin bajada |
+
+La cadena de la TV tiene **un paso bajo MÁS**, no menos. Pero un remuestreo no entero
+arriba-y-abajo puede generar aliasing que parece grano, así que no está cerrado.
+🧭 **Test decisivo y gratis:** `GRADE={"renderScale":1.0}` en la tele → renderiza 2560x1440 y el
+compositor lo baja a 1920x1080, o sea **supersampling limpio**. Si el grano del agua plana se
+desploma, era el remuestreo; si aguanta, es la textura.
+
+### 0.6.7 ⚠ Consecuencia para el §3.1: la palanca podría ser la EQUIVOCADA
+
+El §3.1 propone subir el import a 1536 (+6,4 MB en el `.data`) o sacar los fondos a Addressables,
+y **las dos apuntan a resolución**. Si la causa es el formato, **subir el tamaño dejando DXT1 no
+arregla nada**. El experimento barato es tocar `textureCompression` en los 11 fondos.
+⚠ Cuesta un build de player: los fondos van **horneados en el `.data`**.
+
+### 0.6.8 🧰 Cómo se midió (para poder repetirlo)
+
+```bash
+# capturas simultáneas de las dos pantallas (el instante importa: hay peces moviéndose)
+adb -s <IP_TV>:5555 exec-out screencap -p > tv.png  &
+adb -s <SERIAL_MOVIL> exec-out screencap -p > movil.png  &
+wait
+```
+
+⚠⚠ **Dos senders NO pueden convivir.** Lanzar `cast-headless` con la app del móvil aún conectada
+deja el receiver en `buffered` y **no monta la escena para nadie** (pasó el 28-ago: `Sender
+CONNECTED #1 … sender-0` y `#2 … com.appquarium.qa-4` en el mismo segundo, y un
+`pm.load RECHAZADO LOAD_CANCELLED` que parecía un bug del player y no lo era). Antes de castear
+desde aquí, **el teléfono tiene que desconectar**.
+
+⚠ Las bandas por fracción de filas **no valen** para comparar pantallas de distinta relación de
+aspecto (1920x1080 contra 2400x1080). Hay que **detectar la línea del suelo** en cada captura y
+medir zonas emparejadas.
+
+⚠ Al comparar nitidez hace falta un **control sin detalle** (agua plana). Sin él, «más energía de
+alta frecuencia» se lee como «más nítido» cuando puede ser ruido — que es justo lo que pasaba aquí.
+
 ## 1. Lo que se ve (reportado por el user)
 
 1. **Los colores no se ven tan nítidos ni tan bonitos como en la app.** El fondo en concreto se
@@ -244,7 +567,12 @@ día se enciende el bloom, hay que volver a ponerlo ON.
 
 ## 2. Lo que YA está comprobado (leído del proyecto, no medido en pantalla)
 
-### 2.1 🎯 El grado de color de TV y el del móvil son DISTINTOS a propósito
+### 2.1 🎯 El grado de color de TV y el del móvil son DISTINTOS a propósito ⚠ **ver §0.6.4.bis**
+
+> ⚠⚠ **28-ago: la mitad de los valores que compara esta sección NO SE APLICAN.** En el móvil,
+> `colorFilter`, `postExposure` y **`saturation −15`** están pisados por el Volume de
+> `TankLightingController` (priority 11, `Add<T>(true)`). La diferencia real de saturación es
+> **+18 contra 0**. Ver **§0.6.4.bis**.
 
 No es «lo mismo con menos calidad»: son dos ajustes diferentes. Valores **serializados en cada
 escena** (no los defaults del script):
@@ -274,7 +602,17 @@ tonemapping Neutral que el móvil no tiene, que comprime los altos.
 ⚠ **Hipótesis, no medición:** que esto explique el «blanco y negro» del fondo es lo más probable,
 pero no está comprobado en pantalla. Ver §4 antes de tocar un solo valor.
 
-### 2.2 🎯 Los fondos van a la TV a 1/16 de píxeles
+### 2.2 ~~🎯 Los fondos van a la TV a 1/16 de píxeles~~ ⚠⚠ **DESFASADO Y DEL REVÉS — ver §0.5 y §0.6.6**
+
+> ⚠⚠ **28-ago: medido al mismo tamaño en píxeles, la TV NO se ve menos nítida** — empata con el
+> móvil en la grava del suelo (0.98×). Lo que tiene de más es **grano** en zonas planas (5.13×), y
+> la resolución **predice lo contrario** (0.32×). Toda esta sección razona sobre un síntoma que no
+> es el que se mide. Ver **§0.6.6**.
+
+> ⚠⚠ **Esta sección dice 512 y «9×», y las dos cifras son falsas desde el 21-ago.** Ese día,
+> `de033c9` subió los 11 fondos de **512 a 1024** en el override de WebGL y el doc no se
+> enteró. La diferencia real con el móvil es **2,25× en píxeles (1,5× lineal)**, no 9×. Lo
+> que sigue vale como historia de cómo se llegó aquí, no como estado.
 
 El PNG de origen es **el mismo fichero** en los dos repos (`bg_abyss.png`, 1.935.615 bytes en
 ambos). Lo que cambia es el import:
@@ -430,8 +768,35 @@ todas las combinaciones en la tele y capturar cada una. Sin eso, cada variante e
 
 ---
 
-## 5. Estado
+## 5. Estado — 2026-08-28
 
-- [ ] Nada tocado. Ninguna medición hecha en pantalla todavía.
-- [ ] Decisión del user pendiente en dos frentes: **cuánto FPS está dispuesto a pagar** por
-      acercarse al look del móvil, y **qué debe hacer la sombra** de una deco del fondo.
+- [x] ✅ **URP encendido y desplegado** (21-ago, §0.3). El grado se aplica de verdad.
+- [x] ✅ **Medido en el player real** (27-ago, §0.5) y **en las dos pantallas a la vez** (28-ago,
+      §0.6). La TV **no cambia los colores** — el tono sale a **0° de diferencia**.
+- [x] ✅ **Explicado el «fondo casi en B/N»**: 7 de los 11 fondos están por debajo de croma 12
+      **en el PNG de origen**. Es el arte.
+- [x] ✅ **La comparación honesta con el mismo estado** — hecha (§0.6.1), con capturas simultáneas
+      por `adb` de las dos pantallas.
+- [x] ✅ **La nitidez, medida** (§0.6.6): **al mismo tamaño en píxeles la TV EMPATA** con el móvil
+      donde hay detalle real (0.98×). El §2.2 razonaba sobre un síntoma que no es el que se mide.
+- [ ] ⭐⭐ **LO DE MAYOR RETORNO QUE QUEDA: el bloom, y hace falta tocar C#.** El móvil bloomea a
+      **threshold 0.60** con intensity 1.2, scatter 0.75 y HQ filtering; la TV lo tiene **OFF con
+      threshold 0.92**. El «el bloom no aporta nada» del §0.5 se midió **sin tocar el umbral**
+      (`grade-tune.js` no lo manda), así que medía el umbral, no el bloom. `GRADE` tampoco expone
+      `bloomThreshold`/`bloomScatter`/`HQ` → **ampliar `GradePayload`** y entra en el build
+      pendiente; después ya se barre en caliente sin gastar más builds.
+- [ ] ⭐ **El grano del agua plana** (§0.6.6): 5.13× más que el móvil, con **grado y resolución
+      descartados con medida**. Queda el formato (DXT1 contra ASTC 6x6) y **no está probado**.
+      Test gratis pendiente: `GRADE={"renderScale":1.0}` como supersampling limpio.
+- [ ] ⚠ **La palanca del §3.1 podría ser la equivocada** (§0.6.7): apunta a resolución, y si la
+      causa es el formato, subir el import no arregla nada.
+- [ ] ❓ **Decisión del user, y son cambios de ASPECTO, no bugs:**
+      · resucitar `saturation`/`contrast` en el móvil (`Add<T>(false)`, §0.6.4.bis)
+      · el `postExposure` de la TV, hoy inerte (§0.6.4)
+      · bajar la **viñeta** (0.095, vale **2.0 L\*** en el suelo, §0.6.3)
+- [ ] Decisión del user: **qué debe hacer la sombra** de una deco del fondo.
+- [ ] ⚠ **Reportado por el user el 28-ago y aún sin cerrar:** «en el teléfono se ve precioso, en la
+      tele muy apagado; le falta nitidez, color y vida». La fotometría dice que **apagado = más
+      oscuro** (−4.9 a −8.3 L\*) y que el agua honda pierde **la mitad del croma** (C\* 8.1 contra
+      15.3) por la niebla. Su hipótesis —«la capa azul está demasiado fuerte»— **está sin medir**:
+      el barrido de niebla del 28-ago se perdió por la colisión de dos senders (§0.6.8).
