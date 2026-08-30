@@ -453,6 +453,31 @@ Es función del preset de luz, que elige el usuario y que llega por `change_ligh
 cada frame. El campo `luz=` de la cabecera del `DUMP` dice cuál está activo — es lo que convierte
 esta tabla en un número.
 
+### 0.6.4.quater 💡 LAS 7 LUCES SIGUEN SIN MEDIR — pero el procedimiento ya está (2026-08-30)
+
+Fondos (§0.7) y sustratos ya están medidos; **las luces no**, y **5 de las 7 son de pago**. El 30-ago
+se montó el procedimiento y **la tanda se perdió por un corte de rutado del ISP**, no por el método.
+Herramientas: `Tools/barre-luces.sh` + `Tools/mide_luces.py`. Detalle en
+`CAST_NEXT_SESSION_2026-08-31.md` §1-2. Lo que hay que saber para leer el resultado cuando llegue:
+
+⚠⚠ **Una luz no se mide como un fondo.** Actúa por **dos caminos**: los **spots** (sólo alcanzan a lo
+iluminado) y el **post** `colorFilter`+`postExposure` a priority 11 (alcanza al frame entero,
+**incluidos los unlit**). El telón es unlit ⇒ **la banda de agua (0.12-0.50) aísla el post y la del
+suelo (0.90-1.00) suma los dos. La diferencia ES la descomposición.**
+
+🧭 **`light_white` no es la referencia que parece:** neutro **sólo en post**; su spot es
+`(1.00,0.97,0.93)` y su `spotIntensity` **1.0** contra 2.5-3.5 del resto ⇒ **en el suelo el post
+negativo de los demás pelea contra ×3 de luz y esa banda no aísla para nadie.**
+
+⚠⚠ **`light_cycle` se mide APARTE, al final y como RANGO** sobre un periodo entero (14,3 s), fuera de
+la tabla de ΔE al vecino: no tiene un valor, tiene un recorrido. Es la consecuencia operativa del
+aviso de arriba.
+
+🏆 **Y para repartir entre los dos caminos NO se restan deltas de Lab**: daba 4,4-16,5 de
+«iluminación» sobre fixtures donde la respuesta era **0**, porque Lab es no lineal. El post es un
+producto por canal y sólo se separa en **espacio lineal** — con suelo de ruido medido (**2,2**) y
+umbral (**2,5**), o el número es un artefacto.
+
 ### 0.6.5 ⚠⚠ EL BLOOM: la prueba que lo descartó no estaba probando el bloom
 
 Valores reales, verificados a los dos lados:

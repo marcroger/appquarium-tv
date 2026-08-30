@@ -32,7 +32,8 @@ El móvil envía el estado del tanque vía Google Cast SDK; este proyecto **rend
 
 | Doc | Cuándo |
 |---|---|
-| [`CAST_NEXT_SESSION_2026-08-29.md`](CAST_NEXT_SESSION_2026-08-29.md) | ⭐⭐ **EMPEZAR AQUÍ** (§0.ter y «⏭ MAÑANA SE EMPIEZA AQUÍ»). ⚠⚠ El ajuste visual de la mañana **reventó el suelo** (53,68 % clavado al blanco): se aprobó mirando el agua. Arreglado y desplegado la misma noche (`bloom 0.30 + tonemapping`, sello `rcv 2026-08-28 tmA`). Falta el **casteo con la app real**; producción **parada**. Cierre del 28-ago: Cierre del 28-ago, **el día que las dos sesiones de Claude se hablaron** (`ListAgents` + `SendMessage` con el repo móvil). El user **aprobó mirando la tele** un ajuste visual que iguala la claridad del teléfono (agua alta 75.9 contra 76.0) — horneado y **pendiente de build**. El **bloom no cuesta fps** (el «7 fps» era el framerate absoluto de junio). La **nitidez estaba del revés**: la tele no es más borrosa, es más dura. Y un **relay de logs que moría en silencio**, con HUD ya desplegado y **una lectura a medias que cuesta una captura** (§1). |
+| [`CAST_NEXT_SESSION_2026-08-31.md`](CAST_NEXT_SESSION_2026-08-31.md) | ⭐⭐ **EMPEZAR AQUÍ** («⏭ MAÑANA SE EMPIEZA AQUÍ»). Cierre del 30-ago: **el día que no se midió nada y aun así salió caro de bueno.** El objetivo eran las **7 luces** y no se midió ninguna: de los tres obstáculos, **dos eran instrumentos nuestros que informaban en la dirección tranquilizadora** (mi guarda daba **VERDE** con la línea de fracaso) y el tercero es un **corte de rutado de Telefónica** contra los prefijos de `workers.dev` **y** del endpoint S3 de R2 — no lo arregla nadie de aquí. Trae: el **procedimiento de medida de las luces** (una luz no se mide como un fondo), el **estimador en lineal** con su suelo de ruido, el **plan del dominio propio** (cambiar de host **no cuesta build**) y **3 decisiones del user pendientes**. |
+| [`CAST_NEXT_SESSION_2026-08-29.md`](CAST_NEXT_SESSION_2026-08-29.md) | Cierre del 28-ago (§0.ter). ⚠⚠ El ajuste visual de la mañana **reventó el suelo** (53,68 % clavado al blanco): se aprobó mirando el agua. Arreglado y desplegado la misma noche (`bloom 0.30 + tonemapping`, sello `rcv 2026-08-28 tmA`). Falta el **casteo con la app real**; producción **parada**. Cierre del 28-ago: Cierre del 28-ago, **el día que las dos sesiones de Claude se hablaron** (`ListAgents` + `SendMessage` con el repo móvil). El user **aprobó mirando la tele** un ajuste visual que iguala la claridad del teléfono (agua alta 75.9 contra 76.0) — horneado y **pendiente de build**. El **bloom no cuesta fps** (el «7 fps» era el framerate absoluto de junio). La **nitidez estaba del revés**: la tele no es más borrosa, es más dura. Y un **relay de logs que moría en silencio**, con HUD ya desplegado y **una lectura a medias que cuesta una captura** (§1). |
 | [`CAST_NEXT_SESSION_2026-08-28.md`](CAST_NEXT_SESSION_2026-08-28.md) | Cierre del 27-ago (segundo día sin tele): `remove_fish` **por uid**, un chequeo de compilación **sin Unity y sin build**, y la **paridad visual medida** — no era el grado: copiar el del móvil *perdería* un 35 % de croma, la TV **no apaga el color**, y el «fondo en B/N» es el arte (7 de 11 fondos por debajo de croma 12 en el fichero). Mañana: **dos tandas** y comparar con **el mismo preset** en las dos pantallas. |
 | [`CAST_NEXT_SESSION_2026-08-27.md`](CAST_NEXT_SESSION_2026-08-27.md) | Cierre del 26-ago (día sin tele): tres handlers que **confirmaban lo que no había pasado**, seis ids de preset fantasma, y el **rig local roto** desde el último build. Player nuevo `rcv 2026-08-26 ids` construido y verificado en local (9/9), **pendiente de una tanda** que valide también el `renderScale 0,75` de ayer. |
 | [`CAST_NEXT_SESSION_2026-08-26.md`](CAST_NEXT_SESSION_2026-08-26.md) | Cierre del 25-ago: la escena deja de verse como assets separados (niebla de agua, tono de peces, `renderScale` 1:1). Todo desplegado y validado **menos `renderScale 0,75`**, que se quedó sin tanda. Trae las 3 trampas del día y 2 afirmaciones mías que resultaron falsas. |
@@ -768,7 +769,7 @@ print('OK index.html')
 | `Assets/Scripts/Stubs/` | TvStubs (stubs para clases mobile-only referenciadas indirectamente) |
 | `Assets/Settings/` | **TvRenderPipeline.asset** ⭐ + **TvUniversalRenderer.asset** — el render pipeline que faltaba (2026-08-21). Sin esto no hay post-proceso |
 | `Assets/Editor/` | **TvUrpSetup** ⭐ (crea/enciende/apaga el pipeline y verifica `postProcessData`), **TvRenderProbe** (sonda: ¿se está renderizando, y con qué?), **TvGradeSweep** (barrido de grado en el Editor — ⚠ NO fiable para elegir valores, ver `CAST_PARIDAD_VISUAL.md` §0.1), TvAddressablesSetup, TvBuildTools, SyncFromMobileMenu, **TvBuildPostprocess** (parchea settings.json tras cada build), **TvProdBuild** ⭐ (build de producción en batchmode + preflight de audio), **TvWasmOptimize** ⭐ (fuerza `DiskSizeLTO` en cualquier build), TvEmptyTestBuild, **TvAuthPreflight** ⭐ (aborta el build si falta el token de los bundles), TvShadowDiag, **TvDecoOptimize** ⭐ (pasa una deco a texturas DXT1 sueltas: −49,8 % de peso medido) |
-| `Tools/` | ~30 ficheros. Los que importan: **grade-tune.js** ⭐ (afina el grado sobre el player REAL en Chrome, mandando mensajes `GRADE`), **grade_contact_sheet.py** (hoja de contactos + luminancia/saturación por bandas, con guarda de «esto no mide nada»), **r2-auth-worker/** ⭐ (el Worker portero de los bundles + sus dos baterías de pruebas), **SyncFromMobile.ps1**, **check_preset_ids.js** ⭐ (guarda: ningún id de preset fantasma, sin Unity ni tele), **compile-check.sh** ⭐ (¿compila el C#? en ~15 s, sin Unity y sin build), **static-server.js** (rig local en :3001 — sirve el catálogo **desde R2**, no del disco), **test-updates.js** (los tests de los handlers UPDATE — **16** desde el 27-ago), **test-frases.js** ⭐ (las frases de la pantalla de carga: reparto por tipo, sin repeticiones, idioma y caída a castellano — 29 comprobaciones, sin device ni navegador), **cast-headless.js** (sender sin navegador), **cast-run.sh** (ciclo de medición completo), **restore-production-receiver.sh**, **extract_glb_textures.py** (saca las texturas embebidas de un GLB + `mapeo.txt`, paso previo a `TvDecoOptimize`), **r2_huerfanos.py** (lista/borra bundles huérfanos de R2), y los `rcv-*.html` (receivers de diagnóstico). ⚠ Varios escriben en R2 de producción. |
+| `Tools/` | ~30 ficheros. Los que importan: **grade-tune.js** ⭐ (afina el grado sobre el player REAL en Chrome, mandando mensajes `GRADE`), **grade_contact_sheet.py** (hoja de contactos + luminancia/saturación por bandas, con guarda de «esto no mide nada»), **r2-auth-worker/** ⭐ (el Worker portero de los bundles + sus dos baterías de pruebas), **SyncFromMobile.ps1**, **check_preset_ids.js** ⭐ (guarda: ningún id de preset fantasma, sin Unity ni tele), **barre-luces.sh** ⭐ + **mide_luces.py** ⭐ (las 7 luces: barrido en el device con preflight de ruta y guarda de fotograma congelado, y analizador que **se niega a producir tabla** si el acta no acredita las capturas por sha256), **compile-check.sh** ⭐ (¿compila el C#? en ~15 s, sin Unity y sin build), **static-server.js** (rig local en :3001 — sirve el catálogo **desde R2**, no del disco), **test-updates.js** (los tests de los handlers UPDATE — **16** desde el 27-ago), **test-frases.js** ⭐ (las frases de la pantalla de carga: reparto por tipo, sin repeticiones, idioma y caída a castellano — 29 comprobaciones, sin device ni navegador), **cast-headless.js** (sender sin navegador), **cast-run.sh** (ciclo de medición completo), **restore-production-receiver.sh**, **extract_glb_textures.py** (saca las texturas embebidas de un GLB + `mapeo.txt`, paso previo a `TvDecoOptimize`), **r2_huerfanos.py** (lista/borra bundles huérfanos de R2), y los `rcv-*.html` (receivers de diagnóstico). ⚠ Varios escriben en R2 de producción. |
 
 ---
 
@@ -1104,11 +1105,131 @@ deseando que LA veas»*. **7 de 26** plantillas estaban marcadas; ya son neutras
 ⚠ **No se puede deducir:** `pairs` trae `maleUid`/`femaleUid`, pero sólo cubre peces **emparejados**
 y llega **después del INIT**, o sea cuando la splash ya lleva rato rotando frases.
 
-Campo `sex` **pedido al móvil**, documentado en `CAST_CONTRACT_TV.md`. Valores exactos:
-`"Male"` · `"Female"` · `"Unknown"` · `""` (mayúscula inicial, `.ToString()` de un enum de C#).
-⚠⚠ **El save del móvil tiene `"Male"` por defecto**, así que `"Male"` **no significa «es macho»**:
-significa «nadie ha dicho lo contrario». El emisor debe mandar `""` cuando no esté seguro.
+Campo `sex` ✅ **lo manda el móvil desde la 1.2.6 / code 41** (30-ago), documentado en
+`CAST_CONTRACT_TV.md`. Valores exactos: `"Male"` · `"Female"` · `"Unknown"` · `""` (mayúscula
+inicial, `.ToString()` de un enum de C#). Cualquier otra cosa → tratar como desconocido, **sin
+normalizar a ciegas**.
 
+⚠⚠ **CORREGIDO EL 30-ago — ESTE DOC PEDÍA LO CONTRARIO.** Decía: *«El save del móvil tiene `"Male"`
+por defecto, así que `"Male"` no significa «es macho»: el emisor debe mandar `""` cuando no esté
+seguro»*. **La conclusión se da la vuelta**, y lo persiguió la sesión del repo móvil: `sex` sólo se
+escribe con un valor **deliberado** (`SaveSystem.AddFish:383`; `MigrateSave` no lo toca), así que ese
+`"Male"` residual sale **sólo en peces anteriores a la v1.2** — y para ésos **la propia app YA los
+trata como machos** (`FishInspectorUI:340` les pinta ♂, `FishStatusOverlay:34` color de macho,
+`BreedingManager:236` los empareja como machos). Mandar `""` haría que **la tele dijera una cosa y el
+móvil otra con las dos pantallas delante del usuario**. ⇒ **manda el valor guardado tal cual**; `""`
+sólo lo mandan clientes que no traen el campo.
+
+🧭 **La regla «manda `""` si no estás seguro» era buena en abstracto y mala aquí: NO EXISTE el estado
+“no seguro”. La TV está exactamente igual de segura que la pantalla del móvil, y con las dos delante
+la COHERENCIA ENTRE PANTALLAS gana a la corrección abstracta.**
+
+⏳ **El consumidor de la TV aún no existe** (`CastDataTypes` no declara el campo y el `index.html` no
+lo lee) ⇒ que llegue no cambia nada en pantalla todavía. ⭐ **Consumirlo NO cuesta build de player**:
+las frases viven en el `index.html` y leen `payload.activeFish` en JS (`index.html:389`). Deploy de
+minutos. ⚠ `Tools/cast-headless.js` **no manda `sex` ni `lang`** — hay que añadirlos para probarlo.
+
+🔴 **Bug abierto del MÓVIL, salido de aquí:** los peces pre-v1.2 son **todos `"Male"`** y nadie les
+asigna sexo nunca ⇒ quien venga de v1.0/v1.1 **no puede emparejar sus peces viejos entre sí**. Es
+**contenido de pago (cría) que un usuario antiguo no puede usar**, y no da ningún error.
+
+
+### 💡 Las 7 luces: cómo se miden (2026-08-30) — tercera pata del criterio del user
+
+Fondos y sustratos ya medidos (arriba); las **7 luces** no, y **5 de ellas son de pago**.
+`Tools/barre-luces.sh` barre en el device y `Tools/mide_luces.py` analiza.
+
+⚠⚠ **Una luz NO se mide como un fondo.** Actúa por **dos caminos** y hay que separarlos:
+**(1) iluminación real** —3 spots, `dirDimFactor`, `ambientBlend`— que sólo alcanza a lo que se
+ilumina; **(2) post** —`colorFilter` + `postExposure` del `ColorAdjustments` a priority 11— que
+alcanza al frame entero, **incluidos los shaders unlit** que la iluminación no toca.
+
+El telón es **unlit** ⇒ **la banda de agua ve casi sólo el post y el suelo ve los dos sumados. La
+diferencia entre esas dos bandas ES la descomposición.**
+
+| banda | filas | qué ve |
+|---|---|---|
+| agua alta | 0.12–0.50 | post casi puro |
+| agua honda | 0.50–0.75 | post + niebla |
+| suelo cercano | **0.90–1.00** | iluminación + post |
+
+⚠ El suelo va con el **último 10 %**, no con el `0.80-0.93` de los sustratos: la banda ancha promedia
+el suelo lejano niebleado y **mide la niebla** (§0.6.2 de `CAST_PARIDAD_VISUAL.md`).
+
+🧭 **`light_white` no es la referencia que parece:** es neutro **sólo en post** (filtro `(1,1,1)`,
+exposure `0.00`); su spot es `(1.00,0.97,0.93)` y su `spotIntensity` **1.0** contra **2.5–3.5** de los
+otros seis ⇒ **en el suelo el post negativo pelea contra ×3 de luz: esa banda no aísla para nadie.**
+
+⚠⚠ **`light_cycle` va aparte, AL FINAL y como RANGO:** reescribe spots y `colorFilter` **cada frame**
+a 0.07 Hz (periodo **14,3 s**). 9 capturas cubriendo un periodo, fuera de la tabla de ΔE. Si fuera en
+medio, la transición de 0,7 s del preset siguiente correría contra su `Update()`.
+
+⚠ **Confound que no estaba en ninguna lista: el ciclo día/noche.** `AmbientModeController` toca la
+direccional y el ambiente —que caen en las mismas bandas— y **manda el reloj local** mientras no
+llegue un UPDATE ⇒ un barrido que cruce la hora **cambia de fase a mitad**. Se fija con `ambient=day`.
+
+**🏆 Restar deltas de Lab NO separa un producto.** `ILUM = Δ(suelo) − Δ(agua)` daba **4,4-16,5** sobre
+fixtures donde la respuesta correcta era **0**: Lab es no lineal y esa curvatura se colaba entera
+etiquetada como «iluminación». El post es un **producto por canal**, y un producto sólo es separable
+en un espacio **LINEAL**:
+
+```
+ganancia = lin_k(agua) / lin_white(agua)      <- el post, MEDIDO
+previsto = lin_white(suelo) * ganancia        <- el suelo si SOLO cambiara el post
+ILUM     = medido(suelo) - previsto           <- los spots
+```
+Calibrado en los **dos** sentidos: sin diferencia de iluminación baja a **0,2-2,2**; con iluminación
+inyectada sube a **36,1** con las otras cuatro quietas ⇒ **suelo de ruido 2,2, umbral 2,5**, impreso
+**en la fila** de la tabla. 💰 `ILUM` ≈ 0 significa que ese preset es **sólo un filtro de color
+encima**: al user le llega un tinte, no una luz.
+
+### ⚠⚠ Un patrón que casa con el ÉXITO Y con su FRACASO no es una guarda (2026-08-30)
+
+`barre-luces.sh` esperaba `AQUARIUM READY`. Cuando los bundles no llegan, la splash emite su red de
+seguridad a los 90 s: **`⚠ splash: AQUARIUM READY no llegó en 90s — se descubre la escena igual`**,
+que **contiene la cadena**. El `grep` daba **VERDE** con la línea que dice lo contrario y el barrido
+siguió **4 minutos** fotografiando una pantalla negra. La buena es `AQUARIUM READY: <n> fish active`
+⇒ **exigir los dos puntos**.
+
+⚠ Es peor que un instrumento que se queda mudo: **el mudo es sospechoso, el verde es tranquilizador.**
+
+Del mismo día: se le atribuyó al móvil un `SIN REMAPEO: el sender no mando tankHalfWidth` que salía de
+**`Tools/cast-headless.js`, que manda `tankHalfWidth: 0.0` a propósito**. 🧭 **Medir con un emisor que
+no es el de producción y tratar el resultado como si lo fuera.**
+
+### 🔴 Si `workers.dev` se queda sin ruta: el host de los bundles NO está en el player (2026-08-30)
+
+El 30-ago la tele se quedó en **`BDL 1/7`** con **cero errores** y pantalla negra. No era el token, ni
+el anti-bot, ni el Worker: **Telefónica sin ruta a `188.114.96.0/24`** (y **tampoco al endpoint S3 de
+R2**, `172.64.66.1`/`.190.1`), llegando bien al resto de Cloudflare. Medido por **dos** caminos
+independientes y por **dos** líneas (fija y móvil). ⚠ El hotspot **no sirve**: falla igual.
+
+⭐ **La salida, y es barata:** poner el Worker en un **dominio propio** lo saca del prefijo roto.
+- **La URL NO está en el player**: `webgl-output.data` tiene **0** apariciones del host. Vive en el
+  **catálogo** ⇒ **redesplegar catálogo, NO rebuild de player.**
+- **El hook `TvBundleAuth` casa por RUTA (`/bundle/`), no por host** — decisión de agosto que paga aquí.
+- ⚠⚠ **El nombre es ARITMÉTICA**: el catálogo guarda el host **una vez**, con **prefijo de longitud**
+  (`47` = 40 de host + 7 de `/bundle`). Sólo un host de **exactamente 40 bytes** permite el parche
+  **en sitio**; con otro haría falta un New Build de Addressables y entran los 80 hashes.
+- ⚠⚠ **Nada de `npx wrangler deploy`**: sube **código** además de rutas, y sería el despliegue a
+  ciegas que prohíbe la nota del 28-ago. El Custom Domain se pone **por panel**; el código no se toca.
+- 🧭 **La prueba: `401` sin token y `200` con token.** El **401 es lo que discrimina** — un 200 lo da
+  cualquier servidor; **sólo nuestro Worker rechaza**.
+- ✔ `catalog.hash` **no se toca** (`m_DisableCatalogUpdateOnStart: True`), y los tres ficheros del
+  catálogo van con `max-age=60` ⇒ **la vuelta atrás surte efecto en ~1 minuto**.
+- ⚠ **El R2 público NO sirve los bundles** (`/bundles/` → 404) y ponerlos ahí sería deshacer el cierre
+  del 20-ago: **el argumento decisivo es legal** — Pack 24 y Sketchfab no-CC0 **prohíben redistribuir
+  los assets crudos**, y un bucket público **es** redistribución.
+- ⚠ Mientras dure el corte, el `aws s3`/boto3 de este doc **no funciona**: subir **por el panel de R2**.
+
+### ✅ `RP: … sombras=OFF` NO es una regresión (2026-08-30)
+
+El asset lleva `m_MainLightShadowsSupported: 0` y la línea lo reporta con fidelidad, pero **las
+sombras de este proyecto no son las de URP**: las pintan `Appquarium/PlanarShadow` y
+`Appquarium/FishShadow` (`TvFishShadows.cs:94`, `DecorationPlacer`) por proyección plana contra el
+suelo, que no dependen de esa opción.
+⚠ **La etiqueta engaña y volverá a costar una investigación**: dirá `OFF` para siempre estando todo
+bien. Renombrarla a `urpShadows=` cuesta un build ⇒ **aprovechar el próximo**, no hacerlo solo.
 
 ## ⚠ index.html — template vs procesado
 

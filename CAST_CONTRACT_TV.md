@@ -57,7 +57,7 @@ ningún error, sólo un comportamiento distinto según la ruta. **Ahora hay un s
 | `activeFish[].speciesId` | clave Addressable | Si su bundle no carga: `ERR fish load FAILED …` y **ese** pez no aparece; los demás sí |
 | `activeFish[].nickname` | `FishAgent.SetNickname` (`:75`) | **No se pinta en ningún sitio** — ver §4.2 |
 | `activeFish[].ageScale` | `TvStubs.GetAgeGroup` (`:55`) → `FishAgent.cs:185` | `<= 0` (o campo ausente) → **Adulto**. Umbrales: `<0,525` cría · `<0,825` juvenil · `<1,09` adulto · resto senior |
-| `activeFish[].sex` | **PEDIDO, NO IMPLEMENTADO** (28-ago) | El móvil **no lo manda hoy**. Lo usarían las frases de la splash para el género. Valores acordados: **`"Male"` · `"Female"` · `"Unknown"`** (enum de C# con `.ToString()`, **mayúscula inicial**) y **`""`** de un save antiguo. Cualquier otra cosa → tratar como desconocido, **sin normalizar a ciegas**. ⚠⚠ El save del móvil tiene **`"Male"` por defecto**, así que `"Male"` NO significa «es macho», significa «nadie ha dicho lo contrario»: el emisor debe mandar `""` cuando no esté seguro. Mientras no llegue, **las 26 frases personalizadas son neutras** en los dos idiomas (guarda en `Tools/test-frases.js`) |
+| `activeFish[].sex` | ⏳ **lo manda el móvil desde la 1.2.6 / code 41** (30-ago); el consumidor de la TV **aún no está** (`CastDataTypes` no lo declara y el `index.html` no lo lee) ⇒ mandarlo hoy no cambia nada en pantalla, es aditivo | Lo usarán las frases de la splash. Valores: **`"Male"` · `"Female"` · `"Unknown"`** (enum de C# con `.ToString()`, **mayúscula inicial**) y **`""`** de un cliente que no mande el campo. Cualquier otra cosa → tratar como desconocido, **sin normalizar a ciegas**. ⚠⚠ **CORREGIDO EL 30-ago — este contrato pedía lo contrario.** Decía que el emisor mandara `""` cuando no estuviera seguro, porque el save del móvil tiene `"Male"` por defecto. La sesión del móvil lo persiguió hasta el fondo y **la conclusión se da la vuelta**: `sex` sólo se escribe con un valor deliberado (`SaveSystem.AddFish:383`), así que ese `"Male"` por defecto sólo sale en peces **anteriores a la v1.2** — y para esos **la propia app YA los trata como machos** (`FishInspectorUI:340` les pinta ♂, `FishStatusOverlay:34` les da color de macho, `BreedingManager:236` los empareja como machos). Mandar `""` haría que **la tele dijera una cosa y el móvil otra con las dos pantallas delante del usuario**, que es peor que el dato imperfecto. ⇒ **manda el valor guardado, tal cual.** 🧭 La regla «manda `""` si no estás seguro» era buena en abstracto, pero **aquí no existe el estado “no seguro”: la TV está exactamente igual de segura que la pantalla del móvil** |
 | `decoJson` | `AquariumManager.cs:121` | `""` o `"{}"` → sin decos. ✅ **Comprobación de forma antes de parsear** (26-ago): si no parece un objeto JSON → `ERR INIT decoJson: …` y se ignoran las decos, en vez de tumbar el INIT |
 | `bgId` | `SanearEstado` → `SaveData.selectedBgId` | ✅ **Validado (26-ago)**: desconocido → `ERR INIT bgId: id desconocido 'x' — válidos: … — se usa 'bg_classic'`. **Vacío no es error**: es «no me lo mandó» y se calla |
 | `subId` | `SanearEstado` → `SaveData.selectedSubId` | ✅ igual que `bgId`; por defecto `sub_sand` |
@@ -215,10 +215,12 @@ Verificado desde este lado, contra el código de los dos repos.
 3. 🟡 **«un id nuevo llega y la TV lo rechaza»** (§5 del móvil) es cierto **sólo por la ruta
    UPDATE**. En INIT no. Ver §4.3.
 
-### 5.3 `uid` — adoptado ✅, y `remove_fish` ya lo acepta ✅ (falta el móvil)
+### 5.3 `uid` — adoptado ✅, `remove_fish` lo acepta ✅, y el móvil YA lo manda ✅
 
-El uid del móvil **ya se adopta** (§4.4) y desde el **27-ago** `remove_fish` **ya sabe usarlo**.
-Lo que falta es de vuestro lado: **mandarlo**.
+El uid del móvil **ya se adopta** (§4.4), desde el **27-ago** `remove_fish` **sabe usarlo**, y el
+**30-ago se verificó que el móvil YA lo manda** — `AquariumManager.cs:786` serializa
+`TvRemoveFishPayload { uid, speciesId }` y sólo cae a la cadena de especie si el uid viene vacío.
+Está en producción desde la 1.2.5 / code 40. **El caso de los 3 Banggai está cerrado por los dos lados.**
 
 **Antes:** llegaba sólo un `speciesId` y `DespawnOneBySpecies` quitaba **la primera** instancia de
 esa especie. Con 3 Banggai en el tanque, quitabas uno concreto y desaparecía otro — sin ningún
