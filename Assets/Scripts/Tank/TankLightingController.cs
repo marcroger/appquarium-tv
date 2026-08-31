@@ -41,6 +41,27 @@ public class TankLightingController : MonoBehaviour
         public int    displayOrder;
     }
 
+    // ⚠⚠ `spotIntensity` NO ES COMPARABLE ENTRE PRESETS (medido 2026-08-31 en el device).
+    //    La luz que un spot ENTREGA es `luminancia(color) x spotIntensity`, y la luminancia de
+    //    estos colores va de 0.15 a 0.82 — un factor 5,4. Consecuencia: el numero de esta tabla
+    //    ORDENA AL REVES que la luz real.
+    //
+    //      preset          spotIntensity   lum(color)   LUZ ENTREGADA   ILUM medido en la tele
+    //      light_warm           3.2          0.819          2.622             39.0
+    //      light_sunset         3.2          0.572          1.830             19.2
+    //      light_blue           3.5          0.411          1.438              5.4
+    //      light_purple         3.5          0.290          1.014              3.0
+    //      light_deep           2.5          0.150          0.376              8.7
+    //
+    //    `light_purple` lleva el 3.5 mas alto de la tabla y entrega 2,6 VECES MENOS luz que
+    //    `light_warm`, que pone 3.2. Quien afine esto leyendo los numeros se equivocara de
+    //    signo. La columna «luz entregada» si predice el ILUM medido (warm > sunset > blue >
+    //    purple es el mismo orden en las dos).
+    //
+    // 🧭 NO se han tocado los valores: cambiarlos altera el aspecto de contenido DE PAGO, y eso
+    //    lo aprueba el user mirando la tele, no una tabla. Para igualar la luz entregada a la de
+    //    `light_warm` haria falta: blue 3.5→6.4 · purple 3.5→9.0 · sunset 3.2→4.6 · deep 2.5→17.4.
+    //    Metodo y tablas completas: CAST_PARIDAD_VISUAL.md §0.7.
     public static readonly LightPreset[] Presets =
     {
         new LightPreset

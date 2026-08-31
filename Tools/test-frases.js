@@ -157,12 +157,16 @@ ok('las de cuenta llevan {c}', api.PLANT.en.cuenta.every(t => t.indexOf('{c}') >
 api.leer(JSON.stringify({ type: 'INIT', payload: JSON.stringify(estado) }));
 
 // ── 6bis) GENERO ─────────────────────────────────────────────────────────────
-// AVISO: el sexo del pez NO viaja por el canal Cast. `TvFishEntry` trae speciesId,
-// nickname, uid y ageScale, y nada mas. El movil lo tiene en su save (OwnedFishSave.sex)
-// pero no lo manda, y `pairs` (maleUid/femaleUid) solo cubre peces EMPAREJADOS y ademas
-// llega DESPUES del INIT, o sea cuando la splash ya lleva rato rotando frases.
-// => Mientras no llegue el campo, NINGUNA plantilla personalizada puede marcar genero, o
-//    un pez macho sale como "Nemo esta deseando que LA veas".
+// 2026-08-31: EL SEXO YA VIAJA (movil 1.2.6 / build 41, campo `activeFish[].sex`).
+// El aviso que habia aqui decia lo contrario y se ha quedado obsoleto; lo que NO cambia es
+// que el banco NEUTRO (`unPez`) tiene que seguir siendo neutro, porque es el que se usa
+// cuando el sexo no llega (`""`, cliente viejo), cuando el emisor dice que no lo sabe
+// (`"Unknown"`) y cuando llega basura.
+//
+// Valores en el cable (confirmados por la sesion del repo movil con las lineas delante):
+//   "Male" / "Female" / "Unknown"   <- lo unico que manda la build 41
+//   ""                              <- cliente ANTERIOR a la 41, que no manda el campo
+// Cualquier otra cosa -> desconocido, sin normalizar a ciegas.
 const MARCAS = {
   es: /(que la veas|que lo veas|favorecid[oa]|junt[oa]s\b|guap[oa]\b|solit[oa]\b)/i,
   en: /\b(her|hers|she|his|him|he)\b/i,
@@ -171,9 +175,105 @@ for (const idioma of ['es', 'en']) {
   const P = api.PLANT[idioma];
   const todasP = P.unPez.concat(P.dosPeces, P.cuenta);
   const malas = todasP.filter(t => MARCAS[idioma].test(t));
-  ok('plantillas ' + idioma + ' sin marca de genero'
+  ok('banco NEUTRO ' + idioma + ' sin marca de genero'
      + (malas.length ? ' -> ' + JSON.stringify(malas) : ''), malas.length === 0);
 }
+
+// Y al reves: los bancos con genero tienen que estar REALMENTE marcados. Sin esto, alguien
+// puede editar una frase y dejarla neutra, y el banco seguiria existiendo sin hacer nada
+// -- que es el fallo silencioso de siempre: la infraestructura esta, el efecto no.
+const MARCA_M = {
+  es: /(que lo veas|guapo|orgulloso|emocionado|hambriento|listo|tímido|dormilón)/i,
+  en: /\b(he|him|his)\b/i,
+};
+const MARCA_F = {
+  es: /(que la veas|guapa|orgullosa|emocionada|hambrienta|lista|tímida|dormilona)/i,
+  en: /\b(she|her|hers|herself)\b/i,
+};
+for (const idioma of ['es', 'en']) {
+  const P = api.PLANT[idioma];
+  ok('hay bancos con genero en ' + idioma, Array.isArray(P.unPezM) && Array.isArray(P.unPezF));
+  // Misma longitud que el neutro: si no, la variedad de frases dependeria del sexo del pez.
+  ok('unPezM/unPezF/' + 'unPez con el mismo nº en ' + idioma,
+     P.unPezM.length === P.unPez.length && P.unPezF.length === P.unPez.length,
+     P.unPez.length + ' / ' + P.unPezM.length + ' / ' + P.unPezF.length);
+  // Cada frase con genero lleva su marca...
+  const sinM = P.unPezM.filter(t => !MARCA_M[idioma].test(t));
+  ok('todas las de macho en ' + idioma + ' llevan marca masculina'
+     + (sinM.length ? ' -> ' + JSON.stringify(sinM) : ''), sinM.length === 0);
+  const sinF = P.unPezF.filter(t => !MARCA_F[idioma].test(t));
+  ok('todas las de hembra en ' + idioma + ' llevan marca femenina'
+     + (sinF.length ? ' -> ' + JSON.stringify(sinF) : ''), sinF.length === 0);
+  // ...y NO la del otro. Esto es lo que caza el copiar-pegar a medias.
+  const cruceM = P.unPezM.filter(t => MARCA_F[idioma].test(t));
+  ok('ninguna de macho en ' + idioma + ' lleva marca femenina'
+     + (cruceM.length ? ' -> ' + JSON.stringify(cruceM) : ''), cruceM.length === 0);
+  const cruceF = P.unPezF.filter(t => MARCA_M[idioma].test(t));
+  ok('ninguna de hembra en ' + idioma + ' lleva marca masculina'
+     + (cruceF.length ? ' -> ' + JSON.stringify(cruceF) : ''), cruceF.length === 0);
+  // Y los dos bancos tienen que ser distintos frase a frase: un banco duplicado pasaria
+  // todas las de arriba en ingles (donde la marca la pone un pronombre) sin cambiar nada.
+  const iguales = P.unPezM.filter((t, i) => t === P.unPezF[i]);
+  ok('los dos bancos de ' + idioma + ' difieren frase a frase', iguales.length === 0,
+     iguales.length + ' identicas');
+}
+
+// ── 6ter) EL SEXO, DE PUNTA A PUNTA ─────────────────────────────────────────
+// ⚠⚠ Esto prueba que el index.html PARSEA el campo, NO que el movil lo mande. El fixture lo
+//    escribo yo. La paridad de verdad solo la cierra un volcado de la APK real -- aviso de la
+//    sesion del repo movil, y es el mismo verde fabricado a mano que ya costo una tanda.
+// Los CUATRO caminos, no solo el que espero: Male, Female, Unknown y campo ausente.
+const conSexo = {
+  activeFish: [
+    { speciesId: 'fish_a', nickname: 'Macho',  sex: 'Male'    },
+    { speciesId: 'fish_b', nickname: 'Hembra', sex: 'Female'  },
+    { speciesId: 'fish_c', nickname: 'Nosabe', sex: 'Unknown' },
+    { speciesId: 'fish_d', nickname: 'Viejo'                  }
+  ]
+};
+logs.length = 0;
+api.leer(JSON.stringify({ type: 'INIT', payload: JSON.stringify(conSexo) }));
+ok('el log separa Unknown de ausente', /sexo M1\/F1\/Unknown1\/ausente1/.test(logs.join('|')),
+   logs.join(' | '));
+
+// El banco de un pez concreto: se mira SU nombre dentro de las frases producidas.
+// (`_personalizadas` corta a 3 peces barajados, asi que se repite hasta ver a los cuatro.)
+// ⚠ Se SALTAN las frases con dos nombres: las de pareja (`dosPeces`) son neutras a
+//   proposito, asi que contarlas hundiria la comprobacion de abajo con un fallo que no lo es.
+//   (Lo cazo el propio test en su primera ejecucion: decia FALLA enseñando una frase correcta.)
+const NOMBRES = ['Macho', 'Hembra', 'Nosabe', 'Viejo'];
+const vistas = {};
+for (let i = 0; i < 60; i++) for (const f of api.personales()) {
+  const dentro = NOMBRES.filter(n => f.indexOf(n) >= 0);
+  if (dentro.length !== 1) continue;
+  (vistas[dentro[0]] = vistas[dentro[0]] || []).push(f);
+}
+const soloDe = (n, re) => (vistas[n] || []).length > 0 && (vistas[n] || []).every(f => re.test(f));
+const neutro = n => (vistas[n] || []).length > 0 &&
+  (vistas[n] || []).every(f => !MARCA_M.es.test(f) && !MARCA_F.es.test(f));
+ok('el macho usa el banco masculino', soloDe('Macho', MARCA_M.es),
+   ((vistas.Macho || [])[0] || 'NINGUNA'));
+ok('la hembra usa el banco femenino', soloDe('Hembra', MARCA_F.es),
+   ((vistas.Hembra || [])[0] || 'NINGUNA'));
+// ⚠ Los dos casos de abajo son los que HOY salen en produccion: mientras el 99 % de los
+//   usuarios no actualice, el camino neutro es EL camino. Si se rompe, no se nota.
+ok('"Unknown" cae al banco NEUTRO', neutro('Nosabe'),
+   ((vistas.Nosabe || [])[0] || 'NINGUNA'));
+ok('el campo AUSENTE (cliente viejo) cae al banco NEUTRO', neutro('Viejo'),
+   ((vistas.Viejo || [])[0] || 'NINGUNA'));
+
+// Basura en el campo: ni peta ni se normaliza a ciegas -> neutro.
+logs.length = 0;
+api.leer(JSON.stringify({ type: 'INIT', payload: JSON.stringify({
+  activeFish: [{ speciesId: 'fish_x', nickname: 'Raro', sex: 'MALE' },
+               { speciesId: 'fish_y', nickname: 'Raro2', sex: 42 }] }) }));
+ok('un valor no reconocido se cuenta como RARO', /RAROS2/.test(logs.join('|')), logs.join(' | '));
+const rarasP = api.personales().filter(f => f.indexOf('Raro') >= 0);
+ok('un valor no reconocido cae al banco NEUTRO',
+   rarasP.length > 0 && rarasP.every(f => !MARCA_M.es.test(f) && !MARCA_F.es.test(f)));
+
+// Volver al estado de 7 peces sin sexo para lo que venga detras.
+api.leer(JSON.stringify({ type: 'INIT', payload: JSON.stringify(estado) }));
 
 // ── 6) Contenido ─────────────────────────────────────────────────────────────
 const todas = api.FRASES.es.ambiente.concat(api.FRASES.es.info, api.FRASES.es.espera);

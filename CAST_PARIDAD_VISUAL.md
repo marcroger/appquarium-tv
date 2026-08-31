@@ -320,7 +320,20 @@ que se creía y ahora compite con un refactor de carga asíncrona.
 
 ---
 
-## 0.6 ✅✅✅ MEDIDO EN LAS DOS PANTALLAS A LA VEZ (2026-08-28) — y sale al revés del §2.2
+## 0.6 ⚠ MEDIDO EN LAS DOS PANTALLAS A LA VEZ (2026-08-28) — PARCIALMENTE CADUCADO, ver §0.7
+
+> ⚠⚠ **Leer §0.7 antes de usar esta sección.** Se midió con la tele en OTRO estado de tonemapping
+> (por la mañana del 28-ago, antes del arreglo del suelo de esa noche) y con **zonas emparejadas**,
+> no con bandas por fracción de filas.
+> - ✅ **Lo del SUELO sigue vigente**: remedido el 31-ago da **2° de tono y 4,9 L\*** contra los
+>   **0° y 7,4 L\*** de aquí. Misma conclusión.
+> - ❌ **Lo del AGUA ya no describe la tele de hoy.** El §0.7 mide **25° de tono** en el agua, no 0°.
+>   La causa es la **niebla de agua**, que esta sección sólo vio a medias («pierde la mitad del
+>   croma») sin darse cuenta de que **también mueve el TONO**.
+>
+> 🧭 Es el modo de fallo por defecto de la documentación: **la nota sobrevive al estado que
+> describía, y lee igual de convincente.**
+
 
 Primera medición con **capturas simultáneas por `adb` de la tele y del teléfono**, mismo instante,
 mismo estado real (`bg_classic` + `sub_gravel`, casteando desde `com.appquarium.qa`). Y con los
@@ -825,3 +838,54 @@ todas las combinaciones en la tele y capturar cada una. Sin eso, cada variante e
       oscuro** (−4.9 a −8.3 L\*) y que el agua honda pierde **la mitad del croma** (C\* 8.1 contra
       15.3) por la niebla. Su hipótesis —«la capa azul está demasiado fuerte»— **está sin medir**:
       el barrido de niebla del 28-ago se perdió por la colisión de dos senders (§0.6.8).
+
+
+---
+
+## 0.7 ✅ LAS 7 LUCES EN LAS DOS PANTALLAS (2026-08-31) — y la niebla explica el color
+
+Tele `rcv 2026-08-28 tmA` (`HORNEADO: bloom=0.30 thr=0.60 tm=Neutral sat=18 con=10`) contra móvil
+`com.appquarium.qa` **1.2.5 / code 40**. Misma escena, montada en el móvil y **verificada por save**:
+`bg_classic` + `sub_gravel` + `tank_l` + `deco_anchor` en `x=0` + `ambient=day`.
+
+### 0.7.1 La estructura del catálogo se mide IGUAL en las dos
+
+| par | tele (agua alta / honda / suelo) | móvil |
+|---|---|---|
+| `warm` / `sunset` | 8.2 · 5.9 · 9.2 | 7.4 · 6.2 · 8.2 |
+| `deep` / `purple` | 8.8 · 3.5 · **23.5** | 13.5 · 6.6 · **22.1** |
+
+**Los mismos dos pares, en el mismo orden de cercanía**, con dos aparatos, dos pipelines y dos
+analizadores escritos por separado. **Ninguna luz fundida en ninguna de las dos.**
+
+### 0.7.2 🎯 La única diferencia real: la NIEBLA DE AGUA, y es deliberada
+
+`light_white`, regiones normalizadas:
+
+| región | tele | móvil | Δ |
+|---|---|---|---|
+| **suelo** | L\* 66.8 · C\* 15.7 · **h 79** | L\* 71.7 · C\* 12.0 · **h 81** | **4.9 L\*** · **2°** |
+| **agua** | L\* 54.6 · C\* 34.5 · **h 252** | L\* 66.1 · C\* 35.3 · **h 227** | **11.5 L\*** · **25°** |
+
+**El suelo coincide en tono; los 25° viven sólo en el agua** ⇒ la **niebla de agua del 25-ago** (§ de
+`tv_niebla_de_agua`), que es de la TV y sólo de la TV, y tiñe hacia el color del agua.
+
+⚠⚠ **NO reportar «la tele es 12,6 L\* más oscura».** Son **~5 L\* de pantalla MÁS la niebla**: dos
+hechos distintos, y juntarlos inventa un número que no describe ninguno de los dos.
+
+### 0.7.3 ⚠ Cómo se comparan dos pantallas sin engañarse
+
+- **`--aspect-ref 1.7778` en las DOS tandas.** Tele 1.78 · móvil **2.22** ⇒ sin recortar, el móvil
+  integra un **25 % más de mundo** a los lados. Es neutro donde no hace falta.
+- ⚠ El `screencap` de la tele sale **1920x1080** aunque Unity reporte `Screen` 2560x1440.
+- ⚠⚠ **`x = 0` es la única coordenada X que significa lo mismo en dos aspects distintos**: los
+  bounds X son `worldHalfHeight × aspect` (7.47 = 4.20 × 1.778). Vino gratis porque `--decos` con una
+  sola deco la pone en 0 — **con dos decos habríamos medido mal**.
+- ✅ El eje **Y sí coincide**: los dos `tank_l` valen `worldHalfHeight = 4.2` (leído del asset en los
+  **dos** repos), y el borde del suelo cae en **0.7921** contra **0.7792** ⇒ **14 px**.
+- ⚠⚠ **Falsa alarma que costó una investigación:** el primer detector de borde daba **160 px** y era
+  falso — medía el mayor salto de luminancia, que en el móvil ES el borde agua/grava y **en la tele
+  es la banda oscura del fondo**. 🧭 *No es que el instrumento no viera la magnitud: veía OTRA en
+  cada entrada y las reportaba en las mismas unidades*, con dispersión `0.0000` que **reforzaba la
+  confianza en el artefacto**. `mide_luces.py` usa ahora **dos criterios** y **se calla** si
+  discrepan. Detalle en el fichero de memoria `el_instrumento_no_ve_la_magnitud`.

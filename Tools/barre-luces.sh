@@ -45,7 +45,14 @@ for l in "${LUCES[@]}"; do ARGS+=(--update "change_light=$l@$T"); T=$((T+PASO));
 TCYCLE=$T                       # el ciclo, el ultimo
 ARGS+=(--update "change_light=light_cycle@$TCYCLE")
 ARGS+=(--update "dump=@$((TCYCLE+30))")
-DUR=$((TCYCLE+45))
+# ⚠⚠ 2026-08-31: ERA `TCYCLE+45` Y SE QUEDABA CORTO. La rafaga del ciclo tarda ~50 s
+#    (9 capturas x ~5,5 s: `sleep 2` MAS los ~3,5 s que cuesta el propio screencap por red),
+#    y con +45 la sesion moria a mitad => las DOS ultimas capturas no eran el acuario:
+#    `cycle_f8` (692 colores) era la pantalla negra tras morir la app y `cycle_f9` el
+#    lanzador de Android TV. Se colaron en el RANGO de light_cycle y lo inflaron.
+# 🧭 El comentario de abajo decia «9 capturas a ~2 s = ~18 s» y esa cuenta OLVIDABA LO QUE
+#    CUESTA LA PROPIA CAPTURA. Un calculo de tiempos que solo suma los `sleep` miente.
+DUR=$((TCYCLE+90))
 
 # ⚠⚠ PREFLIGHT DE RUTA — antes de gastar 5 minutos. La primera tanda real (2026-08-30) se
 #    perdio entera porque `*.workers.dev` no era alcanzable desde esta red: el acuario se
@@ -161,7 +168,9 @@ done
 
 # ── 2. light_cycle: una SERIE que cubra un periodo entero ────────────────────
 # hue = Repeat(Time.time * 0.07, 1) -> periodo 1/0.07 = 14.3 s.
-# 9 capturas a ~2 s = ~18 s > 14.3 s, asi que el recorrido queda cubierto entero.
+# 9 capturas a ~5,5 s reales (sleep 2 + ~3,5 s de screencap por red) = ~50 s, o sea ~3,5
+# periodos: el recorrido queda cubierto de sobra. ⚠ Lo que hay que vigilar NO es que
+# lleguen a un periodo, es que la SESION dure mas que la rafaga (ver DUR arriba).
 if esperaN "change_light: " $((k+1)) 60; then
   sleep 3
   for i in 1 2 3 4 5 6 7 8 9; do cap "cycle_f$i"; sleep 2; done
@@ -171,6 +180,10 @@ fi
 
 esperaN "luz=" 1 40 && grep -m1 "luz=" "$LOG" | tee -a "$ACTA" || true
 wait $S 2>/dev/null
+# ⚠⚠ El FINAL DE SESION va AL ACTA, no solo al log: sin el, `mide_luces.py` no puede saber
+#    que una captura se tomo con la app ya muerta, y una pantalla negra o el lanzador de
+#    Android TV entran en la tabla como si fueran el acuario. Paso el 31-ago.
+grep -E "DURACION DE SESION|DURACIÓN DE SESIÓN" "$LOG" | tail -1 | tee -a "$ACTA" || true
 echo "== fin ==" | tee -a "$ACTA"
 echo
 echo "ahora:  python Tools/mide_luces.py --dir _luces"

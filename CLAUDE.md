@@ -32,7 +32,8 @@ El móvil envía el estado del tanque vía Google Cast SDK; este proyecto **rend
 
 | Doc | Cuándo |
 |---|---|
-| [`CAST_NEXT_SESSION_2026-08-31.md`](CAST_NEXT_SESSION_2026-08-31.md) | ⭐⭐ **EMPEZAR AQUÍ** («⏭ MAÑANA SE EMPIEZA AQUÍ»). Cierre del 30-ago: **el día que no se midió nada y aun así salió caro de bueno.** El objetivo eran las **7 luces** y no se midió ninguna: de los tres obstáculos, **dos eran instrumentos nuestros que informaban en la dirección tranquilizadora** (mi guarda daba **VERDE** con la línea de fracaso) y el tercero es un **corte de rutado de Telefónica** contra los prefijos de `workers.dev` **y** del endpoint S3 de R2 — no lo arregla nadie de aquí. Trae: el **procedimiento de medida de las luces** (una luz no se mide como un fondo), el **estimador en lineal** con su suelo de ruido, el **plan del dominio propio** (cambiar de host **no cuesta build**) y **3 decisiones del user pendientes**. |
+| [`CAST_NEXT_SESSION_2026-09-01.md`](CAST_NEXT_SESSION_2026-09-01.md) | ⭐⭐ **EMPEZAR AQUÍ**. Cierre del 31-ago: **el día que se cerraron las tres cosas que llevaban semanas abiertas** — la ruta a R2 (volvió sola), el campo **`sex`** (desplegado y validado, **sin build de player**) y **las 7 luces** (medidas, y con **paridad a dos pantallas**: ninguna fundida en ninguna). **Las dos falsas alarmas del día fueron mías**: un acreditador que dio VERDE a capturas tomadas con la sesión ya muerta, y un detector que **inventó 160 px** de desajuste geométrico con dispersión `0.0000`. Trae la columna **`ILUM`** (qué luz de pago es luz y cuál es sólo un tinte), los **4 documentos caducados** del día, y **4 decisiones del user**. |
+| [`CAST_NEXT_SESSION_2026-08-31.md`](CAST_NEXT_SESSION_2026-08-31.md) | Cierre del 30-ago: **el día que no se midió nada y aun así salió caro de bueno.** El objetivo eran las **7 luces** y no se midió ninguna: de los tres obstáculos, **dos eran instrumentos nuestros que informaban en la dirección tranquilizadora** (mi guarda daba **VERDE** con la línea de fracaso) y el tercero fue un **corte de rutado de Telefónica** contra los prefijos de `workers.dev` **y** del endpoint S3 de R2 — **✅ resuelto solo el 31-ago**, no lo arregló nadie de aquí. Trae: el **procedimiento de medida de las luces** (una luz no se mide como un fondo), el **estimador en lineal** con su suelo de ruido, el **plan del dominio propio** (cambiar de host **no cuesta build**) y **3 decisiones del user pendientes**. |
 | [`CAST_NEXT_SESSION_2026-08-29.md`](CAST_NEXT_SESSION_2026-08-29.md) | Cierre del 28-ago (§0.ter). ⚠⚠ El ajuste visual de la mañana **reventó el suelo** (53,68 % clavado al blanco): se aprobó mirando el agua. Arreglado y desplegado la misma noche (`bloom 0.30 + tonemapping`, sello `rcv 2026-08-28 tmA`). Falta el **casteo con la app real**; producción **parada**. Cierre del 28-ago: Cierre del 28-ago, **el día que las dos sesiones de Claude se hablaron** (`ListAgents` + `SendMessage` con el repo móvil). El user **aprobó mirando la tele** un ajuste visual que iguala la claridad del teléfono (agua alta 75.9 contra 76.0) — horneado y **pendiente de build**. El **bloom no cuesta fps** (el «7 fps» era el framerate absoluto de junio). La **nitidez estaba del revés**: la tele no es más borrosa, es más dura. Y un **relay de logs que moría en silencio**, con HUD ya desplegado y **una lectura a medias que cuesta una captura** (§1). |
 | [`CAST_NEXT_SESSION_2026-08-28.md`](CAST_NEXT_SESSION_2026-08-28.md) | Cierre del 27-ago (segundo día sin tele): `remove_fish` **por uid**, un chequeo de compilación **sin Unity y sin build**, y la **paridad visual medida** — no era el grado: copiar el del móvil *perdería* un 35 % de croma, la TV **no apaga el color**, y el «fondo en B/N» es el arte (7 de 11 fondos por debajo de croma 12 en el fichero). Mañana: **dos tandas** y comparar con **el mismo preset** en las dos pantallas. |
 | [`CAST_NEXT_SESSION_2026-08-27.md`](CAST_NEXT_SESSION_2026-08-27.md) | Cierre del 26-ago (día sin tele): tres handlers que **confirmaban lo que no había pasado**, seis ids de preset fantasma, y el **rig local roto** desde el último build. Player nuevo `rcv 2026-08-26 ids` construido y verificado en local (9/9), **pendiente de una tanda** que valide también el `renderScale 0,75` de ayer. |
@@ -1114,7 +1115,7 @@ normalizar a ciegas**.
 por defecto, así que `"Male"` no significa «es macho»: el emisor debe mandar `""` cuando no esté
 seguro»*. **La conclusión se da la vuelta**, y lo persiguió la sesión del repo móvil: `sex` sólo se
 escribe con un valor **deliberado** (`SaveSystem.AddFish:383`; `MigrateSave` no lo toca), así que ese
-`"Male"` residual sale **sólo en peces anteriores a la v1.2** — y para ésos **la propia app YA los
+`"Male"` residual sale **sólo en peces adquiridos antes del 2026-03-09** — y para ésos **la propia app YA los
 trata como machos** (`FishInspectorUI:340` les pinta ♂, `FishStatusOverlay:34` color de macho,
 `BreedingManager:236` los empareja como machos). Mandar `""` haría que **la tele dijera una cosa y el
 móvil otra con las dos pantallas delante del usuario**. ⇒ **manda el valor guardado tal cual**; `""`
@@ -1124,14 +1125,46 @@ sólo lo mandan clientes que no traen el campo.
 “no seguro”. La TV está exactamente igual de segura que la pantalla del móvil, y con las dos delante
 la COHERENCIA ENTRE PANTALLAS gana a la corrección abstracta.**
 
-⏳ **El consumidor de la TV aún no existe** (`CastDataTypes` no declara el campo y el `index.html` no
-lo lee) ⇒ que llegue no cambia nada en pantalla todavía. ⭐ **Consumirlo NO cuesta build de player**:
-las frases viven en el `index.html` y leen `payload.activeFish` en JS (`index.html:389`). Deploy de
-minutos. ⚠ `Tools/cast-headless.js` **no manda `sex` ni `lang`** — hay que añadirlos para probarlo.
+✅ **HECHO EL 31-ago: la TV ya lo consume**, y **sin build de player** — lo lee el `index.html`
+(`_leerAcuarioParaFrases`), no `CastDataTypes`.
 
-🔴 **Bug abierto del MÓVIL, salido de aquí:** los peces pre-v1.2 son **todos `"Male"`** y nadie les
-asigna sexo nunca ⇒ quien venga de v1.0/v1.1 **no puede emparejar sus peces viejos entre sí**. Es
-**contenido de pago (cría) que un usuario antiguo no puede usar**, y no da ningún error.
+- **`"Male"` y `"Female"` marcan género; `"Unknown"`, `""`, ausente y cualquier otra cosa → banco
+  NEUTRO**, sin normalizar a ciegas. Las frases de **pareja** se quedan neutras siempre (dos peces
+  pueden tener sexos distintos).
+- 💰 **`"Male"` SÍ marca, y es deliberado.** Desde el runtime **no se puede distinguir «macho de
+  verdad» de «macho por defecto»** ⇒ mandarlo al neutro **no arregla el pez roto: degrada a todos los
+  sanos**, que son mayoría desde marzo. El riesgo se acota por diseño: **concordancia gramatical**
+  («está deseando que **lo** veas»), nunca «el macho Nemo» ⇒ **el peor caso es un pronombre**.
+- ⚠⚠ **El camino NEUTRO es EL camino** mientras la mayoría no actualice, y si se rompe **no se nota**
+  ⇒ tiene tests propios.
+- ⚠⚠ El log separa los cuatro: `sexo M1/F1/Unknown1/ausente1` (+`/RAROSn` si llega algo no
+  reconocido). **`ausente` va aparte de `Unknown` a propósito**: el día que el emisor deje de mandar
+  el campo por un bug, juntarlos lo leería como «peces sin sexo conocido» en vez de como **regresión
+  del emisor**.
+- 🧪 `Tools/cast-headless.js` ya manda **`--sex`** y **`--lang`**. `--sex ciclo` reparte **los cuatro**
+  caminos. Nuevo **`--dry-init`**: imprime el INIT que se enviaría y sale, **sin red ni tele**.
+  ⚠⚠ **El defecto de `--sex` es `ninguno`** a propósito — cambiar el INIT por defecto haría que una
+  tanda de hoy **no fuera comparable** con las de agosto, y ese desfase **no da ningún error**.
+  ⚠⚠ Y el arnés **emite lo que se le teclee**: verlo funcionar prueba que **el `index.html` parsea**,
+  NO que **el móvil manda**. Eso sólo lo cierra un volcado de la APK real.
+
+⚠⚠ **CORREGIDO EL 31-ago: la frontera NO es «v1.2», es el 2026-03-09.** El campo `sex` entra en el
+commit `07b9091` («feat: age/sex identity»), de **marzo**, no en la v1.2 de breeding — lo persiguió
+por git la sesión del repo móvil. Decir «pre-v1.2» señalaba una ventana **MÁS GRANDE que la real**.
+Desde esa fecha la mitad de los peces nacen `Male` por un `RandomSex()` **deliberado**: ésos son dato
+bueno.
+
+🔴 **Bug abierto del MÓVIL, salido de aquí:** los peces adquiridos **antes del 2026-03-09** son
+**todos `"Male"`** y nadie les asigna sexo nunca ⇒ quien venga de esa época **no puede emparejar sus
+peces viejos entre sí**. Es **contenido de pago (cría) que un usuario antiguo no puede usar**, y no da
+ningún error.
+
+🏆 **Por qué aguantó seis meses sin que nadie lo viera:** ese mismo commit traía un `MenuItem` de
+Editor («Migrar Identidad Peces») que sexaba los peces existentes. Era **Editor-only** ⇒ parcheó el
+save del **desarrollador** y no corrió jamás en un dispositivo. Quien mirara esa máquina vería peces
+bien sexados. **El propio arreglo borró la evidencia de que hacía falta**, y hoy el `MenuItem` ni
+existe: no quedó ni el arreglo ni la señal de que faltaba. 🧭 Misma familia que el `_lastSenderId`
+(el aviso del 2º sender viajaba al 2º sender): **la comprobación se hizo donde el fallo no vivía.**
 
 
 ### 💡 Las 7 luces: cómo se miden (2026-08-30) — tercera pata del criterio del user
@@ -1197,7 +1230,15 @@ Del mismo día: se le atribuyó al móvil un `SIN REMAPEO: el sender no mando ta
 **`Tools/cast-headless.js`, que manda `tankHalfWidth: 0.0` a propósito**. 🧭 **Medir con un emisor que
 no es el de producción y tratar el resultado como si lo fuera.**
 
-### 🔴 Si `workers.dev` se queda sin ruta: el host de los bundles NO está en el player (2026-08-30)
+### ✅ RESUELTO — Si `workers.dev` se queda sin ruta: el host NO está en el player (30-ago → 31-ago)
+
+> ✅ **31-ago: la ruta VOLVIÓ sola.** Worker **`401`** sin token · R2 público **200** · endpoint S3
+> **lista y escribe** (PUT+HEAD+DELETE) · **80 bundles = 87,3 MB MEDIDOS**, ya no inferidos.
+> ⇒ **el dominio propio deja de ser urgente.** Sigue siendo buen seguro contra el próximo corte, y
+> el plan de abajo queda **listo para ejecutar**, pero no bloquea nada.
+> ⚠⚠ **La nota que describe un bloqueo SOBREVIVE al bloqueo y lee igual de convincente que cuando
+> era cierta.** Esta sección estuvo en presente medio día después de volver la ruta.
+> 🧭 **Al desbloquear algo, buscar quién lo daba por bloqueado.**
 
 El 30-ago la tele se quedó en **`BDL 1/7`** con **cero errores** y pantalla negra. No era el token, ni
 el anti-bot, ni el Worker: **Telefónica sin ruta a `188.114.96.0/24`** (y **tampoco al endpoint S3 de
@@ -1220,7 +1261,8 @@ independientes y por **dos** líneas (fija y móvil). ⚠ El hotspot **no sirve*
 - ⚠ **El R2 público NO sirve los bundles** (`/bundles/` → 404) y ponerlos ahí sería deshacer el cierre
   del 20-ago: **el argumento decisivo es legal** — Pack 24 y Sketchfab no-CC0 **prohíben redistribuir
   los assets crudos**, y un bucket público **es** redistribución.
-- ⚠ Mientras dure el corte, el `aws s3`/boto3 de este doc **no funciona**: subir **por el panel de R2**.
+- ⚠ Mientras dure un corte así, el `aws s3`/boto3 de este doc **no funciona**: subir **por el panel de
+  R2**. (El 31-ago volvió a funcionar: verificado con PUT + HEAD + DELETE contra el bucket privado.)
 
 ### ✅ `RP: … sombras=OFF` NO es una regresión (2026-08-30)
 

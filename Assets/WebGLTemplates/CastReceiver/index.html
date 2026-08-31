@@ -349,6 +349,35 @@
             'Colocando a tus {c} peces…',
             'Tus {c} peces ya vienen.',
             '{c} peces esperándote.'
+          ],
+          // ⚠⚠ BANCOS CON GÉNERO (2026-08-31). `unPez` de arriba es el NEUTRO y sigue
+          //   siendo el que manda: es el que se usa cuando el sexo no viaja o no se reconoce,
+          //   o sea el único camino que estaba probado hasta hoy. Estos dos son ADITIVOS.
+          //   Mismo índice = misma frase en los tres bancos, para que la variedad no dependa
+          //   del sexo del pez.
+          unPezM: [
+            '{n} está deseando que lo veas.',
+            '{n} lleva todo el día presumiendo de lo guapo que está.',
+            '{n} te ha guardado el mejor sitio; está muy orgulloso.',
+            '{n} ya está nadando en círculos, emocionado perdido.',
+            '{n} pregunta si le has traído comida; está hambriento.',
+            '{n} se ha peinado las aletas y está listo para verte.',
+            '{n} dice que hoy se ha levantado muy guapo.',
+            '{n} se ha escondido detrás de una roca. Otra vez. Es un tímido.',
+            'Despertando a {n}, que es un dormilón…',
+            '{n} quiere enseñarte algo y está impaciente por que lo veas.'
+          ],
+          unPezF: [
+            '{n} está deseando que la veas.',
+            '{n} lleva todo el día presumiendo de lo guapa que está.',
+            '{n} te ha guardado el mejor sitio; está muy orgullosa.',
+            '{n} ya está nadando en círculos, emocionada perdida.',
+            '{n} pregunta si le has traído comida; está hambrienta.',
+            '{n} se ha peinado las aletas y está lista para verte.',
+            '{n} dice que hoy se ha levantado muy guapa.',
+            '{n} se ha escondido detrás de una roca. Otra vez. Es una tímida.',
+            'Despertando a {n}, que es una dormilona…',
+            '{n} quiere enseñarte algo y está impaciente por que la veas.'
           ]
         },
         en: {
@@ -373,6 +402,30 @@
             'Getting your {c} fish into place\u2026',
             'Your {c} fish are on their way.',
             '{c} fish waiting for you.'
+          ],
+          unPezM: [
+            '{n} cannot wait for you to see him.',
+            '{n} has been showing off his colours all day.',
+            '{n} saved you the best spot and he is proud of it.',
+            '{n} is already swimming in circles; he cannot contain himself.',
+            '{n} wants to know if you brought him food.',
+            '{n} has straightened his fins just for you.',
+            '{n} says he is having a very good day.',
+            '{n} is hiding behind a rock. Again. He is the shy one.',
+            'Waking {n} up \u2014 he does love a nap\u2026',
+            '{n} has something to show you and he cannot wait.'
+          ],
+          unPezF: [
+            '{n} cannot wait for you to see her.',
+            '{n} has been showing off her colours all day.',
+            '{n} saved you the best spot and she is proud of it.',
+            '{n} is already swimming in circles; she cannot contain herself.',
+            '{n} wants to know if you brought her food.',
+            '{n} has straightened her fins just for you.',
+            '{n} says she is having a very good day.',
+            '{n} is hiding behind a rock. Again. She is the shy one.',
+            'Waking {n} up \u2014 she does love a nap\u2026',
+            '{n} has something to show you and she cannot wait.'
           ]
         }
       };
@@ -388,12 +441,27 @@
           if (typeof payload === 'string') payload = JSON.parse(payload);
           var peces = (payload && payload.activeFish) || [];
           var motes = [];
+          // ⚠⚠ EL SEXO (2026-08-31). Lo manda el móvil desde la 1.2.6 / build 41.
+          //   Sólo `"Male"` y `"Female"` marcan género. TODO lo demás cae al banco neutro:
+          //     · `"Unknown"` — el emisor DICE que no lo sabe (`GetSex()` mapea vacío→Unknown
+          //       ANTES del `.ToString()`, así que desde la 41 ésta es la señal de «sin dato»)
+          //     · `""`        — el campo NO viene: cliente anterior a la 41. NO es «sin dato»,
+          //       es «no preguntes», mismo criterio que ya se aplica a `uid`
+          //     · cualquier otra cosa — no se normaliza a ciegas: lo que no reconozco, no lo invento
+          var nM = 0, nF = 0, nU = 0, nA = 0, nX = 0;
           for (var i = 0; i < peces.length; i++) {
             var nk = peces[i] && peces[i].nickname;
+            var sx = peces[i] ? peces[i].sex : undefined;
+            if      (sx === 'Male')    { nM++; }
+            else if (sx === 'Female')  { nF++; }
+            else if (sx === 'Unknown') { nU++; }
+            else if (sx === undefined || sx === null || sx === '') { nA++; }
+            else { nX++; }
             // ⚠ El mote puede venir vacío, sólo espacios, o ser el id de especie: en esos
             // casos NO sirve para una frase («fish_banggai está deseando que la veas»).
             if (nk && String(nk).trim() && String(nk).indexOf('fish_') !== 0) {
-              motes.push(String(nk).trim());
+              motes.push({ n: String(nk).trim(),
+                           s: (sx === 'Male') ? 'm' : (sx === 'Female') ? 'f' : '' });
             }
           }
           // ⚠ El idioma va en el log a proposito: es la unica forma de confirmar desde el
@@ -401,7 +469,14 @@
           var lang = (payload && payload.lang) ? String(payload.lang) : '';
           _fraseIdioma = lang ? lang.slice(0, 2).toLowerCase() : 'es';
           _fraseDatos = { motes: motes, total: peces.length };
-          dbg('frases: ' + peces.length + ' peces, ' + motes.length + ' con mote, lang='
+          // ⚠⚠ El recuento de sexo va sobre TODOS los peces, no sólo los que tienen mote:
+          //   esta línea es la ÚNICA forma de saber desde fuera si el emisor manda el campo.
+          //   Y `ausente` va SEPARADO de `Unknown` a propósito — «no me lo mandan» y «me dicen
+          //   que no lo saben» son dos diagnósticos distintos, y sólo el primero es cliente
+          //   viejo. Juntarlos volvería a dejar «ausencia de líneas = ausencia de eventos».
+          dbg('frases: ' + peces.length + ' peces, ' + motes.length + ' con mote, sexo M' + nM
+              + '/F' + nF + '/Unknown' + nU + '/ausente' + nA + (nX ? '/RAROS' + nX : '')
+              + ', lang='
               + (lang ? lang + ' -> ' + _fraseIdioma : 'AUSENTE (cliente viejo) -> es'));
         } catch (e) {
           // No se traga: si el INIT cambia de forma, esto lo dice en vez de quedarse mudo
@@ -445,6 +520,15 @@
         return _colas[tipo].shift();
       }
 
+      // Elige el banco de frases de un pez. Cae al NEUTRO ante cualquier duda — que es el
+      // camino de los clientes viejos, el de `"Unknown"` y el de un valor que no conozca.
+      // ⚠ Un idioma sin bancos con género (o añadido a medias) NO peta: usa el neutro.
+      function _bancoUnPez(P, s) {
+        if (s === 'm' && P.unPezM) return P.unPezM;
+        if (s === 'f' && P.unPezF) return P.unPezF;
+        return P.unPez;
+      }
+
       function _personalizadas() {
         var P = _plant();
         var bolsa = [];
@@ -458,11 +542,15 @@
         // acuario parecía un listín. Se barajan para que no sean siempre los mismos tres.
         var motes = _barajar(d.motes).slice(0, 3);
         for (var i = 0; i < motes.length; i++) {
-          for (var j = 0; j < P.unPez.length; j++) bolsa.push(P.unPez[j].replace('{n}', motes[i]));
+          var banco = _bancoUnPez(P, motes[i].s);
+          for (var j = 0; j < banco.length; j++) bolsa.push(banco[j].replace('{n}', motes[i].n));
         }
         if (motes.length >= 2) {
+          // ⚠ Las de pareja se quedan NEUTRAS a propósito: dos peces pueden tener sexos
+          //   distintos y no hay una concordancia que valga para los dos casos sin escribir
+          //   cuatro bancos para tres frases.
           for (var k = 0; k < P.dosPeces.length; k++) {
-            bolsa.push(P.dosPeces[k].replace('{n}', motes[0]).replace('{a}', motes[1]));
+            bolsa.push(P.dosPeces[k].replace('{n}', motes[0].n).replace('{a}', motes[1].n));
           }
         }
         return bolsa;
@@ -886,7 +974,7 @@
       // ⚠ MARCADOR DE VERSION DEL index.html. Sube cada vez que se toque este fichero.
       // Sin esto no hay forma de saber que receiver esta corriendo el device: el sello de la
       // esquina es del `.wasm`, no del html, y un index cacheado es indistinguible del nuevo.
-      var RCV_HTML_VER = '2026-08-28c-relayhud';
+      var RCV_HTML_VER = '2026-08-31-sexo';
       var _lastSenderId = null, _logSent = 0, _logFail = 0, _logErr = '';
       // El HUD se repinta solo: si dependiera de `dbg()` se congelaria justo en el caso que
       // queremos diagnosticar. 2 s es suficiente para leerlo con `adb exec-out screencap`.

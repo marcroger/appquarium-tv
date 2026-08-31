@@ -41,6 +41,24 @@ const FISH     = parseInt(arg('fish', '0'), 10);
 // desde el 2026-08-15). Sin esto no se puede leer el FPS por screencap.
 const DIAG = argv.includes('--diag');
 
+// --sex <modo> -> rellena `activeFish[].sex` del INIT (2026-08-31, movil 1.2.6 / build 41).
+//   ciclo    reparte los CUATRO caminos entre los peces: Male, Female, Unknown y AUSENTE.
+//   Male | Female | Unknown | <cualquier cosa>  -> ese valor a todos (util para basura).
+//   ninguno  (POR DEFECTO) no manda el campo = emisor anterior a la build 41.
+// ⚠⚠ EL DEFECTO ES `ninguno` A PROPOSITO: cambiar el INIT por defecto haria que una tanda de
+//    hoy no fuera comparable con las de agosto, y ese desfase no daria ningun error.
+// ⚠⚠ Y EL AVISO QUE IMPORTA: este arnes emite lo que YO le teclee, asi que verlo funcionar
+//    prueba que el `index.html` PARSEA el campo, NO que el movil lo mande. La paridad de
+//    verdad solo la cierra un volcado de la APK real. Es el mismo verde fabricado a mano que
+//    ya costo una tanda el 30-ago (`SIN REMAPEO` atribuido al movil, y era este fichero).
+const SEX_MODO = arg('sex', 'ninguno');
+const SEX_CICLO = ['Male', 'Female', 'Unknown', null];   // null = campo AUSENTE
+
+// --lang xx -> campo `lang` de TvAquariumState (frases de la splash). Sin el, el receiver
+// cae a castellano y lo dice en su log, que es como se comprueba que llega.
+// ⚠ Por defecto NO se manda, por el mismo motivo de comparabilidad que el `--sex`.
+const LANG = arg('lang', '');
+
 // --decos a,b,c  -> sustituye la lista fija de decos por las indicadas (itemIds).
 // Se colocan repartidas en el suelo. Sirve para aislar UNA deco y compararla antes/despues
 // de tocarla, que es como se valida un cambio de formato sin engañarse.
@@ -152,6 +170,51 @@ const DECOS = [
 if (!STOP && FISH > SPECIES.length) {
   abortar(`pediste --fish ${FISH} y solo hay ${SPECIES.length} especies; se mediria ${SPECIES.length} EN SILENCIO.`);
 }
+// Construye el TvAquariumState del INIT. Va en una FUNCION y no en linea para poder
+// imprimirlo con `--dry-init` sin tele delante: asi el `--sex`/`--lang` se comprueba contra
+// el JSON que se enviaria de verdad, no contra una copia del codigo en un test.
+function construirEstado() {
+  const state = {
+    activeFish: SPECIES.slice(0, FISH).map((s, i) => {
+      const pez = { speciesId: s, nickname: 'test' + i, ageScale: 1.0 };
+      // ⚠ `ausente` se representa NO poniendo la clave, no poniendola a '': son dos
+      //   casos distintos en el receiver y el que hay hoy en produccion es este.
+      const sx = SEX_MODO === 'ninguno' ? null
+               : SEX_MODO === 'ciclo'   ? SEX_CICLO[i % SEX_CICLO.length]
+               : SEX_MODO;
+      if (sx !== null) pez.sex = sx;
+      return pez;
+    }),
+    decoJson: JSON.stringify({ items: DECOS_OVERRIDE || DECOS }),
+    bgId: 'bg_tropical',
+    subId: 'sub_sand',
+    lightId: 'light_white',
+    ambientMode: 'day',
+    fishSpeed: 1.0,
+    // ⚠ tank_l + y:-2.8 van EN PAREJA. La Y del suelo sale de _tankBounds
+    //   (DecorationPlacer.BuildFloorVisual), asi que depende del tanque: cambiar
+    //   uno sin el otro vuelve a dejar las decos flotando. Este par es el unico
+    //   verificado (es el que usa el ?devtest=1 del receiver, visto apoyando bien).
+    // ⚠ Las tandas de estabilidad 4/4 del 2026-08-11 se midieron con tank ''.
+    //   Si se compara con ellas, tenerlo en cuenta.
+    selectedTankId: 'tank_l',
+    tankHalfWidth: 0.0,
+  };
+  if (LANG) state.lang = LANG;
+  return state;
+}
+
+// --dry-init -> imprime el INIT que se enviaria y SALE. No toca la red ni la tele.
+if (argv.includes('--dry-init')) {
+  const st = construirEstado();
+  console.log(JSON.stringify(st, null, 2));
+  const cuenta = st.activeFish.reduce((a, x) => {
+    const k = ('sex' in x) ? String(x.sex) : 'ausente'; a[k] = (a[k] || 0) + 1; return a; }, {});
+  console.log('');
+  console.log('sexo → ' + JSON.stringify(cuenta) + '   lang → ' + (st.lang || 'AUSENTE'));
+  process.exit(0);
+}
+
 if (!STOP && RUNG !== '2' && !argv.includes('--allow-noop-rung')) {
   abortar(`--rung ${RUNG} no hace NADA contra el receiver de produccion (no tiene handler de ` +
           `RUNG_CONFIG desde el 2026-08-15). La tanda mediria lo mismo que --rung 2 pero con ` +
@@ -275,28 +338,16 @@ client.connect(HOST, () => {
     // Se manda tras el RUNG_CONFIG para que Unity ya esté arrancando.
     if (FISH > 0) {
       setTimeout(() => {
-        const state = {
-          activeFish: SPECIES.slice(0, FISH).map((s, i) => ({
-            speciesId: s, nickname: 'test' + i, ageScale: 1.0,
-          })),
-          decoJson: JSON.stringify({ items: DECOS_OVERRIDE || DECOS }),
-          bgId: 'bg_tropical',
-          subId: 'sub_sand',
-          lightId: 'light_white',
-          ambientMode: 'day',
-          fishSpeed: 1.0,
-          // ⚠ tank_l + y:-2.8 van EN PAREJA. La Y del suelo sale de _tankBounds
-          //   (DecorationPlacer.BuildFloorVisual), asi que depende del tanque: cambiar
-          //   uno sin el otro vuelve a dejar las decos flotando. Este par es el unico
-          //   verificado (es el que usa el ?devtest=1 del receiver, visto apoyando bien).
-          // ⚠ Las tandas de estabilidad 4/4 del 2026-08-11 se midieron con tank ''.
-          //   Si se compara con ellas, tenerlo en cuenta.
-          selectedTankId: 'tank_l',
-          tankHalfWidth: 0.0,
-        };
+        const state = construirEstado();
         try {
           appChan.send({ type: 'INIT', payload: JSON.stringify(state) });
-          log(`INIT enviado → ${state.activeFish.length} peces · ${(DECOS_OVERRIDE || DECOS).length} decos${DECOS_OVERRIDE ? ' (override: ' + DECOS_OVERRIDE.map(d => d.itemId).join(',') + ')' : ''} · ${state.bgId}`);
+          // El reparto de sexo se IMPRIME contando lo que va en el JSON, no lo que se pidio
+          // por linea de comandos: si el `--sex` no se aplicara, la linea lo diria.
+          const cuentaSex = state.activeFish.reduce((a, p) => {
+            const k = ('sex' in p) ? String(p.sex) : 'ausente'; a[k] = (a[k] || 0) + 1; return a;
+          }, {});
+          const resumenSex = Object.keys(cuentaSex).map(k => k + ':' + cuentaSex[k]).join(' ');
+          log(`INIT enviado → ${state.activeFish.length} peces · ${(DECOS_OVERRIDE || DECOS).length} decos${DECOS_OVERRIDE ? ' (override: ' + DECOS_OVERRIDE.map(d => d.itemId).join(',') + ')' : ''} · ${state.bgId} · sexo[${resumenSex}] · lang=${state.lang || 'AUSENTE'}`);
         } catch (e) { log('fallo al enviar INIT: ' + e.message); }
       }, 3000);
     } else {
