@@ -81,6 +81,18 @@ public class CastReceiver : MonoBehaviour
                 AplicarNieblaDeAgua(msg.payload);
                 break;
 
+            // Luz del tanque EN CALIENTE. Misma razon que GRADE y FOG, y llegaba tarde: hasta
+            // el 31-ago la luz era lo unico que NO se podia barrer sin gastar un build de 55 min
+            // por variante, y por eso los `spotIntensity` nunca se habian medido. Se descubrio
+            // midiendo: `light_purple` lleva el 3.5 mas alto de la tabla y ENTREGA 2,6 veces
+            // menos luz que `light_warm`, que pone 3.2 (la luz entregada es
+            // luminancia(color) x intensidad, y estos colores van de 0.15 a 0.82).
+            //   { "type":"LUZ", "payload":"{\"spotIntensity\":6.4}" }
+            // Lo que no venga se queda como esta. `{"reset":true}` vuelve al preset declarado.
+            case "LUZ":
+                AplicarLuzEnCaliente(msg.payload);
+                break;
+
             case "PING":
             case "KEEPALIVE":
                 break;
@@ -348,5 +360,59 @@ public class CastReceiver : MonoBehaviour
         public float  bgFit;      // fracción tapada por el suelo; negativo = no tocar
         public float  shadowFade; // desvanecido de sombra sobre el fondo; negativo = no tocar
         public float  renderScale;// escala de render de URP; negativo = no tocar
+    }
+
+    [System.Serializable]
+    private class LuzPayload
+    {
+        public float r, g, b;
+        public float spotIntensity;
+        public float dirDimFactor;
+        public float ambientBlend;
+        public float exposureOffset;
+        public bool  reset;
+    }
+
+    // ⚠ Se PARTE del preset activo, para poder mandar un solo campo — igual que GRADE y FOG.
+    // ⚠⚠ El log imprime la LUZ ENTREGADA (luminancia x intensidad), no solo la intensidad: es
+    //    la magnitud que decide el resultado y la que el numero del preset esconde. Sin ella,
+    //    un barrido de `spotIntensity` vuelve a medir sin saber lo que mide.
+    private void AplicarLuzEnCaliente(string payload)
+    {
+        var luz = FindFirstObjectByType<TankLightingController>();
+        if (luz == null) { JsBridge.Log("LUZ: no hay TankLightingController en la escena"); return; }
+
+        var actual = luz.PresetActual();
+        if (actual == null) { JsBridge.Log("LUZ: no encuentro el preset activo"); return; }
+        var p = actual.Value;
+
+        var f = new LuzPayload
+        {
+            r = p.color.r, g = p.color.g, b = p.color.b,
+            spotIntensity = p.spotIntensity, dirDimFactor = p.dirDimFactor,
+            ambientBlend  = p.ambientBlend,  exposureOffset = p.exposureOffset,
+            reset = false,
+        };
+        try   { JsonUtility.FromJsonOverwrite(payload, f); }
+        catch (System.Exception e) { JsBridge.Log("LUZ: payload ilegible — " + e.Message); return; }
+
+        if (f.reset)
+        {
+            luz.OlvidarLuzEnCaliente();
+            JsBridge.Log($"LUZ: reset — vuelve al preset declarado '{p.id}'");
+            return;
+        }
+
+        p.color          = new Color(f.r, f.g, f.b);
+        p.spotIntensity  = Mathf.Max(0f, f.spotIntensity);
+        p.dirDimFactor   = Mathf.Clamp01(f.dirDimFactor);
+        p.ambientBlend   = Mathf.Clamp01(f.ambientBlend);
+        p.exposureOffset = f.exposureOffset;
+        luz.AplicarLuzEnCaliente(p);
+
+        float lum = 0.2126f * p.color.r + 0.7152f * p.color.g + 0.0722f * p.color.b;
+        JsBridge.Log($"LUZ: {p.id} spot=({p.color.r:F2},{p.color.g:F2},{p.color.b:F2})x{p.spotIntensity:F2} " +
+                     $"lum={lum:F3} ENTREGADA={lum * p.spotIntensity:F3} " +
+                     $"dirDim={p.dirDimFactor:F2} ambBlend={p.ambientBlend:F2} exp={p.exposureOffset:F2}");
     }
 }

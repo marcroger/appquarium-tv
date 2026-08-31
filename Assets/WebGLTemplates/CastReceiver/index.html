@@ -571,9 +571,24 @@
         return f;
       }
 
+      // ⚠⚠ 2026-08-31 — «algunas frases aparecen y desaparecen demasiado rápido… sólo alguna»
+      //    (reportado por el user mirando la tele). La causa NO es el intervalo: es que
+      //    `setInterval` NO GARANTIZA EL ESPACIADO. Mientras cargan los bundles el hilo
+      //    principal del Chromecast se bloquea, los ticks de 7,5 s SE ACUMULAN, y al liberarse
+      //    salen VARIOS SEGUIDOS: dos o tres frases pasan en un parpadeo. Encaja con «sólo
+      //    alguna»: pasa detrás de un atasco, no siempre.
+      //    🧭 La cura no es subir el intervalo —eso mueve el problema, no lo quita— sino exigir
+      //    el tiempo REAL transcurrido. Un tick que llega tarde y amontonado se descarta.
+      // ⚠ Este fichero ya tenía escrito el mismo aviso para otro reloj (~línea 1066: «un
+      //   setInterval(1000) que llega TARDE mide de menos»). Era el mismo fallo sin conectar.
+      var _fraseUltimaMs = -1;
+      var FRASE_MIN_MS   = 6000;   // < 7500 a propósito: tolera jitter normal, corta la ráfaga
+
       function _siguienteFrase() {
         var el = document.getElementById('splash-tip');
         if (!el) return;
+        var ahora = mono();
+        if (_fraseUltimaMs >= 0 && (ahora - _fraseUltimaMs) < FRASE_MIN_MS) return;
         var f = _fuentes();
         // Tirar por cuota, saltando los tipos vacíos (si no hay motes, no hay 'personal').
         var vivos = [], total = 0;
@@ -586,8 +601,11 @@
         for (var k = 0; k < vivos.length; k++) { r -= vivos[k].peso; if (r <= 0) { tipo = vivos[k].tipo; break; } }
         var texto = _sacar(tipo, f[tipo]);
         if (!texto) return;
+        _fraseUltimaMs = ahora;
         el.style.opacity = '0';
-        setTimeout(function () { el.textContent = texto; el.style.opacity = '1'; }, 450);
+        // ⚠ 560 y no 450: la transición CSS de #splash-tip es de 0,55 s, así que a los 450 ms
+        //   el texto VIEJO todavía se ve al ~18 % y el cambio se notaba como un salto.
+        setTimeout(function () { el.textContent = texto; el.style.opacity = '1'; }, 560);
       }
 
       function _arrancarFrases() {
@@ -974,7 +992,7 @@
       // ⚠ MARCADOR DE VERSION DEL index.html. Sube cada vez que se toque este fichero.
       // Sin esto no hay forma de saber que receiver esta corriendo el device: el sello de la
       // esquina es del `.wasm`, no del html, y un index cacheado es indistinguible del nuevo.
-      var RCV_HTML_VER = '2026-08-31-sexo';
+      var RCV_HTML_VER = '2026-08-31b-frases';
       var _lastSenderId = null, _logSent = 0, _logFail = 0, _logErr = '';
       // El HUD se repinta solo: si dependiera de `dbg()` se congelaria justo en el caso que
       // queremos diagnosticar. 2 s es suficiente para leerlo con `adb exec-out screencap`.

@@ -924,3 +924,27 @@ tele**), para igualar la luz entregada a la de `warm` haría falta
 es el preset donde el modelo peor casa **y** al que la tabla asigna el factor mayor (×7), o sea el
 peor sitio para apoyarse en la parte más débil del razonamiento. Su `expOffset −0.60` no es un
 accidente: está construido a propósito para ser oscuro y dramático.
+
+
+### 0.7.5 ✅ DECISIÓN DEL USER (2026-08-31): los `spotIntensity` SE QUEDAN
+
+Se le enseñaron las **cuatro variantes fotografiadas en el device** —`light_blue` 3.5 contra 6.4 y
+`light_purple` 3.5 contra 9.0, misma escena y misma sesión— y eligió: *«no me parece mal ninguna,
+quizás la más suave me gusta más»* ⇒ **se queda lo actual**.
+
+⚠⚠ **Esto convierte el hallazgo en una asimetría CONOCIDA Y ACEPTADA, no en un bug pendiente.**
+`blue` y `purple` entregan ~la mitad de luz que la gratuita y se comportan más como filtros de color
+que como luces, **y así se quieren**: el suelo oscuro es su carácter.
+
+🚩 **Lo que sigue siendo cierto y hay que conservar:** el número **engaña**. Quien afine esto leyendo
+la columna `spotIntensity` se equivocará de signo. La tabla de §0.7.4 se queda por eso.
+
+⭐ **Y afinarlo ya no cuesta un build**: el mensaje `LUZ` (build del 31-ago) barre `spotIntensity`,
+`dirDimFactor`, `ambientBlend`, `exposureOffset` y el color del spot **en caliente**, e imprime la
+**luz entregada** además de la intensidad:
+```
+--raw 'LUZ={"spotIntensity":6.4}@60'     --raw 'LUZ={"reset":true}@120'
+LUZ: light_blue spot=(0.18,0.42,1.00)x6.40 lum=0.411 ENTREGADA=2.629 dirDim=0.30 …
+```
+🧭 Era el último parámetro visual sin barrido en caliente, y por eso llevaba cinco meses sin medirse
+— exactamente el mismo agujero que tuvo el umbral del bloom.

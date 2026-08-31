@@ -63,7 +63,10 @@ ok('máximo 3 peces distintos en las personalizadas',
 // ── 2) ⭐ EL REPARTO POR TIPO (la queja del user: «todas personalizadas») ─────
 api.reset();
 const salidas = [];
-for (let i = 0; i < 200; i++) { api.siguiente(); salidas.push(api.el.textContent); }
+// ⚠ Se AVANZA EL RELOJ entre frases. Antes se llamaba 200 veces con el reloj parado, que no
+//   es lo que hace el receptor: el test modelaba una realidad que no existe. Y desde el
+//   31-ago ademas seria FALSO VERDE al reves — la guarda anti-rafaga descartaria las 199.
+for (let i = 0; i < 200; i++) { api.avanza(7500); api.siguiente(); salidas.push(api.el.textContent); }
 const esPersonal = t => ['Dori', 'Gill', 'Puas', 'Reina'].some(n => t.indexOf(n) >= 0) || / \d+ peces/.test(t);
 const pct = Math.round(100 * salidas.filter(esPersonal).length / salidas.length);
 ok('las personalizadas NO dominan (entre 20 % y 50 %)', pct >= 20 && pct <= 50, pct + ' %');
@@ -76,25 +79,25 @@ ok('salen también frases de ambiente', salidas.some(esAmb));
 // En una carga real caben ~6 frases (40 s / 7,5 s). Ninguna debe repetirse.
 api.reset();
 const seis = [];
-for (let i = 0; i < 6; i++) { api.siguiente(); seis.push(api.el.textContent); }
+for (let i = 0; i < 6; i++) { api.avanza(7500); api.siguiente(); seis.push(api.el.textContent); }
 ok('en 6 frases seguidas no se repite ninguna', new Set(seis).size === 6, seis.length + ' → ' + new Set(seis).size + ' distintas');
 api.reset();
 const doce = [];
-for (let i = 0; i < 12; i++) { api.siguiente(); doce.push(api.el.textContent); }
+for (let i = 0; i < 12; i++) { api.avanza(7500); api.siguiente(); doce.push(api.el.textContent); }
 ok('en 12 frases seguidas tampoco', new Set(doce).size === 12, new Set(doce).size + ' distintas');
 
 // ── 4) Basura y acuario vacío: no revienta y lo DICE ─────────────────────────
 logs.length = 0;
 api.leer('esto no es json');
 ok('con basura avisa en el log', /no pude leer/.test(logs.join('|')));
-api.reset(); api.siguiente();
+api.reset(); api.avanza(7500); api.siguiente();
 ok('con basura sigue saliendo una frase genérica', api.el.textContent.length > 3, api.el.textContent);
 
 logs.length = 0;
 api.leer(JSON.stringify({ type: 'INIT', payload: JSON.stringify({ activeFish: [] }) }));
 api.reset();
 const vacio = [];
-for (let i = 0; i < 20; i++) { api.siguiente(); vacio.push(api.el.textContent); }
+for (let i = 0; i < 20; i++) { api.avanza(7500); api.siguiente(); vacio.push(api.el.textContent); }
 ok('acuario vacío: ninguna frase personalizada', !vacio.some(esPersonal));
 ok('acuario vacío: sin marcadores sueltos', !vacio.some(t => /\{[nac]\}/.test(t)));
 
@@ -102,11 +105,11 @@ ok('acuario vacío: sin marcadores sueltos', !vacio.some(t => /\{[nac]\}/.test(t
 api.leer(JSON.stringify({ type: 'INIT', payload: JSON.stringify(estado) }));
 api.arranca(); api.reset();
 const pronto = [];
-for (let i = 0; i < 40; i++) { api.siguiente(); pronto.push(api.el.textContent); }
+for (let i = 0; i < 40; i++) { api.avanza(7500); api.siguiente(); pronto.push(api.el.textContent); }
 ok('a los 0 s NO salen las de espera', !pronto.some(t => api.FRASES.es.espera.indexOf(t) >= 0));
 api.avanza(30000); api.reset();
 const tarde = [];
-for (let i = 0; i < 60; i++) { api.siguiente(); tarde.push(api.el.textContent); }
+for (let i = 0; i < 60; i++) { api.avanza(7500); api.siguiente(); tarde.push(api.el.textContent); }
 ok('a los 30 s SÍ salen las de espera', tarde.some(t => api.FRASES.es.espera.indexOf(t) >= 0));
 
 // ── 7) ⭐ EL IDIOMA (se validó `lang=es -> es` en device el 28-ago) ──────────
@@ -117,7 +120,7 @@ function conIdioma(lang) {
   api.leer(JSON.stringify({ type: 'INIT', payload: JSON.stringify(Object.assign({ lang: lang }, estado)) }));
   api.reset();
   const out = [];
-  for (let i = 0; i < 60; i++) { api.siguiente(); out.push(api.el.textContent); }
+  for (let i = 0; i < 60; i++) { api.avanza(7500); api.siguiente(); out.push(api.el.textContent); }
   return out;
 }
 let sal = conIdioma('en');
@@ -274,6 +277,24 @@ ok('un valor no reconocido cae al banco NEUTRO',
 
 // Volver al estado de 7 peces sin sexo para lo que venga detras.
 api.leer(JSON.stringify({ type: 'INIT', payload: JSON.stringify(estado) }));
+
+// ── 5ter) LA GUARDA ANTI-RAFAGA (2026-08-31) ─────────────────────────────────
+// El user reporto: «algunas frases aparecen y desaparecen demasiado rapido... solo alguna».
+// Causa: `setInterval` no garantiza el espaciado — mientras cargan los bundles el hilo se
+// bloquea, los ticks se ACUMULAN y al liberarse salen varios seguidos. La cura es exigir el
+// tiempo REAL, no confiar en el intervalo.
+api.reset();
+api.avanza(100000);            // lejos de cualquier frase anterior
+api.siguiente();
+const primera = api.el.textContent;
+api.siguiente(); api.siguiente(); api.siguiente();          // rafaga: 3 ticks amontonados
+ok('una rafaga de ticks NO cambia la frase', api.el.textContent === primera,
+   JSON.stringify(api.el.textContent));
+api.avanza(3000); api.siguiente();
+ok('a los 3 s tampoco (por debajo del minimo)', api.el.textContent === primera);
+api.avanza(4000); api.siguiente();                          // 7 s en total: ya pasa
+ok('a los 7 s SI cambia', api.el.textContent !== primera,
+   JSON.stringify(api.el.textContent));
 
 // ── 6) Contenido ─────────────────────────────────────────────────────────────
 const todas = api.FRASES.es.ambiente.concat(api.FRASES.es.info, api.FRASES.es.espera);

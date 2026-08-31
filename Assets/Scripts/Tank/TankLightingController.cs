@@ -73,14 +73,25 @@ public class TankLightingController : MonoBehaviour
     //    dos» CALLANDO que dejaba fuera uno de cinco. Un modelo que casa con 4 de 5 es util;
     //    presentarlo como si casara con los 5 lo convierte en una trampa para el siguiente.
     //
-    // 🧭 NO se han tocado los valores: cambiarlos altera el aspecto de contenido DE PAGO, y eso
-    //    lo aprueba el user mirando la tele, no una tabla. Para igualar la luz entregada a la de
-    //    `light_warm` haria falta: blue 3.5→6.4 · purple 3.5→9.0 · sunset 3.2→4.6 · deep 2.5→17.4.
-    // ⚠⚠ Si algun dia se toca, EMPEZAR POR blue/purple, que es donde la formula SI predice lo
-    //    medido, y DEJAR `deep` FUERA: es justo el preset donde el modelo peor casa, y su
-    //    tabla le asigna el factor mas grande (x7). Ademas su `expOffset -0.60` no es un
-    //    accidente: esta construido a proposito para ser oscuro y dramatico.
-    //    Metodo y tablas completas: CAST_PARIDAD_VISUAL.md §0.7.
+    // ✅✅ DECIDIDO POR EL USER EL 2026-08-31, MIRANDO LA TELE: LOS VALORES SE QUEDAN COMO ESTAN.
+    //    Se le enseñaron las CUATRO variantes fotografiadas en el device (blue 3.5 contra 6.4 y
+    //    purple 3.5 contra 9.0, misma escena y misma sesion). Su respuesta: «no me parece mal
+    //    ninguna, quizas la mas suave me gusta mas» ⇒ se queda lo suave, o sea lo actual.
+    //
+    // ⚠⚠ POR ESO, ESTO NO ES UN BUG PENDIENTE: es una asimetria CONOCIDA Y ACEPTADA. `light_blue`
+    //    y `light_purple` entregan ~la mitad de luz que la gratuita y se comportan mas como
+    //    filtros de color que como luces, Y ASI SE QUIEREN — el suelo oscuro es su caracter.
+    //    Lo que sigue siendo cierto y util es que EL NUMERO ENGAÑA: quien afine esto leyendo la
+    //    columna `spotIntensity` se equivocara de signo. Por eso la tabla de arriba se queda.
+    //
+    // 🚩 NO 'ARREGLAR' ESTO sin volver a preguntar. Es contenido DE PAGO ya comprado, y la
+    //    decision se tomo con las imagenes delante, no con la tabla. Si algun dia se reabre:
+    //    para igualar la luz entregada a `light_warm` harian falta blue 3.5→6.4 · purple 3.5→9.0
+    //    · sunset 3.2→4.6 · deep 2.5→17.4, y habria que EMPEZAR POR blue/purple —donde la formula
+    //    SI predice lo medido— y DEJAR `deep` FUERA: es donde el modelo peor casa y donde la tabla
+    //    pide el factor mayor (x7); ademas su `expOffset -0.60` esta puesto a proposito.
+    // ⭐ Y ya NO cuesta un build probarlo: el mensaje `LUZ` barre estos valores en caliente.
+    //    Metodo, tablas y capturas: CAST_PARIDAD_VISUAL.md §0.7.
     public static readonly LightPreset[] Presets =
     {
         new LightPreset
@@ -285,6 +296,7 @@ public class TankLightingController : MonoBehaviour
         }
 
         _currentPresetId = id;
+        _luzOverride     = null;   // un cambio de preset explicito manda sobre el override
         if (_transition != null) StopCoroutine(_transition);
 
         TvLayerDebug.Set("Lighting", $"preset={id} filter=({preset.Value.filterColor.r:F2},{preset.Value.filterColor.g:F2},{preset.Value.filterColor.b:F2})");
@@ -299,11 +311,37 @@ public class TankLightingController : MonoBehaviour
             ApplySceneOverrides(preset.Value, Color.white);
     }
 
+    // ⚠⚠ AFINAR LA LUZ EN CALIENTE (2026-08-31) — lo consume el mensaje `LUZ`.
+    //    Hasta hoy el grado (`GRADE`) y la niebla (`FOG`) se podian barrer en caliente y la LUZ
+    //    no: elegir un `spotIntensity` costaba un build de 55 min POR VARIANTE, y por eso nunca
+    //    se hizo. Es el mismo agujero que tuvo el umbral del bloom, que costo meses de creer
+    //    que "el bloom no aporta nada" porque el barrido corria siempre a 0.92.
+    private LightPreset? _luzOverride;
+
+    public LightPreset? PresetActual() => FindPreset(_currentPresetId);
+
+    public void AplicarLuzEnCaliente(LightPreset p)
+    {
+        _luzOverride = p;
+        ApplyPreset(p);
+    }
+
+    // ⚠ Volver al preset declarado. Lo hace tambien cualquier `change_light`.
+    public void OlvidarLuzEnCaliente()
+    {
+        _luzOverride = null;
+        var p = FindPreset(_currentPresetId);
+        if (p != null && !p.Value.animated) ApplyPreset(p.Value);
+    }
+
     // Llamado por AmbientModeController tras una transición día/noche.
     public void RefreshBaseValues()
     {
         _dirBaseIntensity = _dirLight != null ? _dirLight.intensity : _dirBaseIntensity;
         _ambientBase      = RenderSettings.ambientLight;
+        // ⚠ Si hay un override en caliente, se respeta: si no, una transicion dia/noche lo
+        //   borraria EN SILENCIO y el que esta mirando la tele veria desaparecer su cambio.
+        if (_luzOverride != null) { ApplyPreset(_luzOverride.Value); return; }
         var preset = FindPreset(_currentPresetId);
         if (preset != null && !preset.Value.animated) ApplyPreset(preset.Value);
     }
