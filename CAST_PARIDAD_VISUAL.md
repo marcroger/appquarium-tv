@@ -889,3 +889,38 @@ hechos distintos, y juntarlos inventa un número que no describe ninguno de los 
   cada entrada y las reportaba en las mismas unidades*, con dispersión `0.0000` que **reforzaba la
   confianza en el artefacto**. `mide_luces.py` usa ahora **dos criterios** y **se calla** si
   discrepan. Detalle en el fichero de memoria `el_instrumento_no_ve_la_magnitud`.
+
+
+### 0.7.4 ⚠⚠ `spotIntensity` no es comparable entre presets — y `light_deep` es la excepción
+
+La luz que un spot **entrega** es `luminancia(color) × spotIntensity`, y la luminancia de estos
+colores va de **0,15 a 0,82** (factor 5,4) ⇒ **el número de la tabla ordena AL REVÉS que la luz real**:
+
+| preset | `spotIntensity` | lum(color) | **luz entregada** | ILUM medido |
+|---|---|---|---|---|
+| `light_warm` | 3.2 | 0.819 | **2.622** | 39.0 |
+| `light_sunset` | 3.2 | 0.572 | 1.830 | 19.2 |
+| `light_blue` | 3.5 | 0.411 | 1.438 | 5.4 |
+| `light_purple` | **3.5** | 0.290 | **1.014** | 3.0 |
+| `light_deep` | 2.5 | 0.150 | **0.376** | **8.7** ← no encaja |
+
+**`light_purple` lleva el 3.5 más alto de la tabla y entrega 2,6 veces MENOS luz que `light_warm`,
+que pone 3.2.** Quien afine esto leyendo los números se equivoca de signo.
+
+⚠⚠ **La columna predice el ILUM en CUATRO de los cinco.** `light_deep` entrega la **menor** luz de
+todas y sin embargo mide **8.7**, por encima de `blue` y `purple`. El motivo: **el spot es una de
+cuatro palancas**, y `deep` es el extremo en las otras tres —`dirDim 0.15` · `ambientBlend 0.55` ·
+`expOffset −0.60`—, que son **globales**. Lo aportó la sesión del repo móvil reproduciendo los
+números por su cuenta.
+
+🧭 **Y la lección de método:** la primera versión de esta nota decía «mismo orden en las dos»
+**callando que dejaba fuera uno de cinco**. *Un modelo que casa con 4 de 5 es útil; presentarlo como
+si casara con los 5 lo convierte en una trampa para el siguiente que lo lea.*
+
+**Si algún día se tocan los valores** (⚠ es contenido **de pago**: lo aprueba el user **mirando la
+tele**), para igualar la luz entregada a la de `warm` haría falta
+`blue 3.5→6.4 · purple 3.5→9.0 · sunset 3.2→4.6 · deep 2.5→17.4`.
+⚠⚠ **Empezar por `blue`/`purple`** —donde la fórmula sí predice lo medido— y **dejar `deep` fuera**:
+es el preset donde el modelo peor casa **y** al que la tabla asigna el factor mayor (×7), o sea el
+peor sitio para apoyarse en la parte más débil del razonamiento. Su `expOffset −0.60` no es un
+accidente: está construido a propósito para ser oscuro y dramático.

@@ -55,12 +55,31 @@ public class TankLightingController : MonoBehaviour
     //
     //    `light_purple` lleva el 3.5 mas alto de la tabla y entrega 2,6 VECES MENOS luz que
     //    `light_warm`, que pone 3.2. Quien afine esto leyendo los numeros se equivocara de
-    //    signo. La columna «luz entregada» si predice el ILUM medido (warm > sunset > blue >
-    //    purple es el mismo orden en las dos).
+    //    signo. La columna «luz entregada» predice el ILUM medido en CUATRO de los cinco:
+    //    warm > sunset > blue > purple es el mismo orden en las dos columnas.
+    //
+    // ⚠⚠ PERO `light_deep` NO ENCAJA, y la excepcion va aqui y no en una nota al pie:
+    //    entrega la MENOR luz de todas (0.376) y sin embargo mide ILUM 8.7, por ENCIMA de
+    //    `blue` (5.4) y `purple` (3.0). El motivo es que el spot es UNA de CUATRO palancas, y
+    //    `deep` es el mas agresivo en las otras tres — las GLOBALES:
+    //
+    //      preset          spotI   dirDim   ambBlend   expOffset
+    //      light_deep       2.5     0.15      0.55       -0.60     <- el extremo en las tres
+    //      light_blue       3.5     0.30      0.45       -0.30
+    //      light_purple     3.5     0.30      0.40       -0.25
+    //
+    //    Lo aporto la sesion del repo movil, reproduciendo los numeros por su cuenta. 🧭 Y la
+    //    leccion de metodo: mi primera version de este comentario decia «mismo orden en las
+    //    dos» CALLANDO que dejaba fuera uno de cinco. Un modelo que casa con 4 de 5 es util;
+    //    presentarlo como si casara con los 5 lo convierte en una trampa para el siguiente.
     //
     // 🧭 NO se han tocado los valores: cambiarlos altera el aspecto de contenido DE PAGO, y eso
     //    lo aprueba el user mirando la tele, no una tabla. Para igualar la luz entregada a la de
     //    `light_warm` haria falta: blue 3.5→6.4 · purple 3.5→9.0 · sunset 3.2→4.6 · deep 2.5→17.4.
+    // ⚠⚠ Si algun dia se toca, EMPEZAR POR blue/purple, que es donde la formula SI predice lo
+    //    medido, y DEJAR `deep` FUERA: es justo el preset donde el modelo peor casa, y su
+    //    tabla le asigna el factor mas grande (x7). Ademas su `expOffset -0.60` no es un
+    //    accidente: esta construido a proposito para ser oscuro y dramatico.
     //    Metodo y tablas completas: CAST_PARIDAD_VISUAL.md §0.7.
     public static readonly LightPreset[] Presets =
     {
