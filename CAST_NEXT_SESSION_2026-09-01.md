@@ -13,18 +13,41 @@
 
 ## ⏭ MAÑANA SE EMPIEZA AQUÍ
 
-**No queda nada bloqueante.** Lo que hay es una decisión del user y dos cabos menores.
+**No queda nada bloqueante, y producción ya NO está parada** (ver abajo). Lo que hay son decisiones del user y dos cabos menores.
+
+🔴 **Lo único de este repo que sigue esperando: 3 commits SIN PUSHEAR** (`a586458`, `52797d9`, `1b588f0`). ⚠ Repo **PÚBLICO**: el push no se retira, y lo pide el user o no se hace.
 
 | | qué | de quién |
 |---|---|---|
 | 🟡 **dominio** | Custom Domain para el Worker. **Ya NO es urgente** (la ruta volvió sola) pero sigue siendo el seguro contra el próximo corte de Telefónica. El plan entero está en `CAST_NEXT_SESSION_2026-08-31.md` §3 y **no cuesta build de player** | **user** |
 | 🟡 **`TankData.cs:19`** | Tooltip caducado en fichero **compartido**: dice «Ocean/Large=5.0 \| Starter=4.0 \| Micro=3.65» y **ningún tanque real responde a eso** salvo el ocean (`tank_l` **4.2** · `tank_m` 3.5 · `tank_nano` 2.5). Y el defecto del campo es `5f` ⇒ un `TankData` nuevo nace con el encuadre del ocean sin que nadie lo elija. Tocarlo obliga a re-sync con el móvil | **user** |
 | 🟢 **precio de las luces** | `light_warm` **ilumina 13× más** que `light_purple` **y es el gratuito**. No es un bug ni un desajuste de publicidad (medido: la tienda no las vende como iluminación). Es una decisión de producto | **user** |
-| 🔴 **peces pre-2026-03-09** | Bug **del MÓVIL**, sin arreglar: son todos `"Male"` y nadie les asigna sexo ⇒ **no pueden emparejarse entre sí**. Contenido de pago que un usuario antiguo no puede usar, sin ningún error | **repo móvil** |
+| ✅ **peces pre-2026-03-09** | **ARREGLADO Y VERIFICADO EN APARATO el 31-ago** por el repo móvil (5 commits en `origin/main`). Tres aperturas: migra una vez, **persiste**, no vuelve. ⚠ Por el camino cazaron un segundo bug que **habría sido peor que el original**: la migración corría pero **no llegaba al disco**, así que con `RandomSex()` los sexos habrían cambiado **en cada arranque**, rompiendo parejas ya formadas | ✅ hecho |
 
-⚠ **Producción NO está parada.** El handoff anterior decía «⏭ lo primero mañana: el casteo con la app
-REAL … producción PARADA». Hoy se ha casteado con la APK real (`com.appquarium.qa` 1.2.5/40) sobre la
-tele y **el acuario monta**. Eso queda cerrado.
+✅✅ **PRODUCCIÓN DESBLOQUEADA — el casteo con la app de PLAY, hecho y verificado por DOS caminos.**
+Era el punto que bloqueaba desde el 28-ago (*«el casteo con la app REAL: `com.appquarium.app` firmado
++ packs de Play»*). Se hizo el 31-ago y se comprobó **separando las dos preguntas**, que no son la misma:
+
+| pregunta | quién la contesta | resultado |
+|---|---|---|
+| ¿la app de **Play** establece sesión y manda el estado? | logcat del emisor | `frases: 3 peces, 3 con mote, sexo M2/F1/Unknown0/ausente0` desde PID vivo con `installerPackageName=com.android.vending` |
+| ¿el receptor resuelve sus bundles y **los pinta**? | captura de la tele | **3 peces, y son peces** (165.620 colores, escena completa con cañón y estatua) |
+
+⚠⚠ **La primera tanda fue un FALSO CIERRE y estuvo a punto de anotarse**: casteó
+`com.appquarium.qa`, instalada a mano con `bundletool --local-testing` ⇒ **los packs los sirvió el
+modo de prueba, no Play**. Los peces salían, el render era perfecto, y **no respondía la pregunta que
+se hizo**. 🧭 *Una corroboración que llega al sitio correcto por un camino roto.*
+⚠ El discriminador bueno es **`installerPackageName`** (`com.android.vending` = Play · `null` = a
+mano) más el **recuento de peces** (Play 3 · QA 6). **La ESCENA no discrimina**: los dos saves tienen
+el mismo cañón y la misma estatua.
+
+🏆 **Y la tercera prueba, la que no esperaba nadie: en PÍXELES.** La splash de esa misma sesión de
+Play pintó *«Escarlata está deseando que **la** veas»* — cadena que existe en **un solo sitio** del
+`index.html`, `unPezF[0]` (el neutro dice «tiene muchas ganas de verte», el masculino «que **lo**
+veas»). Y Escarlata es **la única hembra** de su acuario, lo que cuadra con el `M2/F1` del cable.
+🧭 *Un `ausente0` hay que creérselo; una concordancia en femenino **no se puede fabricar** sin que el
+campo haya llegado con ese valor.* **No es un log que afirma un estado: es un efecto que sólo puede
+existir si toda la cadena funcionó.**
 
 ---
 
